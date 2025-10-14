@@ -79,60 +79,126 @@ This project provides a comprehensive, production-ready administration console t
 
 ### Prerequisites
 
-- **Node.js 16+** and npm
-- **FlexiManage Backend** running (ports 3002/8000 for HTTP, 3443 for HTTPS)
-- **Docker** (recommended for development environment)
+- **Node.js 20+** with NVM
+- **npm 6+**
+- **MongoDB 8.0.15** replica set (3 nodes on ports 27017-27019)
+- **Redis 5.0.5+** (port 6379)
+- **PM2 Process Manager** (`npm install -g pm2`)
+- **Email Server** (aiosmtpd on port 1025)
 
-### Development Setup
+### System Architecture
 
-1. **Navigate to frontend directory:**
-   ```bash
-   cd frontend
-   ```
+FlexiManage runs as a production service with:
+- **Backend**: Managed by PM2 and systemd
+- **MongoDB**: Systemd auto-start replica set
+- **Redis**: Systemd service
+- **Frontend**: Served as static files from backend at port 3443
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+### Production Setup
 
-3. **Configure environment variables:**
-   ```bash
-   # Optional: Set custom API URL
-   export REACT_APP_API_URL=http://manage.miwide.com:3002/api
-   
-   # Optional: Set Cloudflare Turnstile keys
-   export REACT_APP_TURNSTILE_SITE_KEY=your_site_key
-   ```
-
-4. **Start development server:**
-   ```bash
-   npm start
-   ```
-
-5. **Access the application:**
-   - Frontend: [http://localhost:3000](http://localhost:3000)
-   - Backend API: [http://manage.miwide.com:3002/api](http://manage.miwide.com:3002/api)
-
-### 🐳 Docker Development
-
-The project includes Docker configuration for seamless development:
+#### 1. Install Required Services
 
 ```bash
-# Start the entire stack
-docker compose up -d
+# Install MongoDB replica set (ARM64)
+sudo bash scripts/install_mongodb_arm64.sh
 
-# Frontend: http://manage.miwide.com:3000
-# Backend API: http://manage.miwide.com:3002/api
-# Backend HTTPS: https://manage.miwide.com:3443
+# Configure MongoDB systemd auto-start
+sudo bash scripts/setup_mongodb_systemd.sh
+
+# Install Redis
+sudo bash scripts/install_redis.sh
+
+# Install email server (aiosmtpd)
+sudo bash scripts/install_aiosmtpd.sh
+
+# Install PM2 globally
+npm install -g pm2
 ```
 
-### 📦 Build for Production
+#### 2. Install Backend Dependencies
 
 ```bash
+cd backend
+npm install
+```
+
+#### 3. Build Frontend for Production
+
+```bash
+cd frontend
+npm install
 npm run build
 ```
 
-The optimized build artifacts will be stored in the `build/` directory, ready for deployment.
+The optimized build will be in `frontend/build/` and served by the backend.
+
+#### 4. Configure FlexiManage Systemd Service
+
+```bash
+# Set up FlexiManage auto-start service
+sudo bash scripts/setup_fleximanage_systemd.sh
+
+# The script will:
+# - Create systemd service unit
+# - Configure PM2 to manage Node.js backend
+# - Set up dependencies (MongoDB, Redis)
+# - Enable boot auto-start
+# - Start the service
+```
+
+#### 5. Verify Installation
+
+```bash
+# Check service status
+systemctl status fleximanage
+systemctl status mongod-27017 mongod-27018 mongod-27019
+systemctl status redis-server
+
+# Check PM2 processes
+pm2 list
+
+# Check listening ports
+ss -tlnp | grep -E ':(3002|3443|27017|27018|27019|6379)'
+```
+
+### Access the Application
+
+- **Production HTTPS**: https://manage.miwide.com:3443
+- **API Endpoint**: https://manage.miwide.com:3443/api
+- **HTTP (dev)**: http://manage.miwide.com:3002
+
+### Development Mode
+
+For frontend development with hot-reload:
+
+```bash
+cd frontend
+npm install
+
+# Configure API endpoint
+export REACT_APP_API_URL=http://manage.miwide.com:3002/api
+
+# Start development server
+npm start
+```
+
+Access at http://localhost:3000 (proxies API requests to backend)
+
+### Service Management
+
+```bash
+# Start/stop/restart FlexiManage
+systemctl start fleximanage
+systemctl stop fleximanage
+systemctl restart fleximanage
+
+# View logs
+journalctl -u fleximanage -f
+pm2 logs fleximanage-backend
+
+# Monitor PM2 processes
+pm2 monit
+```
 
 ## 📁 Project Structure
 
@@ -421,10 +487,14 @@ The application uses a unified design system built on Bootstrap 5:
    - FlexiEdge agent connectivity restored
    - Real-time device communication enabled
 
-5. **Production-Ready Features**:
-   - Docker containerization with volume mounting
-   - Environment-based configuration
-   - Hot reloading for development
+5. **Production Infrastructure**:
+   - **Systemd Service Management**: Boot auto-start for FlexiManage backend
+   - **PM2 Process Manager**: Node.js application lifecycle management with auto-restart
+   - **MongoDB Replica Set**: Systemd-managed 3-node cluster (ports 27017-27019)
+   - **Redis Cache**: Systemd service for session and cache storage
+   - **Service Dependencies**: Automatic startup ordering (MongoDB → Redis → FlexiManage)
+   - **Professional Logging**: Centralized logs via systemd journal and PM2
+   - **High Availability**: Automatic restart on failure with 10-second delay
 
 ## 🚧 Development Status & Roadmap
 
@@ -434,7 +504,16 @@ This frontend represents a **production-ready** React application that has been:
 - ✅ **Enhanced** with modern React patterns and real-time features
 - ✅ **Integrated** with live backend services and WebSocket communication
 - ✅ **Styled** with professional UI/UX design system
-- ✅ **Containerized** for Docker deployment
+- ✅ **Production deployed** with systemd service management and PM2 process orchestration
+- ✅ **Infrastructure automated** with MongoDB replica set and Redis auto-start
+
+### Production Infrastructure Features
+- ✅ **Systemd Service**: FlexiManage auto-starts on system boot
+- ✅ **PM2 Process Manager**: Automatic restart on crashes, zero-downtime reloads
+- ✅ **MongoDB Replica Set**: High-availability database with 3 nodes
+- ✅ **Service Dependencies**: Proper startup ordering and health checks
+- ✅ **Centralized Logging**: systemd journal and PM2 log aggregation
+- ✅ **Email Notifications**: aiosmtpd SMTP server for system emails
 
 ### Next Planned Enhancements
 1. **TypeScript Migration**: Incremental conversion starting with services layer
@@ -442,6 +521,8 @@ This frontend represents a **production-ready** React application that has been:
 3. **Real-Time Notifications**: Toast system for API events and errors
 4. **Mobile Optimization**: Enhanced responsive design for mobile devices
 5. **E2E Testing**: Cypress test suite for critical user flows
+6. **Load Balancing**: Nginx reverse proxy for production scaling
+7. **SSL Automation**: Let's Encrypt integration for automatic certificate renewal
 
 ## 🤝 Contributing
 
@@ -544,13 +625,62 @@ getTTFB(console.log);
 
 ### Common Issues
 
+**Service Not Starting:**
+```bash
+# Check FlexiManage service status
+systemctl status fleximanage
+
+# Check dependencies
+systemctl status mongod-27017 mongod-27018 mongod-27019
+systemctl status redis-server
+
+# View service logs
+journalctl -u fleximanage -n 50
+
+# Check PM2 processes
+pm2 list
+pm2 logs fleximanage-backend
+```
+
 **API Connection Issues:**
 ```bash
 # Check backend availability
 curl -X GET "http://manage.miwide.com:3002/api/dashboard/stats"
+curl -k -X GET "https://manage.miwide.com:3443/api/dashboard/stats"
+
+# Check listening ports
+ss -tlnp | grep -E ':(3002|3443)'
 
 # Verify CORS configuration
 # Check browser console for CORS errors
+```
+
+**Database Connection Issues:**
+```bash
+# Check MongoDB replica set status
+mongosh --port 27017 --eval 'rs.status()'
+
+# Check Redis connection
+redis-cli ping
+
+# Verify service dependencies
+systemctl list-dependencies fleximanage
+```
+
+**PM2 Process Issues:**
+```bash
+# Check PM2 daemon
+pm2 ping
+
+# Restart PM2 processes
+pm2 restart fleximanage-backend
+
+# Reset PM2 daemon
+pm2 kill
+pm2 resurrect
+
+# Monitor in real-time
+pm2 monit
 ```
 
 **Authentication Problems:**
@@ -561,6 +691,11 @@ sessionStorage.clear();
 
 # Check JWT token validity
 # Inspect token in browser developer tools
+
+# Verify backend authentication endpoint
+curl -X POST "http://manage.miwide.com:3002/api/users/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin@flexiwan.com","password":"admin"}'
 ```
 
 **Build Issues:**
@@ -572,6 +707,151 @@ npm install
 # Clear React build cache
 rm -rf build/
 npm run build
+
+# Rebuild and restart backend
+cd backend && npm install
+systemctl restart fleximanage
+```
+
+**Service Won't Start on Boot:**
+```bash
+# Check if service is enabled
+systemctl is-enabled fleximanage
+
+# Enable auto-start
+systemctl enable fleximanage
+
+# Check boot logs
+journalctl -b -u fleximanage
+```
+
+## 🚀 Production Deployment Guide
+
+### Complete Installation from Scratch
+
+```bash
+# 1. Install MongoDB replica set
+sudo bash scripts/install_mongodb_arm64.sh
+sudo bash scripts/setup_mongodb_systemd.sh
+
+# 2. Install Redis
+sudo bash scripts/install_redis.sh
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+
+# 3. Install email server
+sudo bash scripts/install_aiosmtpd.sh
+
+# 4. Install Node.js with NVM (if not already installed)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+source ~/.bashrc
+nvm install 20
+nvm use 20
+
+# 5. Install PM2 globally
+npm install -g pm2
+
+# 6. Install backend dependencies
+cd /root/fleximanage/backend
+npm install
+
+# 7. Build frontend
+cd /root/fleximanage/frontend
+npm install
+npm run build
+
+# 8. Configure and start FlexiManage service
+cd /root/fleximanage
+sudo bash scripts/setup_fleximanage_systemd.sh
+
+# 9. Verify all services
+systemctl status fleximanage
+systemctl status mongod-27017 mongod-27018 mongod-27019
+systemctl status redis-server
+pm2 list
+```
+
+### Post-Installation Verification
+
+```bash
+# Check all services are enabled for auto-start
+systemctl is-enabled fleximanage
+systemctl is-enabled mongod-27017 mongod-27018 mongod-27019
+systemctl is-enabled redis-server
+
+# Check listening ports
+ss -tlnp | grep -E ':(3002|3443|27017|27018|27019|6379|1025)'
+
+# Test MongoDB replica set
+mongosh --port 27017 --eval 'rs.status()'
+
+# Test Redis
+redis-cli ping
+
+# Test FlexiManage API
+curl -k https://manage.miwide.com:3443/api/dashboard/stats
+```
+
+### Updating FlexiManage
+
+```bash
+# 1. Pull latest changes
+cd /root/fleximanage
+git pull origin main
+
+# 2. Update backend dependencies
+cd backend
+npm install
+
+# 3. Rebuild frontend
+cd ../frontend
+npm install
+npm run build
+
+# 4. Restart service
+systemctl restart fleximanage
+
+# 5. Verify
+pm2 logs fleximanage-backend
+systemctl status fleximanage
+```
+
+### Backup and Restore
+
+```bash
+# Backup MongoDB data
+sudo systemctl stop mongod-27017 mongod-27018 mongod-27019
+sudo tar -czf fleximanage-mongodb-backup-$(date +%Y%m%d).tar.gz /data/db2701*
+sudo systemctl start mongod-27017 mongod-27018 mongod-27019
+
+# Backup application code and configuration
+tar -czf fleximanage-app-backup-$(date +%Y%m%d).tar.gz /root/fleximanage
+
+# Restore MongoDB data
+sudo systemctl stop mongod-27017 mongod-27018 mongod-27019
+sudo rm -rf /data/db2701*
+sudo tar -xzf fleximanage-mongodb-backup-YYYYMMDD.tar.gz -C /
+sudo chown -R mongodb:mongodb /data/db2701*
+sudo systemctl start mongod-27017 mongod-27018 mongod-27019
+```
+
+### System Monitoring
+
+```bash
+# Monitor FlexiManage service
+journalctl -u fleximanage -f
+
+# Monitor PM2 processes
+pm2 monit
+
+# Check system resources
+top -p $(pgrep -f fleximanage-backend)
+
+# View MongoDB logs
+tail -f /var/log/mongodb/mongod-27017.log
+
+# Check Redis logs
+journalctl -u redis-server -f
 ```
 
 ---

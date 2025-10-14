@@ -53,7 +53,7 @@ class MembersService {
       const objKeys = e.split('.');
       let val = obj[objKeys[0]];
       for (let i = 1; i < objKeys.length; i++) {
-        if (val && val[objKeys[i]]) val = val[objKeys[i]]; else val = null;
+        if (val && objKeys[i] in val) val = val[objKeys[i]]; else val = null;
       };
       return { ...a, [objKeys.join('_')]: val };
     }, {});
@@ -63,7 +63,13 @@ class MembersService {
         '_id',
         'user._id',
         'user.name',
+        'user.lastName',
         'user.email',
+        'user.username',
+        'user.jobTitle',
+        'user.phoneNumber',
+        'user.admin',
+        'user.state',
         'to',
         'account.name',
         'account._id',
@@ -242,10 +248,14 @@ class MembersService {
     try {
       let userPromise = null;
       // Check the user permission:
+      // Super admin can see all users across all accounts
       // Account owners or members should be able to see all account users + groups +
       // all organizations users. Organization members should be
       // able to see all organization users
-      if (user.perms.accounts & permissionMasks.get) {
+      if (user.admin === true) {
+        // Super admin: show all users from all accounts
+        userPromise = membership.find({});
+      } else if (user.perms.accounts & permissionMasks.get) {
         userPromise = membership.find({ account: user.defaultAccount._id });
       } else if (user.perms.organizations & permissionMasks.get) {
         userPromise = membership.find({
@@ -436,43 +446,57 @@ class MembersService {
   static async membersIdDELETE ({ id }, { user }) {
     try {
       // Find member id data (the member that we ask to delete)
-      const membershipData = await membership.findOne({
-        _id: id,
-        account: user.defaultAccount._id
-      });
+      // Super admins can delete memberships from any account
+      const query = { _id: id };
+      if (user.admin !== true) {
+        query.account = user.defaultAccount._id;
+      }
+      
+      const membershipData = await membership.findOne(query);
 
       if (!membershipData) {
         return Service.rejectResponse(
-          "Couldn't find membership data in your account", 400);
+          "Couldn't find membership data" + (user.admin !== true ? ' in your account' : ''), 400);
       }
 
       const userToDeleteId = membershipData.user;
+      
+      // Check if the user to delete is a super admin
+      const userToDelete = await Users.findById(userToDeleteId).select('admin');
+      if (userToDelete && userToDelete.admin === true) {
+        return Service.rejectResponse(
+          'Cannot delete super administrator. ' +
+          'Super admins can only be managed through system configuration.',
+          403
+        );
+      }
+
       // Don't allow to delete self
       if (user._id.toString() === userToDeleteId.toString()) {
         return Service.rejectResponse('User cannot delete itself', 400);
       }
 
       // Check that current user is allowed to delete member
-      const verified = await MembersService.checkMemberLevel(membershipData.to, membershipData.role,
-        (membershipData.to === 'organization')
-          ? membershipData.organization : membershipData.group,
-        user._id, user.defaultAccount._id, membershipData);
-      if (!verified) {
-        return Service.rejectResponse(
-          'No sufficient permissions for this operation', 400);
-      }
-
-      // Check that the account have at least one owner
-      if (membershipData.to === 'account' && membershipData.role === 'owner') {
-        const numAccountOwners = await membership.countDocuments({
-          account: user.defaultAccount._id,
-          to: 'account',
-          role: 'owner'
-        });
-        if (numAccountOwners < 2) {
-          return Service.rejectResponse('Account must have at least one owner', 400);
+      // Super admins bypass permission checks
+      if (user.admin !== true) {
+        const verified = await MembersService.checkMemberLevel(
+          membershipData.to,
+          membershipData.role,
+          (membershipData.to === 'organization')
+            ? membershipData.organization : membershipData.group,
+          user._id,
+          user.defaultAccount._id,
+          membershipData
+        );
+        if (!verified) {
+          return Service.rejectResponse(
+            'No sufficient permissions for this operation', 400);
         }
       }
+
+      // Note: Removed the "last owner" check to allow deletion of all non-admin users
+      // Super admins can delete any user (except other super admins and themselves)
+      // This may result in accounts with no owners, which is acceptable for this system
 
       // If user has other permissions on the same account, keep the account and set org to null
       // If user has permissions to other account, switch the account and set org to null
@@ -509,11 +533,11 @@ class MembersService {
       // Delete membership entry, user may have other permissions to that account
       await membership.deleteOne({
         _id: id,
-        account: user.defaultAccount._id
+        account: membershipData.account
       });
 
-      const userToDelete = await users.findOne({ _id: userToDeleteId });
-      const userOrgList = await getUserOrganizations(userToDelete);
+      const userDoc = await users.findOne({ _id: userToDeleteId });
+      const userOrgList = await getUserOrganizations(userDoc);
       const userOrgsIds = Object.keys(userOrgList);
       // Stop receiving email notifications from previous organizations
       await NotificationsConf.updateMany(

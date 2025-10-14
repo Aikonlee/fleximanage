@@ -1,0 +1,196 @@
+.about-page {
+  padding: var(--spacing-md);
+  max-width: 900px;
+  margin: 0;
+  animation: fadeIn 0.5s ease;
+  max-height: calc(100vh - var(--header-height) - 40px);
+  overflow: hidden;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.about-card {
+  margin-top: var(--spacing-md);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-light);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.about-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.about-card .card-body {
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.about-logo {
+  text-align: left;
+  padding: var(--spacing-lg) 0 var(--spacing-md) var(--spacing-lg);
+  border-bottom: 3px solid transparent;
+  background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  background-clip: padding-box;
+  border-image: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-light) 100%) 1;
+  margin-bottom: var(--spacing-lg);
+}
+
+.about-logo .brand-name {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.about-info {
+  margin-bottom: var(--spacing-md);
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-light);
+  transition: background-color var(--transition-fast);
+}
+
+.info-item:hover {
+  background-color: var(--primary-lighter);
+  padding-left: var(--spacing-md);
+  padding-right: var(--spacing-md);
+  margin-left: calc(-1 * var(--spacing-md));
+  margin-right: calc(-1 * var(--spacing-md));
+  border-radius: var(--radius-md);
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.info-label::before {
+  content: '▸';
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+.info-value {
+  font-weight: 600;
+  color: var(--primary-color);
+  font-size: var(--font-size-base);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--primary-lighter);
+  border-radius: var(--radius-sm);
+}
+
+.about-description {
+  margin: var(--spacing-md) 0 0 0;
+  padding: var(--spacing-md);
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.about-description p {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.about-links {
+  margin-top: 30px;
+}
+
+.link-item {
+  display: flex;
+  flex-direction: column;
+  padding: 15px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.link-item:last-child {
+  border-bottom: none;
+}
+
+.link-label {
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 5px;
+  font-size: 0.95rem;
+}
+
+.link-value {
+  color: #007bff;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: color 0.2s;
+}
+
+.link-value:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
+
+/* Page header optimization for About page */
+.about-page .page-header {
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 2px solid var(--border-light);
+}
+
+.about-page .page-header h2 {
+  font-size: var(--font-size-xl);
+  margin: 0;
+  color: var(--text-primary);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .about-page {
+    padding: var(--spacing-sm);
+    max-height: none;
+    overflow: auto;
+  }
+
+  .about-logo .brand-name {
+    font-size: var(--font-size-xl);
+  }
+
+  .info-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+
+  .info-label,
+  .info-value {
+    font-size: var(--font-size-xs);
+  }
+  
+  .about-description {
+    padding: var(--spacing-sm);
+  }
+}

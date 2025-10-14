@@ -185,6 +185,27 @@ class DeviceStatus {
           state: Joi.string(),
           peerState: Joi.string()
         }))
+      }).allow({}).optional(),
+      wan_monitoring: Joi.object().pattern(/^[a-z0-9:._/-]{1,64}$/i, Joi.object({
+        ifname: Joi.string().optional(),
+        rtt: Joi.number().optional(),
+        drop_rate: Joi.number().optional(),
+        connected: Joi.boolean().optional()
+      })).allow({}).optional(),
+      dhcp: Joi.object({
+        leases: Joi.array().items(Joi.object({
+          address: Joi.string().ip({ version: ['ipv4'] }),
+          hwaddr: Joi.string(),
+          client_id: Joi.string().optional(),
+          valid_lifetime: Joi.string().optional(),
+          expire: Joi.string().optional(),
+          subnet_id: Joi.string().optional(),
+          fqdn_fwd: Joi.string().optional(),
+          fqdn_rev: Joi.string().optional(),
+          hostname: Joi.string().allow('').optional(),
+          state: Joi.string().optional(),
+          user_context: Joi.string().allow('').optional()
+        }))
       }).allow({}).optional()
     });
 

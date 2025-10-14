@@ -43,8 +43,45 @@ const { generateSecret, verifyCode } = require('../otp');
 const SHA256 = require('crypto-js/sha256');
 const rateLimit = require('express-rate-limit');
 const RateLimitStore = require('../rateLimitStore');
+const jwt = require('jsonwebtoken');
+const { verifyToken } = require('../tokens');
 
 router.use(bodyParser.json());
+
+// Manual JWT verification middleware for user verification endpoints
+const verifyAdminJWT = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return next(createError(401, 'No authentication token provided'));
+    }
+
+    await verifyToken(token);
+    const decoded = jwt.decode(token);
+    
+    if (!decoded || !decoded._id) {
+      return next(createError(401, 'Invalid token'));
+    }
+
+    const user = await User.findById(decoded._id)
+      .populate('defaultOrg')
+      .populate('defaultAccount');
+    
+    if (!user) {
+      return next(createError(401, 'User not found'));
+    }
+
+    if (user.admin !== true) {
+      return next(createError(403, 'Admin access required'));
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    logger.error('JWT verification failed', { params: { error: err.message } });
+    return next(createError(401, 'Authentication failed'));
+  }
+};
 
 // Error formatter
 const formatErr = (err, msg) => {
@@ -716,6 +753,158 @@ router.route('/mfa/verifyRecoveryCode')
     }
 
     return await sendJwtToken(req, res, validated);
+  });
+
+// Batch verify users by admin (must come before /:userId/verify to avoid route conflict)
+router.route('/verify/batch')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, verifyAdminJWT, async (req, res, next) => {
+    try {
+      if (!req.body.ids || !Array.isArray(req.body.ids) || req.body.ids.length === 0) {
+        return next(createError(400, 'Invalid user IDs'));
+      }
+
+      const result = await User.updateMany(
+        { _id: { $in: req.body.ids }, state: 'unverified' },
+        { state: 'verified' }
+      );
+
+      logger.info('Batch user verification', {
+        params: { count: result.modifiedCount, adminId: req.user._id }
+      });
+
+      return res.status(200).json({
+        status: 'batch verification completed',
+        verifiedCount: result.modifiedCount
+      });
+    } catch (err) {
+      logger.error('Batch verification failed', {
+        params: { reason: err.message }
+      });
+      return next(createError(500, 'Batch verification failed'));
+    }
+  });
+
+// Verify user by admin (single user)
+router.route('/:userId/verify')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, verifyAdminJWT, async (req, res, next) => {
+    try {
+      const user = await User.findOneAndUpdate(
+        { _id: req.params.userId, state: 'unverified' },
+        { state: 'verified' },
+        { new: true }
+      );
+
+      if (!user) {
+        return next(createError(404, 'User not found or already verified'));
+      }
+
+      logger.info('User verified by admin', {
+        params: { userId: req.params.userId, adminId: req.user._id }
+      });
+
+      return res.status(200).json({ status: 'user verified', userId: user._id });
+    } catch (err) {
+      logger.error('User verification failed', {
+        params: { userId: req.params.userId, reason: err.message }
+      });
+      return next(createError(500, 'Verification failed'));
+    }
+  });
+
+// Batch promote/demote admin (must come before /:userId/admin to avoid route conflict)
+router.route('/admin/batch')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, verifyAdminJWT, async (req, res, next) => {
+    try {
+      const { promote, demote } = req.body;
+
+      if (promote && Array.isArray(promote) && promote.length > 0) {
+        const result = await User.updateMany(
+          { _id: { $in: promote } },
+          { admin: true }
+        );
+        logger.info('Batch user promotion', {
+          params: { count: result.modifiedCount, adminId: req.user._id }
+        });
+        return res.status(200).json({
+          status: 'batch promotion completed',
+          promotedCount: result.modifiedCount
+        });
+      } else if (demote && Array.isArray(demote) && demote.length > 0) {
+        const result = await User.updateMany(
+          { _id: { $in: demote } },
+          { admin: false }
+        );
+        logger.info('Batch user demotion', {
+          params: { count: result.modifiedCount, adminId: req.user._id }
+        });
+        return res.status(200).json({
+          status: 'batch demotion completed',
+          demotedCount: result.modifiedCount
+        });
+      } else {
+        return next(createError(400, 'Invalid request: provide promote or demote array'));
+      }
+    } catch (err) {
+      logger.error('Batch admin operation failed', {
+        params: { reason: err.message }
+      });
+      return next(createError(500, 'Batch admin operation failed'));
+    }
+  });
+
+// Promote/Demote admin (single user)
+router.route('/:userId/admin')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .put(cors.corsWithOptions, verifyAdminJWT, async (req, res, next) => {
+    try {
+      const user = await User.findOneAndUpdate(
+        { _id: req.params.userId },
+        { admin: true },
+        { new: true }
+      );
+
+      if (!user) {
+        return next(createError(404, 'User not found'));
+      }
+
+      logger.info('User promoted to admin', {
+        params: { userId: req.params.userId, adminId: req.user._id }
+      });
+
+      return res.status(200).json({ status: 'user promoted', userId: user._id });
+    } catch (err) {
+      logger.error('User promotion failed', {
+        params: { userId: req.params.userId, reason: err.message }
+      });
+      return next(createError(500, 'Promotion failed'));
+    }
+  })
+  .delete(cors.corsWithOptions, verifyAdminJWT, async (req, res, next) => {
+    try {
+      const user = await User.findOneAndUpdate(
+        { _id: req.params.userId },
+        { admin: false },
+        { new: true }
+      );
+
+      if (!user) {
+        return next(createError(404, 'User not found'));
+      }
+
+      logger.info('User demoted from admin', {
+        params: { userId: req.params.userId, adminId: req.user._id }
+      });
+
+      return res.status(200).json({ status: 'user demoted', userId: user._id });
+    } catch (err) {
+      logger.error('User demotion failed', {
+        params: { userId: req.params.userId, reason: err.message }
+      });
+      return next(createError(500, 'Demotion failed'));
+    }
   });
 
 // Default exports

@@ -44,7 +44,7 @@ const pick = (...keys) => obj => keys.reduce((a, e) => {
   const objKeys = e.split('.');
   let val = obj[objKeys[0]];
   for (let i = 1; i < objKeys.length; i++) {
-    if (val && val[objKeys[i]]) val = val[objKeys[i]]; else val = null;
+    if (val && objKeys[i] in val) val = val[objKeys[i]]; else val = null;
   };
   return { ...a, [objKeys.join('_')]: val };
 }, {});
@@ -155,10 +155,33 @@ membersRouter.route('/')
   .get(cors.corsWithOptions, verifyPermission('members', 'get'), async (req, res, next) => {
     let userPromise = null;
     // Check the user permission:
+    // Super admin can see all users across all accounts
     // Account owners or members should be able to see all account users + groups +
     // all organizations users. Organization members should be
     // able to see all organization users
-    if (req.user.perms.accounts & permissionMasks.get) {
+    
+    // Debug logging - write to file for troubleshooting
+    const fs = require('fs');
+    const debugLog = '/root/fleximanage/logs/members-debug.log';
+    const debugInfo = {
+      timestamp: new Date().toISOString(),
+      userId: req.user._id,
+      userEmail: req.user.email,
+      isAdmin: req.user.admin,
+      adminType: typeof req.user.admin,
+      adminStrictCheck: req.user.admin === true,
+      defaultAccount: req.user.defaultAccount?._id,
+      queryParams: req.query
+    };
+    fs.appendFileSync(debugLog, JSON.stringify(debugInfo, null, 2) + '\n');
+    
+    if (req.user.admin === true) {
+      // Super admin: show all users from all accounts
+      fs.appendFileSync(debugLog, 'BRANCH: Super admin access\n');
+      userPromise = membership.find({});
+    } else if (req.user.perms.accounts & permissionMasks.get) {
+      fs.appendFileSync(debugLog, 'BRANCH: Account owner/manager access\n');
+      userPromise = membership.find({ account: req.user.defaultAccount._id });
       userPromise = membership.find({ account: req.user.defaultAccount._id });
     } else if (req.user.perms.organizations & permissionMasks.get) {
       userPromise = membership.find({
@@ -176,12 +199,52 @@ membersRouter.route('/')
         .populate('account')
         .populate('organization')
         .then((memList) => {
-          const response = memList.map(mem =>
+          // Apply filters
+          let filtered = memList;
+
+          // State filter
+          if (req.query.state) {
+            const states = req.query.state.split(',').map(s => s.trim());
+            filtered = filtered.filter(mem => mem.user && states.includes(mem.user.state));
+          }
+
+          // Search filter
+          if (req.query.q) {
+            const q = req.query.q.toLowerCase();
+            filtered = filtered.filter(mem => {
+              const user = mem.user || {};
+              const account = mem.account || {};
+              const org = mem.organization || {};
+              return (
+                (user.name && user.name.toLowerCase().includes(q)) ||
+                (user.lastName && user.lastName.toLowerCase().includes(q)) ||
+                (user.email && user.email.toLowerCase().includes(q)) ||
+                (user.username && user.username.toLowerCase().includes(q)) ||
+                (account.name && account.name.toLowerCase().includes(q)) ||
+                (org.name && org.name.toLowerCase().includes(q))
+              );
+            });
+          }
+
+          const total = filtered.length;
+
+          // Apply pagination
+          const offset = parseInt(req.query.offset) || 0;
+          const limit = parseInt(req.query.limit) || 25;
+          const paginated = filtered.slice(offset, offset + limit);
+
+          const response = paginated.map(mem =>
             pick(
               '_id',
               'user._id',
               'user.name',
+              'user.lastName',
               'user.email',
+              'user.username',
+              'user.admin',
+              'user.state',
+              'user.jobTitle',
+              'user.phoneNumber',
               'to',
               'account.name',
               'account._id',
@@ -191,6 +254,12 @@ membersRouter.route('/')
               'role'
             )(mem)
           );
+
+          // Set pagination headers
+          res.set('X-Total-Count', total.toString());
+          res.set('X-Offset', offset.toString());
+          res.set('X-Limit', limit.toString());
+
           return res.status(200).json(response);
         })
         .catch((err) => {

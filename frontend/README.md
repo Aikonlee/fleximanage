@@ -1,0 +1,588 @@
+# FlexiManage Frontend
+
+React Web UI for the flexiWAN (flexiManage) backend – an open source SD‑WAN management platform.  
+This project provides a comprehensive, production-ready administration console targeting the APIs exposed by the flexiManage backend.
+
+> The project includes both responsive UI components and real-time dashboard functionality with live traffic statistics and device monitoring.
+
+## 🚀 Current Implementation Status
+
+### ✅ **Fully Implemented Features**
+
+- **🏠 Dashboard**: 
+  - Real-time device statistics (running, connected, approved status)
+  - Live traffic monitoring with automatic unit conversion (Bytes → MBytes → GBytes)
+  - Tunnel status tracking (connected, pending, unknown)
+  - Dynamic data fetching from backend analytics
+  - Professional status tables with color-coded indicators
+
+- **🖥️ Device Management**: 
+  - Complete device listing with status indicators
+  - Device information modal with detailed hardware specs
+  - Real-time connection status monitoring
+  - Device configuration and approval workflow
+
+- **🔗 Tunnel Management**: 
+  - Tunnel overview and status monitoring
+  - Bandwidth allocation tracking
+  - Connection state management
+  - Tunnel configuration interface
+
+- **🌐 Network Management**: 
+  - Network topology visualization
+  - Interface configuration
+  - Network settings management
+  - Organization-based network isolation
+
+- **🔐 Security & Access Control**:
+  - JWT-based authentication with role-based permissions
+  - Firewall policy management interface
+  - QoS policy configuration
+  - Access token management with centered table layouts
+
+- **👥 User & Organization Management**:
+  - Multi-organization support
+  - User role management
+  - Member invitation system
+  - Organization settings and billing
+
+- **📊 Monitoring & Analytics**:
+  - Real-time device monitoring
+  - Traffic analytics with backend integration
+  - Performance metrics dashboard
+  - Notification system
+
+### 🔧 **Authentication & Security**
+- **Cloudflare Turnstile Integration**: Complete captcha support for login/registration
+- **Role-Based Access Control**: Permission-based route guards
+- **JWT Token Management**: Secure token handling with refresh capabilities
+- **Session Management**: Persistent login with secure storage
+
+## 🛠️ Technology Stack
+
+- **React 18**: Modern React with hooks and functional components
+- **React Router 6**: Advanced client-side routing with route guards
+- **Bootstrap 5 & React-Bootstrap**: Responsive UI framework with custom components
+- **Axios**: HTTP client with request/response interceptors
+- **React Icons**: Comprehensive icon library (Font Awesome, Bootstrap icons)
+- **Recharts**: Data visualization for analytics dashboards
+- **JWT Authentication**: Token-based authentication with permission decoding
+
+### 🎨 **UI/UX Features**
+- **Responsive Design**: Mobile-first approach with Bootstrap grid system
+- **Custom Styling**: Tailored CSS with professional color schemes
+- **Unified Table Components**: Consistent table layouts across all pages
+- **Real-time Updates**: Live data refresh without page reloads
+- **Status Indicators**: Color-coded status badges and progress indicators
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Node.js 16+** and npm
+- **FlexiManage Backend** running (ports 3002/8000 for HTTP, 3443 for HTTPS)
+- **Docker** (recommended for development environment)
+
+### Development Setup
+
+1. **Navigate to frontend directory:**
+   ```bash
+   cd frontend
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment variables:**
+   ```bash
+   # Optional: Set custom API URL
+   export REACT_APP_API_URL=http://manage.miwide.com:3002/api
+   
+   # Optional: Set Cloudflare Turnstile keys
+   export REACT_APP_TURNSTILE_SITE_KEY=your_site_key
+   ```
+
+4. **Start development server:**
+   ```bash
+   npm start
+   ```
+
+5. **Access the application:**
+   - Frontend: [http://localhost:3000](http://localhost:3000)
+   - Backend API: [http://manage.miwide.com:3002/api](http://manage.miwide.com:3002/api)
+
+### 🐳 Docker Development
+
+The project includes Docker configuration for seamless development:
+
+```bash
+# Start the entire stack
+docker compose up -d
+
+# Frontend: http://manage.miwide.com:3000
+# Backend API: http://manage.miwide.com:3002/api
+# Backend HTTPS: https://manage.miwide.com:3443
+```
+
+### 📦 Build for Production
+
+```bash
+npm run build
+```
+
+The optimized build artifacts will be stored in the `build/` directory, ready for deployment.
+
+## 📁 Project Structure
+
+```
+frontend/
+├── public/
+│   ├── index.html              # Main HTML template
+│   ├── manifest.json           # PWA manifest
+│   └── favicon.ico             # Application icon
+├── src/
+│   ├── components/             # Reusable UI components
+│   │   ├── Header.js           # Navigation header with user menu
+│   │   ├── Sidebar.js          # Main navigation sidebar
+│   │   ├── Forbidden.js        # 403 permission denied component
+│   │   └── *.css               # Component-specific styles
+│   ├── pages/                  # Main application pages
+│   │   ├── Home.js             # Dashboard with real-time stats
+│   │   ├── Devices.js          # Device management interface
+│   │   ├── Tunnels.js          # Tunnel monitoring and config
+│   │   ├── Network.js          # Network topology and settings
+│   │   ├── Firewall.js         # Security policy management
+│   │   ├── QoS.js              # Quality of Service policies
+│   │   ├── Monitoring.js       # Analytics and monitoring
+│   │   ├── Login.js            # Authentication with Turnstile
+│   │   ├── Register.js         # User registration
+│   │   ├── Tokens.js           # API token management
+│   │   ├── Settings.js         # System configuration
+│   │   ├── account/            # Account management pages
+│   │   │   ├── Profile.js      # User profile settings
+│   │   │   ├── Organizations.js # Organization management
+│   │   │   ├── Members.js      # Team member management
+│   │   │   ├── Billing.js      # Billing and subscription
+│   │   │   ├── AccessKeys.js   # API access keys
+│   │   │   └── NotificationsSettings.js # Alert preferences
+│   │   └── *.css               # Page-specific stylesheets
+│   ├── services/               # API and external services
+│   │   ├── api.js              # Axios HTTP client configuration
+│   │   └── meta.js             # Metadata and utility functions
+│   ├── auth/                   # Authentication logic
+│   │   └── permissions.js      # JWT decoding and role-based access
+│   ├── constants/              # Application constants
+│   │   ├── branding.js         # Brand configuration
+│   │   ├── countries.js        # Country/region data
+│   │   └── serviceTypes.js     # Service type definitions
+│   ├── styles/                 # Global stylesheets
+│   │   ├── index.css           # Global styles and Bootstrap overrides
+│   │   └── unified-table.css   # Consistent table styling
+│   ├── App.js                  # Main application component with routing
+│   ├── index.js                # React application entry point
+│   └── setupProxy.js           # Development proxy configuration
+├── package.json                # Dependencies and scripts
+└── README.md                   # This documentation
+```
+
+## 🔐 Authentication & Access Control
+
+### Default Credentials
+- **Username:** `admin@flexiwan.com`
+- **Password:** `admin`
+
+### JWT-Based Authentication
+The application uses JWT tokens with role-based permissions:
+
+```javascript
+// Token structure includes permission claims
+{
+  "sub": "user_id",
+  "username": "admin@flexiwan.com", 
+  "defaultOrg": { "_id": "org_id", "name": "Organization" },
+  "perms": {
+    "devices": 7,      // Full access (read/write/delete)
+    "tunnels": 1,      // Read-only access
+    "accounts": 7      // Full access
+  }
+}
+```
+
+### Permission-Based Route Guards
+Routes are protected based on JWT permission claims:
+
+| Route Path | Required Permission | Access Level |
+|------------|-------------------|--------------|
+| `/` (Home) | `devices` | Read (1) |
+| `/devices` | `devices` | Read (1) |
+| `/tunnels` | `tunnels` | Read (1) |
+| `/firewall` | `firewallpolicies` | Read (1) |
+| `/qos` | `qospolicies` | Read (1) |
+| `/monitoring` | `devices` | Read (1) |
+| `/network` | `organizations` | Read (1) |
+| `/account/*` | `accounts` | Read (1) |
+| `/account/organizations` | `organizations` | Read (1) |
+| `/account/access-keys` | `accesstokens` | Read (1) |
+
+## 🔌 Backend Integration & API
+
+### API Configuration
+The frontend communicates with the FlexiManage backend through a well-defined REST API:
+
+```javascript
+// Default API endpoints
+const API_ENDPOINTS = {
+  HTTP: 'http://manage.miwide.com:3002/api',
+  HTTPS: 'https://manage.miwide.com:3443/api',
+  WebSocket: 'wss://manage.miwide.com:3443'
+};
+```
+
+### Environment Configuration
+Configure API endpoints using environment variables:
+
+```bash
+# Development
+REACT_APP_API_URL=http://manage.miwide.com:3002/api npm start
+
+# Production
+REACT_APP_API_URL=https://manage.miwide.com:3443/api npm run build
+```
+
+### Real-Time Data Integration
+The frontend fetches live data from multiple backend services:
+
+- **Dashboard Statistics**: `/api/dashboard/stats` - Real-time device and traffic metrics
+- **Device Management**: `/api/devices` - Device status, configuration, and health
+- **Tunnel Monitoring**: `/api/tunnels` - VPN tunnel status and bandwidth
+- **Traffic Analytics**: Backend aggregates device statistics for monthly traffic totals
+- **WebSocket Events**: Live device connection status and notifications
+
+### API Client Features
+```javascript
+// Configured with interceptors for:
+- JWT token attachment
+- Automatic token refresh
+- Error handling and retry logic
+- Request/response logging
+- CORS support
+```
+
+## Cloudflare Turnstile (Login & Registration)
+
+If the backend is configured with Cloudflare Turnstile keys it will expect a captcha token on registration (already implemented server side) and now also on login. To enable the widget on this frontend login page:
+
+1. Obtain keys from https://dash.cloudflare.com/profile/api-tokens (Turnstile section)
+2. Export the site key at dev/build time:
+   ```bash
+   REACT_APP_TURNSTILE_SITE_KEY=<YOUR_SITE_KEY> npm start
+   # or for a production build
+   REACT_APP_TURNSTILE_SITE_KEY=<YOUR_SITE_KEY> npm run build
+   ```
+3. Backend env variables (example):
+   ```bash
+   export CAPTCHA_SITE_KEY=<YOUR_SITE_KEY>
+   export CAPTCHA_SECRET_KEY=<YOUR_SECRET_KEY>
+   ```
+4. Without `CAPTCHA_SECRET_KEY` the backend will treat captcha as always valid (development convenience).
+
+Development / Test Keys:
+For quick local setup you can use Cloudflare's public TEST key pair for Turnstile (works on any domain, always validates):
+
+```
+Site (public) key: 1x00000000000000000000AA
+Secret (server) key: 1x0000000000000000000000000000000AA
+```
+
+Export them exactly like real keys. NEVER use these test keys in production.
+
+Adaptive enforcement: The backend now also returns `captchaEnforced` from `GET /api/public/config` which is true only when the backend has a non-empty secret key (`captchaKey`).
+
+Behavior matrix:
+
+| Site Key Present | captchaEnforced | Widget Loads | Result |
+|------------------|-----------------|--------------|--------|
+| No               | false           | N/A          | No captcha shown, login proceeds normally |
+| Yes              | false           | Yes          | Token collected but not required (dev / test mode) |
+| Yes              | false           | Fails        | Warning banner; login still allowed |
+| Yes              | true            | Yes          | User must complete captcha before submit |
+| Yes              | true            | Fails        | Error banner – user may be blocked (operator should fix key/network) |
+
+Watchdog: After 6 seconds, if a site key exists but the widget has not rendered, a warning (non-enforced) or danger (enforced) alert appears to aid debugging. In non-enforced mode users can still submit. In enforced mode they are advised that login may fail until the issue is resolved.
+
+### Runtime Mechanism for Acquiring captchaSiteKey (No Rebuild Required)
+
+To avoid rebuilding every time the site key is changed, the frontend determines the Cloudflare Turnstile site key based on the following priority:
+1. Build-time environment variable `REACT_APP_TURNSTILE_SITE_KEY`
+2. Runtime-injected `window.__TURNSTILE_SITE_KEY__` (can be manually written in a script tag in `index.html`)
+3. Fetched from the backend public endpoint `GET /api/public/config` which returns `captchaSiteKey`
+   (since enhancement: also returns `captchaEnforced` boolean)
+
+If neither 1 nor 2 exists, `Login.js` will automatically request `/api/public/config` after mounting. If the response contains `captchaSiteKey`, it will load the Cloudflare Turnstile script and render the widget on the fly, without requiring a rebuild.
+
+Example of backend public endpoint response:
+```json
+{
+   "captchaSiteKey": "0x4AAAAAAAxxxxxxxxxxxxxxxxxx",
+   "companyName": "flexiWAN",
+   "allowUsersRegistration": true
+}
+```
+
+Example of runtime override (for operations to inject in the browser console without a rebuild):
+```js
+window.__TURNSTILE_SITE_KEY__ = 'NEW_SITE_KEY';
+// Manually trigger a page re-render (e.g., by navigating away and back to the login page) to reload the script
+```
+
+To disable Turnstile: ensure that the key is not provided in any of the three locations (build variable, global injection, or API response).
+
+The frontend does not expose the backend's SECRET (only the public site key is transmitted).
+
+## Role-Based Route Guards
+
+The frontend now decodes JWT permissions (`perms` claim) and guards certain routes.
+
+Permission mapping (view requires GET bit = 0x1):
+| Route | Permission Key |
+|-------|----------------|
+| /devices | devices |
+| /tunnels | tunnels |
+| /firewall | firewallpolicies |
+| /qos | qospolicies |
+| /monitoring | devices |
+| /account, /account/profile | accounts |
+| /account/organizations | organizations |
+| /account/notifications | notifications |
+| /account/billing | billing |
+| /account/access-keys | accesstokens |
+| /network | organizations |
+| /users | accounts |
+
+If user lacks the GET permission bit for the mapped key a 403 placeholder is shown.
+
+Implementation details:
+1. Token decoded client-side (no external libs) in `src/auth/permissions.js`.
+2. Guard logic inside `App.js` via a lightweight `<Guard />` wrapper.
+3. Adjust or extend mapping by editing the route definitions in `App.js`.
+
+Future ideas: central route config, dynamic menu hiding based on same permission map.
+
+## 🎨 UI/UX Design System
+
+### Custom Styling Framework
+The application uses a unified design system built on Bootstrap 5:
+
+```css
+/* Key design principles */
+- Consistent color palette with status indicators
+- Responsive grid layouts for all screen sizes  
+- Unified table styling across all pages
+- Professional typography with proper hierarchy
+- Custom components with hover states and transitions
+```
+
+### Status Color Coding
+```css
+.status-running     { color: #28a745; background: #d4edda; } /* Green */
+.status-connected   { color: #007bff; background: #cce7ff; } /* Blue */
+.status-warning     { color: #ffc107; background: #fff3cd; } /* Yellow */
+.status-error       { color: #dc3545; background: #f8d7da; } /* Red */
+.status-pending     { color: #6f42c1; background: #e2d9f3; } /* Purple */
+```
+
+### Responsive Breakpoints
+- **Mobile**: < 768px (Collapsible sidebar, stacked cards)
+- **Tablet**: 768px - 1024px (Sidebar overlay, responsive tables)
+- **Desktop**: > 1024px (Fixed sidebar, full table views)
+
+## 📊 Recent Enhancements
+
+### ✨ **Latest Updates (October 2025)**
+1. **Real-Time Traffic Statistics**: 
+   - Dynamic traffic calculation from device analytics
+   - Automatic unit conversion (Bytes → KBytes → MBytes → GBytes)
+   - Live updates without page refresh
+
+2. **Enhanced Table Layouts**:
+   - Centered column headers and data across all pages
+   - Consistent table styling for Tokens, Access Keys, and status tables
+   - Professional borders and spacing
+
+3. **Improved Dashboard**:
+   - Live device status monitoring (running, connected, approved)
+   - Real-time tunnel status tracking
+   - Professional status tables with color-coded indicators
+
+4. **WebSocket Integration**:
+   - Backend HTTPS server properly configured
+   - FlexiEdge agent connectivity restored
+   - Real-time device communication enabled
+
+5. **Production-Ready Features**:
+   - Docker containerization with volume mounting
+   - Environment-based configuration
+   - Hot reloading for development
+
+## 🚧 Development Status & Roadmap
+
+### Current Implementation Status
+This frontend represents a **production-ready** React application that has been:
+- ✅ **Fully reconstructed** from analysis of existing backend APIs
+- ✅ **Enhanced** with modern React patterns and real-time features
+- ✅ **Integrated** with live backend services and WebSocket communication
+- ✅ **Styled** with professional UI/UX design system
+- ✅ **Containerized** for Docker deployment
+
+### Next Planned Enhancements
+1. **TypeScript Migration**: Incremental conversion starting with services layer
+2. **Advanced Analytics**: Recharts integration for traffic visualization
+3. **Real-Time Notifications**: Toast system for API events and errors
+4. **Mobile Optimization**: Enhanced responsive design for mobile devices
+5. **E2E Testing**: Cypress test suite for critical user flows
+
+## 🤝 Contributing
+
+### Development Guidelines
+When contributing to this project:
+
+1. **API Integration**: Wrap new backend endpoints in `src/services/api.js`
+2. **Component Structure**: Use functional components with React hooks
+3. **Styling**: Follow the unified design system in `src/styles/`
+4. **Permissions**: Implement route guards for new protected pages
+5. **Error Handling**: Add proper error boundaries and user feedback
+
+### Code Standards
+```javascript
+// Example component structure
+import React, { useState, useEffect } from 'react';
+import { Card, Table } from 'react-bootstrap';
+import api from '../services/api';
+import './ComponentName.css';
+
+const ComponentName = () => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const response = await api.get('/endpoint');
+      setData(response.data);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="component-name">
+      {/* Component JSX */}
+    </div>
+  );
+};
+
+export default ComponentName;
+```
+
+## 🏷️ Branding Customization
+
+All user-visible brand strings are centralized in `src/constants/branding.js`:
+
+```javascript
+export const BRAND_NAME = 'FlexiManage';
+export const BRAND_TAGLINE = 'Open SD-WAN Management Platform';
+```
+
+### Customization Steps
+1. **Update Brand Constants**: Edit `src/constants/branding.js`
+2. **Update HTML Metadata**: Modify `public/index.html` title and meta description
+3. **Update PWA Manifest**: Edit `public/manifest.json` for app name and short_name
+4. **Rebuild Application**: Run `npm run build` to apply changes
+
+```bash
+# Example rebranding workflow
+echo 'export const BRAND_NAME = "MySDWAN";' > src/constants/branding.js
+echo 'export const BRAND_TAGLINE = "Custom Network Management";' >> src/constants/branding.js
+npm run build
+```
+
+### Design Guidelines
+- Import brand constants in components instead of hardcoding strings
+- Maintain consistent branding across all user-facing text
+- Update favicons and logos in the `public/` directory
+- Consider updating CSS custom properties for brand colors
+
+## 📈 Performance & Monitoring
+
+### Build Optimization
+- **Code Splitting**: Automatic route-based code splitting
+- **Tree Shaking**: Unused code elimination in production builds
+- **Asset Optimization**: Image compression and lazy loading
+- **Bundle Analysis**: Use `npm run build` with `--analyze` flag
+
+### Production Monitoring
+```javascript
+// Web Vitals tracking included
+import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals';
+
+// Performance metrics automatically collected
+getCLS(console.log);
+getFID(console.log);
+getFCP(console.log);
+getLCP(console.log);
+getTTFB(console.log);
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**API Connection Issues:**
+```bash
+# Check backend availability
+curl -X GET "http://manage.miwide.com:3002/api/dashboard/stats"
+
+# Verify CORS configuration
+# Check browser console for CORS errors
+```
+
+**Authentication Problems:**
+```bash
+# Clear browser storage
+localStorage.clear();
+sessionStorage.clear();
+
+# Check JWT token validity
+# Inspect token in browser developer tools
+```
+
+**Build Issues:**
+```bash
+# Clear node modules and reinstall
+rm -rf node_modules package-lock.json
+npm install
+
+# Clear React build cache
+rm -rf build/
+npm run build
+```
+
+---
+
+## 📞 Support & Documentation
+
+- **Backend Repository**: [FlexiManage Backend](https://github.com/Miwide-Info/fleximanage)
+- **API Documentation**: Available at `/api/docs` when backend is running
+- **Issue Tracking**: Use GitHub Issues for bug reports and feature requests
+- **Development Chat**: Contact the FlexiWAN development team
+
+**Version**: 1.0.0 (Production Ready)  
+**Last Updated**: October 2025  
+**License**: AGPL-3.0

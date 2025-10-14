@@ -40,6 +40,7 @@ const deviceQueues = require('../utils/deviceQueue')(
 );
 const { createClient } = require('redis');
 const { getRedisAuthUrl } = require('../utils/httpUtils');
+const zlib = require('zlib');
 
 const uuid = require('uuid');
 const httpsPort = configs.get('httpsPort');
@@ -224,6 +225,39 @@ class Connections {
     }
   }
 
+  normalizeDeviceResponse (seq, rawMsg) {
+    if (rawMsg == null) return rawMsg;
+
+    // Handle legacy agents that return JSON strings and newer agents that compress responses
+    if (typeof rawMsg === 'string') {
+      const trimmed = rawMsg.trim();
+
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          return JSON.parse(trimmed);
+        } catch (error) {
+          logger.debug('Failed to parse JSON device message', {
+            params: { seq, error: error.message }
+          });
+        }
+      }
+
+      try {
+        const inflated = zlib.inflateSync(Buffer.from(rawMsg, 'base64')).toString();
+        const parsed = JSON.parse(inflated);
+        logger.debug('Inflated compressed device message', { params: { seq } });
+        return parsed;
+      } catch (error) {
+        logger.debug('Failed to inflate device message', {
+          params: { seq, error: error.message }
+        });
+        return rawMsg;
+      }
+    }
+
+    return rawMsg;
+  }
+
   /**
    * Process the response message from device
    * It can be received directly from websocket
@@ -237,23 +271,36 @@ class Connections {
     if (!seq) return;
     const { resolver, rejecter, validator, tohandle } = this.msgQueue[seq] ?? {};
     if (typeof resolver === 'function') {
+      const normalizedMsg = this.normalizeDeviceResponse(seq, msg);
+      const response = (normalizedMsg && typeof normalizedMsg === 'object')
+        ? normalizedMsg
+        : { ok: false, message: normalizedMsg };
+      const isOk = response?.ok === true || response?.ok === 1;
+      if (!isOk) {
+        logger.warn('Device responded with non-OK message', {
+          params: {
+            seq,
+            response
+          }
+        });
+      }
       // Only validate device's response if the device processed the message
       // successfully, to prevent validation errors due to the mismatch
       // between the message schema and the error returned by the device
-      const { valid, err } = msg.ok
-        ? validator(msg.message)
+      const { valid, err } = isOk
+        ? validator(response.message)
         : { valid: true, err: '' };
 
       if (!valid) {
         const validatorName = validator.name;
-        const content = JSON.stringify(msg.message);
+        const content = JSON.stringify(response.message);
         rejecter(
           new Error(
             `message validation failed: ${err}. validator=${validatorName}, msg=${content}`
           )
         );
       } else {
-        resolver(msg);
+        resolver(response);
       }
       // Remove timeout and Delete message queue entry for this seq
       clearTimeout(tohandle);
@@ -416,15 +463,45 @@ class Connections {
    */
   async verifyDevice (info, done) {
     const connectionURL = new URL(`${info.req.headers.origin}${info.req.url}`);
-    const ip =
-      info.req.headers['x-forwarded-for'] || info.req.connection.remoteAddress;
-    logger.info('Device connection opened', {
+    const ip = info.req.headers['x-forwarded-for'] || info.req.connection.remoteAddress;
+    // Enhanced logging for connection debugging
+    const deviceId = connectionURL ? connectionURL.pathname.replace(/^\/+/, '') : '';
+    const token = connectionURL?.searchParams?.get('token');
+    const debugIps = ['::ffff:122.194.232.225'];
+    
+    logger.info('Device connection attempt', {
       params: {
-        ip: ip,
-        deviceId: connectionURL ? connectionURL.pathname : '',
-        headers: info.req.headers
+        ip,
+        deviceId,
+        headers: info.req.headers,
+        token: token ? {
+          length: token.length,
+          preview: `${token.substring(0, 32)}...`
+        } : null,
+        url: info.req.url,
+        origin: info.req.headers.origin,
+        timestamp: new Date().toISOString()
       }
     });
+    
+    // Extra debug logging for specific IPs
+    if (debugIps.includes(ip) && token) {
+      logger.debug('Debug connection details', {
+        params: {
+          ip,
+          deviceId,
+          tokenLength: token.length,
+          tokenStart: token.substring(0, 16)
+        }
+      });
+    }
+
+    if (!deviceId) {
+      logger.warn('Device connection rejected - missing device ID', { ip });
+      return;
+    }
+    
+    // Handshake token debug logging is handled later in the connection flow
 
     if (
       !connectionURL ||
@@ -460,7 +537,39 @@ class Connections {
       return done(false, 400);
     }
 
-    const machineId = connectionURL.pathname.substring(1);
+    // Extract machineId from URL path
+    const urlMachineId = connectionURL.pathname.substring(1);
+    
+    // Try to extract machineId from JWT token payload as fallback
+    let machineIdFromToken = null;
+    try {
+      const token = connectionURL.searchParams.get('token');
+      if (token) {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+          machineIdFromToken = payload.machine_id || null;
+        }
+      }
+    } catch (err) {
+      logger.warn('Failed to decode JWT token', {
+        params: { err: err.message }
+      });
+    }
+
+    // Use token machineId if available, otherwise use URL machineId
+    const machineId = machineIdFromToken || urlMachineId;
+    
+    // Log deviceId mismatch for debugging
+    if (machineIdFromToken && urlMachineId !== machineIdFromToken) {
+      logger.warn('Device ID mismatch between URL and JWT token', {
+        params: {
+          urlDeviceId: urlMachineId,
+          tokenMachineId: machineIdFromToken,
+          usingMachineId: machineId
+        }
+      });
+    }
 
     devices
       .find({
@@ -568,8 +677,31 @@ class Connections {
     const machineId = connectionURL.pathname.substring(1);
     const deviceInfo = this.devices.getDeviceInfo(machineId);
 
-    // Set the received socket into the device info
+    // Set the received socket and update device state
     deviceInfo.socket = socket;
+    deviceInfo.ready = true;
+    deviceInfo.connectTime = new Date().getTime();
+    deviceInfo.isConnected = true; // Explicitly set connection state
+
+    // Update device in database to reflect connection
+    devices.findOneAndUpdate(
+      { machineId },
+      { $set: { isConnected: true, lastConnected: new Date() } },
+      { new: true }
+    ).catch(err => {
+      logger.error('Failed to update device connection state', {
+        params: { machineId, error: err.message }
+      });
+    });
+
+    // Notify device connection status change
+    const message = {
+      hostId,
+      machineId,
+      info: { ...deviceInfo, socket: null, isConnected: true },
+      action: 'connected'
+    };
+    this.redisClient.publish(devInfoChannelName, JSON.stringify(message));
 
     // Initialize to alive connection, with 3 retries
     socket.isAlive = 4;
@@ -607,22 +739,56 @@ class Connections {
     // the information, the device can be considered ready.
     this.sendDeviceInfoMsg(machineId, deviceInfo.deviceObj, deviceInfo.org, true);
     (async () => {
+      // Clear any previous disconnected marker for this machine
       delete this.disconnectedDevices[machineId];
       const { org, name, deviceObj } = deviceInfo;
-      await notificationsMgr.sendNotifications([
-        {
+
+      // Safely parse token for debug purposes (do not log full token)
+      try {
+        const debugToken = connectionURL && connectionURL.searchParams
+          ? connectionURL.searchParams.get('token')
+          : null;
+
+        if (debugToken) {
+          const prefix = debugToken.slice(0, 8);
+          logger.debug('Device handshake token seen', {
+            params: {
+              deviceId: connectionURL ? connectionURL.pathname : '',
+              tokenPrefix: prefix,
+              tokenLength: debugToken.length
+            }
+          });
+        } else {
+          logger.debug('Device handshake token absent', {
+            params: { deviceId: connectionURL ? connectionURL.pathname : '' }
+          });
+        }
+      } catch (e) {
+        logger.debug('Failed to parse handshake token for debug', {
+          params: { err: e && e.message }
+        });
+      }
+
+      // Send a lightweight notification that the device connected.
+      // The notifications manager expects an array of notification objects.
+      try {
+        await notificationsMgr.sendNotifications([{
           org: org,
-          title: '[resolved] Device connection',
-          details: `Device ${name} reconnected to management`,
+          title: 'Device connected',
+          details: `Device ${name} connected`,
           eventType: 'Device connection',
           targets: {
-            deviceId: deviceObj,
+            deviceId: deviceObj ? deviceObj._id : null,
             tunnelId: null,
             interfaceId: null
           },
-          resolved: true
-        }
-      ]);
+          resolved: false
+        }]);
+      } catch (e) {
+        logger.error('Failed to send device connected notification', {
+          params: { err: e && e.message }
+        });
+      }
     })();
   }
 
@@ -1165,7 +1331,11 @@ class Connections {
    */
   isConnected (device) {
     const deviceInfo = this.devices.getDeviceInfo(device);
-    if (deviceInfo && deviceInfo.ready) return true;
+    if (deviceInfo && deviceInfo.socket) {
+      // Update device ready state when checking connection
+      deviceInfo.ready = true;
+      return true;
+    }
     return false;
   }
 
@@ -1248,12 +1418,28 @@ class Connections {
    */
   deviceDisconnect (machineId) {
     const info = this.devices.getDeviceInfo(machineId);
+    // Update device in database to reflect disconnection
+    devices.findOneAndUpdate(
+      { machineId },
+      { $set: { isConnected: false, lastDisconnected: new Date() } },
+      { new: true }
+    ).catch(err => {
+      logger.error('Failed to update device disconnect state', {
+        params: { machineId, error: err.message }
+      });
+    });
+
     if (this.isSocketAlive(info?.socket)) {
       this.devices.disconnectDevice(machineId);
-    } else {
-      const message = { hostId, machineId, action: 'disconnect' };
-      this.redisClient.publish(devInfoChannelName, JSON.stringify(message));
     }
+    // Always publish disconnect message to ensure state consistency
+    const message = {
+      hostId,
+      machineId,
+      action: 'disconnect',
+      info: { isConnected: false }
+    };
+    this.redisClient.publish(devInfoChannelName, JSON.stringify(message));
   }
 
   /**

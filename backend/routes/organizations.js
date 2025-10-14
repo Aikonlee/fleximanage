@@ -35,6 +35,7 @@ const mongoConns = require('../mongoConns.js')();
 const createError = require('http-errors');
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 const flexibilling = require('../flexibilling');
+const { deviceStats } = require('../models/analytics/deviceStats');
 
 const organizationsRouter = express.Router();
 organizationsRouter.use(bodyParser.json());
@@ -290,6 +291,138 @@ organizationsRouter.route('/:orgId')
     } catch (err) {
       logger.error('Error updating organization', { params: { reason: err.message } });
       return next(createError(400, err.message));
+    }
+  });
+
+// Get organization summary (dashboard statistics)
+organizationsRouter.route('/summary')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .get(cors.corsWithOptions, verifyPermission('organizations', 'get'), async (req, res, next) => {
+    try {
+      const orgId = req.user.defaultOrg;
+      
+      if (!orgId) {
+        return res.status(200).json({
+          devices: { total: 0, running: 0, connected: 0, approved: 0 },
+          tunnels: { total: 0, active: 0 },
+          traffic: { total: 0, unit: 'MBytes', totalBytes: 0, lastUpdate: null }
+        });
+      }
+
+      // Get device statistics
+      const totalDevices = await devices.countDocuments({ org: orgId });
+      const runningDevices = await devices.countDocuments({
+        org: orgId,
+        'deviceStatus.state': 'running'
+      });
+      const connectedDevices = await devices.countDocuments({
+        org: orgId,
+        isConnected: true
+      });
+      const approvedDevices = await devices.countDocuments({
+        org: orgId,
+        isApproved: true
+      });
+
+      // Get tunnel statistics
+      const totalTunnels = await tunnels.countDocuments({ org: orgId });
+      const activeTunnels = await tunnels.countDocuments({
+        org: orgId,
+        isActive: true
+      });
+
+      // Get traffic statistics from deviceStats collection
+      // Query the latest stats for each device in the organization
+      const deviceList = await devices.find({ org: orgId }).select('_id machineId').lean();
+      const deviceIds = deviceList.map(d => d._id);
+      
+      let totalBytes = 0;
+      if (deviceIds.length > 0) {
+        try {
+          // Get the latest stats for each device
+          const latestStats = await deviceStats.aggregate([
+            {
+              $match: {
+                org: orgId,
+                device: { $in: deviceIds }
+              }
+            },
+            {
+              $sort: { time: -1, createdAt: -1 }
+            },
+            {
+              $group: {
+                _id: '$device',
+                latestStats: { $first: '$stats' }
+              }
+            }
+          ]);
+
+          logger.debug('Retrieved device stats', {
+            params: { orgId, deviceCount: deviceIds.length, statsCount: latestStats.length }
+          });
+
+          // Aggregate rx_bytes and tx_bytes from all device interfaces
+          latestStats.forEach(deviceStat => {
+            if (deviceStat.latestStats) {
+              Object.values(deviceStat.latestStats).forEach(interfaceStats => {
+                if (interfaceStats.rx_bytes) totalBytes += interfaceStats.rx_bytes;
+                if (interfaceStats.tx_bytes) totalBytes += interfaceStats.tx_bytes;
+              });
+            }
+          });
+
+          logger.debug('Calculated total traffic bytes', {
+            params: { orgId, totalBytes }
+          });
+        } catch (err) {
+          logger.error('Error querying device stats', {
+            params: { orgId, error: err.message, stack: err.stack }
+          });
+        }
+      }
+
+      // Convert bytes to appropriate unit
+      let total, unit;
+      if (totalBytes >= 1024 * 1024 * 1024) { // GB
+        total = (totalBytes / (1024 * 1024 * 1024)).toFixed(2);
+        unit = 'GBytes';
+      } else if (totalBytes >= 1024 * 1024) { // MB
+        total = (totalBytes / (1024 * 1024)).toFixed(2);
+        unit = 'MBytes';
+      } else if (totalBytes >= 1024) { // KB
+        total = (totalBytes / 1024).toFixed(2);
+        unit = 'KBytes';
+      } else {
+        total = totalBytes;
+        unit = 'Bytes';
+      }
+
+      const summary = {
+        devices: {
+          total: totalDevices,
+          running: runningDevices,
+          connected: connectedDevices,
+          approved: approvedDevices
+        },
+        tunnels: {
+          total: totalTunnels,
+          active: activeTunnels
+        },
+        traffic: {
+          total: parseFloat(total),
+          unit: unit,
+          totalBytes: totalBytes,
+          lastUpdate: new Date()
+        }
+      };
+
+      return res.status(200).json(summary);
+    } catch (err) {
+      logger.error('Error getting organization summary', {
+        params: { reason: err.message, stack: err.stack }
+      });
+      return next(createError(500, 'Error getting organization summary'));
     }
   });
 

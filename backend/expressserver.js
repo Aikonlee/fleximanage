@@ -29,6 +29,9 @@ const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
 const OpenApiValidator = require('express-openapi-validator');
 const openapiRouter = require('./utils/openapiRouter');
+const WebSocket = require('ws');
+const connections = require('./websocket/Connections')();
+const broker = require('./broker/broker');
 const createError = require('http-errors');
 // const session = require('express-session');
 const passport = require('passport');
@@ -65,10 +68,7 @@ const ticketsRouter = require('./routes/tickets')(
   configs.get('ticketingSystemAccountId', 'string')
 );
 
-// WSS
-const WebSocket = require('ws');
-const connections = require('./websocket/Connections')();
-const broker = require('./broker/broker.js');
+// Role selector for authentication
 const roleSelector = require('./utils/roleSelector')(configs.get('redisUrl'));
 
 class ExpressServer {
@@ -225,7 +225,12 @@ class ExpressServer {
     this.app.use('/spec', express.static(path.join(__dirname, 'api', 'openapi.yaml')));
     this.app.get('/hello', (req, res) => res.send('Hello World'));
 
-    this.app.get('/api/version', (req, res) => res.json({ version }));
+    this.app.get('/api/version', (req, res) => res.json({
+      version,
+      management: version,
+      device: '6.4.32',
+      upgradeDeadline: 'Dec 02, 2024, 08:00 AM'
+    }));
     this.app.get('/api/restServers', (req, res) => res.json({ version }));
 
     this.app.use(cors.corsWithOptions);
@@ -393,7 +398,7 @@ class ExpressServer {
       connections.registerCloseCallback('deviceStatus', deviceStatus.deviceConnectionClosed);
 
       this.wss.on('connection', connections.createConnection);
-      console.log('Websocket server running');
+      logger.info('WebSocket server initialized on port ' + this.securePort);
 
       this.server.listen(this.port, () => {
         console.log('HTTP server listening on port', { params: { port: this.port } });

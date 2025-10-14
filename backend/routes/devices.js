@@ -606,6 +606,96 @@ devicesRouter.route('/:deviceId/staticroutes')
     }
   });
 
+// DHCP server configuration
+devicesRouter.route('/:deviceId/dhcp')
+  .options(cors.corsWithOptions,
+    verifyPermission('devices', 'get'),
+    async (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, verifyPermission('devices', 'post'), async (req, res, next) => {
+    try {
+      const deviceObject = await devices.findOne({
+        _id: mongoose.Types.ObjectId(req.params.deviceId),
+        org: req.user.defaultOrg._id
+      });
+
+      if (!deviceObject) {
+        return next(createError(404, 'Device not found'));
+      }
+
+      if (!deviceObject.isApproved) {
+        return next(createError(400, 'Device must be first approved'));
+      }
+
+      // Validate required fields
+      const { interface: interfaceId, rangeStart, rangeEnd, dns, macAssign } = req.body;
+      if (!interfaceId || !rangeStart || !rangeEnd) {
+        return next(createError(400, 'Missing required DHCP configuration fields'));
+      }
+
+      // Find the interface
+      const iface = deviceObject.interfaces.find(i => i.devId === interfaceId);
+      if (!iface) {
+        return next(createError(404, 'Interface not found'));
+      }
+
+      // Create DHCP configuration
+      const dhcpConfig = {
+        interface: interfaceId,
+        rangeStart,
+        rangeEnd,
+        dns: dns || [],
+        macAssign: macAssign || [],
+        status: 'waiting'
+      };
+
+      // Check if DHCP config already exists for this interface
+      const existingDhcpIndex = deviceObject.dhcp.findIndex(d => d.interface === interfaceId);
+      let dhcpConfigObject;
+      if (existingDhcpIndex >= 0) {
+        // Update existing DHCP configuration
+        deviceObject.dhcp[existingDhcpIndex] = dhcpConfig;
+        dhcpConfigObject = deviceObject.dhcp[existingDhcpIndex];
+      } else {
+        // Add new DHCP configuration
+        deviceObject.dhcp.push(dhcpConfig);
+        dhcpConfigObject = deviceObject.dhcp[deviceObject.dhcp.length - 1];
+      }
+
+      // Save the device with DHCP configuration
+      await deviceObject.save();
+
+      // Apply the DHCP configuration to the device
+      const applyData = {
+        _id: dhcpConfigObject._id,
+        interface: interfaceId,
+        rangeStart,
+        rangeEnd,
+        dns: dns || [],
+        macAssign: macAssign || [],
+        action: existingDhcpIndex >= 0 ? 'modify' : 'add',
+        org: req.user.defaultOrg._id
+      };
+      
+      await dispatcher.apply(deviceObject, 'dhcp', req.user, applyData);
+
+      logger.info('DHCP server configuration added', {
+        params: { deviceId: req.params.deviceId, interface: interfaceId },
+        req: req
+      });
+
+      return res.status(200).json({
+        message: 'DHCP server configured successfully',
+        dhcp: dhcpConfig
+      });
+    } catch (error) {
+      logger.error('Failed to configure DHCP server', {
+        params: { deviceId: req.params.deviceId, error: error.message },
+        req: req
+      });
+      return next(createError(500, `Failed to configure DHCP server: ${error.message}`));
+    }
+  });
+
 // update static route
 devicesRouter.route('/:deviceId/staticroutes/:routeId')
   .options(cors.corsWithOptions,

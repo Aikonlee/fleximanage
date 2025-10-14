@@ -41,6 +41,7 @@ exports.getToken = async function ({ user }, override = {}, shouldExpire = true)
     {
       _id: user._id,
       username: user.username,
+      admin: user.admin || false,
       org: user.defaultOrg ? user.defaultOrg._id : null,
       orgName: user.defaultOrg ? user.defaultOrg.name : null,
       account: user.defaultAccount ? user.defaultAccount._id : null,
@@ -73,6 +74,7 @@ exports.getRefreshToken = async ({ user }, override = {}) => {
   return jwt.sign({
     _id: user._id,
     username: user.username,
+    admin: user.admin || false,
     ...override
   }, configs.get('userTokenSecretKey'), {
     expiresIn: configs.get('userRefreshTokenExpiration', 'number')

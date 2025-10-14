@@ -1,26 +1,51 @@
-# Logs
+# Logs and temporary files
 *.log
+*.tmp
+*.swp
+*.swo
+logs/
+/tmp/
 
-# tars
+# Archives and builds
 *.tar.gz
+*.tgz
+build
+coverage/
+dist/
 
-# Node modules
+# Dependencies
 node_modules/
 
-# production
-build
-
-# Operating systems related files
+# Operating System
 .DS_Store
+Thumbs.db
 
-# debian build
+# IDE and Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.csr
+backend/bin/cert.*/
+cert.*/
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+
+# Build artifacts and generated files
+backend/public/
 debian/fleximanage
 
-# IDE files
-.vscode/launch.json
-
-# Jest coverage report
-coverage/
-
-# tmp pki directory
+# Backend temporary files
 backend/tmp/openvpn_pki*
+backend/logs/
+
+# Frontend build artifacts
+frontend/build/

@@ -57,10 +57,12 @@ const { prepareTunnelAddJob, prepareTunnelRemoveJob } = require('../deviceLogic/
 const { transformVxlanConfig } = require('../deviceLogic/jobParameters');
 const { validateFirewallRules } = require('../utils/deviceUtils');
 const { getMajorVersion, getMinorVersion } = require('../versioning');
-const notificationsMgr = require('../notifications/notifications')();
+
 const { validateOverlappingSubnets } = require('../deviceLogic/validators');
 const { checkOverlapping } = require('../utils/networks');
 const ObjectId = require('mongoose').Types.ObjectId;
+
+const { getDefaultNotificationsSettings } = require('../models/defaultSettings');
 
 class OrganizationsService {
   /**
@@ -697,8 +699,7 @@ class OrganizationsService {
       if (!qosPolicy) throw new Error('Error default QoS policy adding');
 
       // Add default notifications settings
-      const notificationsSettings = await notificationsMgr.getDefaultNotificationsSettings(
-        updUser.defaultAccount._id);
+      const notificationsSettings = getDefaultNotificationsSettings();
       const ownerMembership = await membership.find({
         account: updUser.defaultAccount,
         to: 'account',

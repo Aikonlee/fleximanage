@@ -1,6 +1,5 @@
 // flexiWAN SD-WAN software - flexiEdge, flexiManage.
 // For more information go to https://flexiwan.com
-// Copyright (C) 2020  flexiWAN Ltd.
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as
@@ -27,10 +26,12 @@ const hostname = os.hostname();
 const configEnv = {
   // This is the default configuration, override by the following sections
   default: {
-    // URL of the rest server
-    restServerUrl: ['https://local.flexiwan.com:3443'],
+    // URL of the rest server (must match agentBroker format without https:// prefix)
+    restServerUrl: ['manage.miwide.com:3443'],
+    // URL of the agent broker server
+    agentBroker: ['manage.miwide.com:3443'],
     // URL of the UI server
-    uiServerUrl: ['https://local.flexiwan.com:3000'],
+    uiServerUrl: ['http://manage.miwide.com:3000'],
     // Key used for users tokens, override default with environment variable USER_SECRET_KEY
     userTokenSecretKey: 'abcdefg1234567',
     // Whether to validate open API response. True for testing and dev, False for production,
@@ -73,7 +74,7 @@ const configEnv = {
     // Mongo VPN database
     mongoVpnUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexivpn?replicaSet=rs`,
     // Billing Redirect OK page url
-    billingRedirectOkUrl: 'https://local.flexiwan.com/ok.html',
+    billingRedirectOkUrl: 'https://manage.miwide.com/ok.html',
     // Biling config site - this is used as the billing site name in ChargeBee
     billingConfigSite: 'flexiwan-test',
     // ChargeBee default plan for a new customer
@@ -123,20 +124,27 @@ const configEnv = {
     // Certificate key location, under bin directory
     // On production if the key located in the Let's encrypt directory, it's possible to link to it using:
     // sudo ln -s /etc/letsencrypt/live/app.flexiwan.com/privkey.pem ~/FlexiWanSite/bin/cert.app.flexiwan.com/domain.key
-    httpsCertKey: '/cert.local.flexiwan.com/domain.key',
+    httpsCertKey: '/cert.manage.miwide.com/domain.key',
     // Certificate location, under bin directory
     // On production if the key located in the Let's encrypt directory, it's possible to link to it using:
     // sudo ln -s /etc/letsencrypt/live/app.flexiwan.com/fullchain.pem ~/FlexiWanSite/bin/cert.app.flexiwan.com/certificate.pem
-    httpsCert: '/cert.local.flexiwan.com/certificate.pem',
+    httpsCert: '/cert.manage.miwide.com/certificate.pem',
     // Default agent broker the device tries to create connection for
     // The broker is sent to the device when it registers.
     // It's possible to use multiple brokers in case of multiple domains, in that case
     // the system will use the last broker that matches the domain used in the token or the first broker if not found
-    agentBroker: ['local.flexiwan.com:3443'],
+    agentBroker: ['manage.miwide.com:3443'],
     // Whitelist of allowed domains for CORS checks
-    corsWhiteList: ['http://local.flexiwan.com:3000', 'https://local.flexiwan.com:3000', 'https://local.flexiwan.com:3443', 'https://127.0.0.1:3000'],
+    corsWhiteList: [
+      'http://manage.miwide.com:3000',
+      'https://manage.miwide.com:3443',
+      'http://localhost:3000',
+      'https://localhost:3443',
+      'http://0.0.0.0:3000',
+      'https://0.0.0.0:3443'
+    ],
     // Client static root directory
-    clientStaticDir: 'public',
+    clientStaticDir: '../frontend/build',
     // Mgmt-Agent protocol version
     agentApiVersion: '6.0.0',
     // Mgmt log files
@@ -211,7 +219,7 @@ const configEnv = {
     // TCP clamping header size, this value will be reduced from the MTU when calculating the mss clamping size
     tcpClampingHeaderSize: 40,
     // flexiVpn server portal url
-    flexiVpnServer: ['https://localvpn.flexiwan.com:4443'], // can be string or list
+    flexiVpnServer: ['https://localvpn.miwide.com:4443'], // can be string or list
     // After successful vpn client authentication, the OpenVPN server will generate tmp token valid for the below number of seconds.
     // On the following renegotiations, the OpenVPN client will pass this token instead of the users password
     vpnTmpTokenTime: 43200,
@@ -264,7 +272,7 @@ const configEnv = {
   },
   // Override for development environment, default environment if not specified
   development: {
-    clientStaticDir: 'client/build',
+    clientStaticDir: '../frontend/build',
     mailerBypassCert: true,
     SwRepositoryUrl: 'https://deb.flexiwan.com/info/flexiwan-router/latest-testing',
     userTokenExpiration: 604800,
@@ -284,9 +292,9 @@ const configEnv = {
     uiServerUrl: ['https://app.flexiwan.com:443'],
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
-    agentBroker: ['app.flexiwan.com:443'],
+    agentBroker: ['manage.miwide.com:3443'],
     validateOpenAPIResponse: false,
-    clientStaticDir: 'client/build',
+    clientStaticDir: '../frontend/build',
     // 'billingConfigSite': 'flexiwan-test',
     // 'billingDefaultPlan': 'enterprise',
     // 'useFlexiBilling': true,
@@ -302,13 +310,13 @@ const configEnv = {
     // modify next params for hosted server
     restServerUrl: ['https://hosted.server.com:443'],
     uiServerUrl: ['https://hosted.server.com:443'],
-    agentBroker: ['hosted.server.com:443'],
+    agentBroker: ['manage.miwide.com:3443'],
     corsWhiteList: 'https://hosted.server.com:443, http://hosted.server.com:80',
     billingRedirectOkUrl: 'https://hosted.server.com/ok.html',
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
     validateOpenAPIResponse: false,
-    clientStaticDir: 'client/build',
+    clientStaticDir: '../frontend/build',
     billingConfigSite: 'flexiwan',
     billingDefaultPlan: 'enterprise',
     useFlexiBilling: true,
@@ -325,9 +333,9 @@ const configEnv = {
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
     kuePrefix: 'mngdeviceq',
-    agentBroker: ['manage.flexiwan.com:443'],
+    agentBroker: ['manage.miwide.com:3443'],
     validateOpenAPIResponse: false,
-    clientStaticDir: 'client/build',
+    clientStaticDir: '../frontend/build',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan',
@@ -350,8 +358,8 @@ const configEnv = {
     userIpReqRateLimit: 3000,
     unreadNotificationPeriod: 300000,
     userRefreshTokenExpiration: 86400,
-    agentBroker: ['appqa01.flexiwan.com:443'],
-    clientStaticDir: 'client/build',
+    agentBroker: ['manage.miwide.com:3443'],
+    clientStaticDir: '../frontend/build',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan-test',
@@ -375,8 +383,8 @@ const configEnv = {
     userIpReqRateLimit: 3000,
     unreadNotificationPeriod: 300000,
     userRefreshTokenExpiration: 86400,
-    agentBroker: ['appqa02.flexiwan.com:443'],
-    clientStaticDir: 'client/build',
+    agentBroker: ['manage.miwide.com:3443'],
+    clientStaticDir: '../frontend/build',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan-test',

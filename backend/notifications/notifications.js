@@ -504,6 +504,9 @@ class NotificationsManager {
 
       const orgsMap = new Map();
       const orgNotificationsMap = new Map();
+      const defaultNotificationsConfPromise = notificationsConf
+        .findOne({ name: 'Default notifications settings' }).lean();
+
       for (const notification of notifications) {
         logger.debug('Processing notification', { params: { notification } });
         const {
@@ -512,26 +515,40 @@ class NotificationsManager {
         } = notification;
         let orgNotificationsConf = orgNotificationsMap.get(org);
         if (!orgNotificationsConf) {
-          orgNotificationsConf = await notificationsConf.findOne({ org: org }).lean();
+          orgNotificationsConf = await notificationsConf.findOne({ org }).lean();
+          if (!orgNotificationsConf) {
+            orgNotificationsConf = await defaultNotificationsConfPromise;
+            if (!orgNotificationsConf) {
+              logger.error('Missing default notifications configuration', {
+                params: { org }
+              });
+              continue;
+            }
+          }
           orgNotificationsMap.set(org, orgNotificationsConf);
         }
 
-        const rules = orgNotificationsMap.get(org).rules;
-        const sendResolvedAlert = rules[eventType].resolvedAlert;
-        let currentSeverity;
-        if (!severity) {
-          currentSeverity = rules[eventType].severity;
-          notification.severity = currentSeverity;
+        const rules = (orgNotificationsConf && orgNotificationsConf.rules) || {};
+        const eventRule = rules[eventType];
+        if (!eventRule) {
+          logger.warn('No notification rule defined for event type', {
+            params: { org, eventType }
+          });
+          continue;
         }
+        const sendResolvedAlert = eventRule?.resolvedAlert ?? false;
+        const effectiveSeverity = severity || eventRule?.severity || 'warning';
+        notification.severity = effectiveSeverity;
+        const currentSeverity = effectiveSeverity;
         let existingAlert;
         let existingUnresolvedAlert = false;
         const alertUniqueKey = eventType + '_' + org + '_' + JSON.stringify(targets) +
-          '_' + severity;
+          '_' + currentSeverity;
         if (existingAlertSet.has(alertUniqueKey)) {
           existingUnresolvedAlert = true;
         } else {
           existingAlert = await this.checkAlertExistence(
-            eventType, targets, org, severity || currentSeverity);
+            eventType, targets, org, currentSeverity);
           if (existingAlert?.exists) {
             if (!existingAlert.resolved) {
               existingUnresolvedAlert = true;
@@ -550,7 +567,7 @@ class NotificationsManager {
 
         // If this is a resolved alert: resolve the existing notification
         if (resolved && !isInfo && existingUnresolvedAlert) {
-          await this.resolveAnAlert(eventType, targets, severity || currentSeverity, org);
+          await this.resolveAnAlert(eventType, targets, currentSeverity, org);
         }
 
         // Send an alert only if one of the both is true:
@@ -653,7 +670,7 @@ class NotificationsManager {
           } else {
             logger.debug('Step 2: No need to check hierarchy. Proceeding to send notification.');
           }
-          if (rules[eventType].immediateEmail) {
+          if (eventRule.immediateEmail) {
             // Check if there is already an event like this for the same device(for device alerts)
             const emailSentForPreviousAlert = !targets.deviceId ? null
               : await notificationsDb.findOne({
@@ -697,7 +714,7 @@ class NotificationsManager {
               const emailSent = await this.sendEmailNotification(
                 title,
                 orgNotificationsConf,
-                severity || notification.severity,
+                notification.severity,
                 details
               );
               if (!notification.emailSent) {
@@ -710,9 +727,9 @@ class NotificationsManager {
               notification.emailSent.sendingTime = emailSent;
             }
           }
-          if (rules[eventType].sendWebHook) {
+          if (eventRule.sendWebHook) {
             await this.sendWebHook(title, details,
-              severity || notification.severity, orgNotificationsConf);
+              notification.severity, orgNotificationsConf);
           }
           const key = notification.org.toString();
           const notificationList = orgsMap.get(key);

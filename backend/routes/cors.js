@@ -23,7 +23,16 @@ const whitelist = configs.get('corsWhiteList', 'list');
 
 // CORS handler
 var corsOptionsCheck = (req, callback) => {
-  var corsOptions = { exposedHeaders: ['Refresh-JWT', 'refresh-token', 'records-total'] };
+  var corsOptions = { 
+    exposedHeaders: [
+      'Refresh-JWT', 
+      'refresh-token', 
+      'records-total',
+      'X-Total-Count',
+      'X-Offset',
+      'X-Limit'
+    ] 
+  };
   if (req.header('Origin') && whitelist.indexOf(req.header('Origin')) !== -1) {
     // In whitelist, allow the request to be accepted
     corsOptions.origin = true;
@@ -35,7 +44,16 @@ var corsOptionsCheck = (req, callback) => {
 };
 
 // Operations allowed for * origins
-exports.cors = cors({ exposedHeaders: ['Refresh-JWT', 'refresh-token', 'records-total'] });
+exports.cors = cors({ 
+  exposedHeaders: [
+    'Refresh-JWT', 
+    'refresh-token', 
+    'records-total',
+    'X-Total-Count',
+    'X-Offset',
+    'X-Limit'
+  ] 
+});
 
 // Operations allowed for whitelist origins
 exports.corsWithOptions = cors(corsOptionsCheck);

@@ -1,12 +1,36 @@
-# flexiWAN Official Repository
+# flexiWAN FlexiManage - SD-WAN Management Platform
 
-The official respository for flexiwan is in https://gitlab.com/flexiwangroup
+**Production URL**: https://manage.miwide.com:3443
 
-# About flexiWAN
+## About This Fork
 
-flexiWAN is the world's first open source [SD-WAN](https://flexiwan.com/). flexiWAN offers a complete SD-WAN solution comprising of flexiEdge (the edge router) and flexiManage (the central management system) with core SD-WAN functionality. Our mission is to democratize the SD-WAN Market through an open source & modular  SD-WAN solution lowering barriers to entry for companies to adopt it or offer services based on the flexiWAN SD-WAN solution. To learn more about the flexiWAN's unique approach to networking, visit the [flexiWAN](https://flexiwan.com/) website, and follow the company on [Twitter](https://twitter.com/FlexiWan) and [LinkedIn](https://www.linkedin.com/company/flexiwan).
+This is a customized fork of flexiWAN's SD-WAN management platform, enhanced with modern UI improvements, advanced permission management, and production-ready deployment configurations.
 
-To contact us please drop us an email at yourfriends@flexiwan.com, or for any general issue please use our [Google User Group](https://groups.google.com/a/flexiwan.com/forum/#!forum/flexiwan-users)
+### Recent Improvements (2025)
+
+#### UI Enhancements
+- ✅ Unified table styling system with gradient headers and responsive design
+- ✅ Enhanced Organizations page layout with proper spacing and divider lines
+- ✅ Improved Tokens and AccessKeys pages with vertically centered action buttons
+- ✅ Responsive design improvements across all management pages
+
+#### Backend & Permission System
+- ✅ Enhanced error message handling for better user feedback
+- ✅ Super admin cross-account management capabilities
+- ✅ Flexible user deletion policy (removed "last owner" restriction for non-admin users)
+- ✅ Super administrator protection (cannot be deleted)
+- ✅ Improved account name resolution in error messages
+
+#### System Configuration
+- ✅ HTTPS production deployment (port 3443)
+- ✅ Cloudflare Turnstile CAPTCHA integration
+- ✅ Multi-factor authentication (MFA) support
+- ✅ MongoDB 8.0.15 ARM64 replica set support
+- ✅ Email notification system (aiosmtpd)
+
+## About flexiWAN
+
+flexiWAN is the world's first open source [SD-WAN](https://flexiwan.com/). The platform offers a complete SD-WAN solution comprising of flexiEdge (the edge router) and flexiManage (the central management system) with core SD-WAN functionality.
 
 # flexiManage
 

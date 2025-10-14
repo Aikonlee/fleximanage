@@ -19,6 +19,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const mongoConns = require('../mongoConns.js')();
 const validators = require('./validators');
+const configs = require('../configs')();
 
 /**
  * Token Database Schema
@@ -44,6 +45,11 @@ const tokenSchema = new Schema({
     type: String,
     required: true,
     maxlength: [1024, 'Token length must be at most 1024']
+  },
+  // management server URL
+  server: {
+    type: String,
+    default: () => 'https://' + configs.get('agentBroker', 'list')[0]
   }
 }, {
   timestamps: true

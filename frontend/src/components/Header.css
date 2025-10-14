@@ -1,0 +1,96 @@
+.header-navbar {
+  padding: 0 20px !important;
+  height: var(--header-height);
+  line-height: var(--header-height);
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: var(--shadow-md);
+  justify-content: space-between !important;
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100% !important;
+  max-width: 100% !important;
+  background: var(--header-bg) !important;
+  z-index: var(--z-header);
+  display: flex !important;
+  align-items: center;
+  box-sizing: border-box;
+  backdrop-filter: blur(10px);
+}
+
+.sidebar-toggle {
+  color: #6c757d;
+  border: none;
+  font-size: 1.2rem;
+  padding: 8px;
+}
+
+.sidebar-toggle:hover {
+  color: #495057;
+}
+
+/* Notification bell + badge */
+.notifications {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-icon {
+  font-size: 1.25rem;
+  color: #6c757d;
+  cursor: pointer;
+  position: relative; /* anchor for badge */
+  transition: color .15s ease;
+}
+.notification-icon:hover {
+  color: #495057;
+}
+
+/* Circle badge overlapping top-right corner of bell */
+.notification-badge {
+  --badge-size: 18px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(45%, -45%); /* push outward for overlap */
+  width: var(--badge-size);
+  height: var(--badge-size);
+  background-color: #dc3545;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 2px #fff; /* ring to separate from background */
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Shrink font slightly when showing 9+ */
+.notification-badge:has(span),
+.notification-badge:contains('9+') { /* fallback not widely supported; purely decorative */
+  font-size: 9px;
+}
+
+.user-dropdown {
+  color: #495057 !important;
+  border: none;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+}
+
+.user-dropdown:focus {
+  box-shadow: none !important;
+}
+
+.user-dropdown:hover {
+  color: #212529 !important;
+}

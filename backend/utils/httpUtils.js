@@ -14,8 +14,10 @@
 
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 const configs = require('../configs')();
 const url = require('url');
+const logger = require('../logging/logging')({ module: module.filename, type: 'httpUtils' });
 
 const getUiServerUrl = req => {
   let uiServerUrl = null;
@@ -37,26 +39,57 @@ const getUiServerUrl = req => {
 
 const getAgentBroker = tokenServer => {
   const brokerServers = configs.get('agentBroker', 'list');
-  let broker = brokerServers[0];
+  let broker = brokerServers[0];  // Use raw server string first
+  
+  logger.info('Getting agent broker server', {
+    params: {
+      tokenServer: tokenServer,
+      brokerServers: brokerServers,
+      initialBroker: broker
+    }
+  });
+
   if (tokenServer) {
-    // Try to find broker with the same domain as the token
-    // If not found return the first agent broker
-    const urlSchema = new url.URL(tokenServer);
-    const tokenDomain = urlSchema.hostname.replace(/^[^.]+\./g, '');
-    brokerServers.forEach(s => {
-      const sUrlSchema = new url.URL('http://' + s);
-      const sDomain = sUrlSchema.hostname.replace(/^[^.]+\./g, '');
-      if (sDomain === tokenDomain) broker = s;
-    });
+    try {
+      // Try to find broker with the same domain as the token
+      const urlSchema = new url.URL(tokenServer);
+      const tokenDomain = urlSchema.hostname.replace(/^[^.]+\./g, '');
+      
+      for (const s of brokerServers) {
+        const sUrlSchema = new url.URL('https://' + s);
+        const sDomain = sUrlSchema.hostname.replace(/^[^.]+\./g, '');
+        if (sDomain === tokenDomain) {
+          broker = s;
+          break;
+        }
+      }
+    } catch (err) {
+      logger.error('Error processing token server URL', {
+        params: { error: err.message, tokenServer }
+      });
+    }
   }
+
+  logger.info('Selected agent broker server', {
+    params: { finalBroker: broker }
+  });
+
   return broker;
 };
 
 const getRedisAuthUrl = redisUrl => {
-  const urlInfo = new URL(redisUrl);
-  const redisAuth = urlInfo.username;
-  urlInfo.username = '';
-  const redisUrlNoAuth = urlInfo.href;
+  let redisAuth = null;
+  let redisUrlNoAuth = redisUrl;
+
+  if (redisUrl.includes('@')) {
+    const urlParts = redisUrl.split('@');
+    redisAuth = urlParts[0].split('//')[1];
+    redisUrlNoAuth = urlParts[1];
+    if (!redisUrlNoAuth.startsWith('redis://')) {
+      redisUrlNoAuth = 'redis://' + redisUrlNoAuth;
+    }
+  }
+
   return { redisAuth, redisUrlNoAuth };
 };
 

@@ -44,9 +44,12 @@ const genToken = function (data) {
 // check update
 const checkUpdReq = (qtype, req) => new Promise(function (resolve, reject) {
   if (qtype === 'POST') {
+    const server = 'https://' + configs.get('agentBroker', 'list')[0];
+    req.body.server = server;
     req.body.token = genToken({
       org: req.user.defaultOrg._id.toString(),
-      account: req.user.defaultAccount._id
+      account: req.user.defaultAccount._id,
+      server: server
     });
     req.body.org = req.user.defaultOrg._id.toString();
   } else {

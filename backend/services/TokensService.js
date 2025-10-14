@@ -41,6 +41,7 @@ class TokensService {
           org: item.org.toString(),
           name: item.name,
           token: item.token,
+          server: item.server || '-',
           createdAt: item.createdAt.toISOString()
         };
       });
@@ -176,6 +177,11 @@ class TokensService {
         server = servers[0];
       }
 
+      // Ensure server URL has https:// prefix
+      if (!server.startsWith('https://')) {
+        server = 'https://' + server;
+      }
+
       const tokenData = {
         org: orgList[0].toString(),
         account: user.defaultAccount._id,
@@ -202,7 +208,8 @@ class TokensService {
       const token = await Tokens.create({
         name: tokenRequest.name,
         org: orgList[0].toString(),
-        token: body
+        token: body,
+        server: server
       });
 
       return Service.successResponse({
@@ -234,11 +241,15 @@ class TokensService {
       };
     };
     // If server specified by user, check if it exists in the configs list
-    if (server && !allowedServers.includes(server)) {
-      return {
-        valid: false,
-        message: 'Token error: Server is not allowed'
-      };
+    if (server) {
+      // Remove protocol prefix for comparison if present
+      const normalizedServer = server.replace(/^https?:\/\//, '');
+      if (!allowedServers.includes(normalizedServer)) {
+        return {
+          valid: false,
+          message: 'Token error: Server is not allowed'
+        };
+      }
     }
     return { valid: true, message: '' };
   }

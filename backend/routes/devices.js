@@ -558,6 +558,10 @@ devicesRouter.route('/:deviceId/staticroutes')
           gateway_ip: value.gateway,
           ifname: value.ifname,
           metric: value.metric,
+          redistributeViaOSPF: value.redistributeViaOSPF,
+          redistributeViaBGP: value.redistributeViaBGP,
+          onLink: value.onLink,
+          conditions: value.conditions || [],
           status: value.status
         };
       });
@@ -584,6 +588,10 @@ devicesRouter.route('/:deviceId/staticroutes')
         gateway: req.body.gateway_ip,
         ifname: req.body.ifname,
         metric: req.body.metric,
+        redistributeViaOSPF: req.body.redistributeViaOSPF || false,
+        redistributeViaBGP: req.body.redistributeViaBGP || false,
+        onLink: req.body.onLink || false,
+        conditions: req.body.conditions || [],
         status: 'waiting'
       });
 
@@ -597,12 +605,45 @@ devicesRouter.route('/:deviceId/staticroutes')
         { new: true }
       );
 
-      req.body.method = 'staticroutes';
-      req.body.id = route.id;
-      await dispatcher.apply(device, req.body.method, req.user, req.body);
+      // Log route object for debugging
+      logger.info('Created static route', {
+        params: {
+          routeId: route._id,
+          routeObject: route,
+          requestBody: req.body
+        }
+      });
+
+      // Prepare data for dispatcher
+      const dispatcherData = {
+        _id: route._id,
+        destination: route.destination,
+        gateway: route.gateway,
+        ifname: route.ifname,
+        metric: route.metric,
+        redistributeViaOSPF: route.redistributeViaOSPF,
+        redistributeViaBGP: route.redistributeViaBGP,
+        onLink: route.onLink,
+        org: req.user.defaultOrg._id,
+        action: 'add'
+      };
+
+      logger.info('Dispatcher data prepared', {
+        params: { dispatcherData }
+      });
+
+      await dispatcher.apply(device, 'staticroutes', req.user, dispatcherData);
       return res.status(200).send({});
     } catch (error) {
-      return next(createError(500, 'Failed to add a route'));
+      logger.error('Failed to add static route', {
+        params: {
+          deviceId: req.params.deviceId,
+          requestBody: req.body,
+          error: error.message,
+          stack: error.stack
+        }
+      });
+      return next(createError(500, 'Failed to add a route: ' + error.message));
     }
   });
 

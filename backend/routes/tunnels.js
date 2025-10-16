@@ -22,6 +22,7 @@ const cors = require('./cors');
 const { verifyPermission } = require('../authenticate');
 const mongoose = require('mongoose');
 const createError = require('http-errors');
+const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 
 const deviceStatus = require('../periodic/deviceStatus')();
 
@@ -91,26 +92,35 @@ tunnelsRouter
 // When options message received, reply origin based on whitelist
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .delete(cors.corsWithOptions, verifyPermission('tunnels', 'del'), (req, res, next) => {
+    const tunnelId = req.params.tunnelId;
+    const orgId = req.user.defaultOrg._id;
+    
+    logger.info('Deleting tunnel', { params: { tunnelId, orgId } });
+    
     tunnels
       .findOneAndUpdate(
-        // Query
-        { _id: mongoose.Types.ObjectId(req.params.tunnelId), org: req.user.defaultOrg._id },
+        // Query - match by ID and org
+        { _id: mongoose.Types.ObjectId(tunnelId), org: orgId, isActive: true },
         // Update
         { isActive: false },
         // Options
         { upsert: false, new: true })
       .then((resp) => {
         if (resp != null) {
+          logger.info('Tunnel deleted successfully', { params: { tunnelId, num: resp.num } });
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           return res.json(resp);
         } else {
-          return next(createError(404, 'tunnel not found'));
+          logger.warn('Tunnel not found or already deleted', { params: { tunnelId, orgId } });
+          return next(createError(404, 'Tunnel not found or already inactive'));
         }
       }, (err) => {
+        logger.error('Error deleting tunnel', { params: { tunnelId, error: err.message } });
         next(err);
       })
       .catch((err) => {
+        logger.error('Error deleting tunnel', { params: { tunnelId, error: err.message } });
         next(err);
       });
   });

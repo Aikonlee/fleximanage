@@ -26,7 +26,10 @@ class MongoConns {
 
     this.mainDB = mongoose.createConnection(configs.get('mongoUrl'), {
       useNewUrlParser: true,
-      useCreateIndex: true
+      useUnifiedTopology: true,
+      useCreateIndex: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000
     });
     this.mainDB.then((db) => {
       logger.info('Connected to MongoDB mainDB');
@@ -34,7 +37,10 @@ class MongoConns {
 
     this.analyticsDB = mongoose.createConnection(configs.get('mongoAnalyticsUrl'), {
       useNewUrlParser: true,
-      useCreateIndex: true
+      useUnifiedTopology: true,
+      useCreateIndex: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000
     });
     this.analyticsDB.then((db) => {
       logger.info('Connected to MongoDB analyticsDB');
@@ -44,7 +50,10 @@ class MongoConns {
 
     this.vpnDB = mongoose.createConnection(configs.get('mongoVpnUrl'), {
       useNewUrlParser: true,
-      useCreateIndex: true
+      useUnifiedTopology: true,
+      useCreateIndex: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000
     });
     this.vpnDB.then((db) => {
       logger.info('Connected to MongoDB vpnDB');

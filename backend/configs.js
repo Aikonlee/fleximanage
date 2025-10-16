@@ -66,13 +66,13 @@ const configEnv = {
     // Default value is not set, which only validate the client side captcha
     captchaKey: '',
     // Mongo main database
-    mongoUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwan?replicaSet=rs`,
+    mongoUrl: 'mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/flexiwan?replicaSet=rs',
     // Mongo analytics database
-    mongoAnalyticsUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwanAnalytics?replicaSet=rs`,
+    mongoAnalyticsUrl: 'mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/flexiwanAnalytics?replicaSet=rs',
     // Mongo Billing database
-    mongoBillingUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexibilling?replicaSet=rs`,
+    mongoBillingUrl: 'mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/flexibilling?replicaSet=rs',
     // Mongo VPN database
-    mongoVpnUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexivpn?replicaSet=rs`,
+    mongoVpnUrl: 'mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/flexivpn?replicaSet=rs',
     // Billing Redirect OK page url
     billingRedirectOkUrl: 'https://manage.miwide.com/ok.html',
     // Biling config site - this is used as the billing site name in ChargeBee

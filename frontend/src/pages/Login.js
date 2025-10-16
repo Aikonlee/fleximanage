@@ -299,6 +299,11 @@ const Login = ({ onLogin }) => {
               </div>
             </Card.Body>
           </Card>
+          <div className="text-center mt-3">
+            <small className="text-muted">
+              © OpenSource-OpenNetworking.org 2025.10, All Rights Reserved
+            </small>
+          </div>
         </Col>
       </Row>
     </Container>

@@ -78,3 +78,8 @@ code {
 .settings-item:hover .settings-icon {
   color: #495057;
 }
+
+/* Modal positioning fix - ensure modals appear below fixed header */
+.modal-dialog {
+  margin-top: 80px !important;
+}

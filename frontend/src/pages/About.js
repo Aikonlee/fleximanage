@@ -36,13 +36,13 @@ const About = () => {
   return (
     <div className="about-page">
       <div className="page-header">
-        <h2>About flexiWAN</h2>
+        <h2>Open SD-WAN Management Platform</h2>
       </div>
 
       <Card className="about-card">
         <Card.Body>
           <div className="about-logo">
-            <h1 className="brand-name">flexiWAN</h1>
+            <h1 className="brand-name">OpenSource-OpenNetworking</h1>
           </div>
 
           <div className="about-info">

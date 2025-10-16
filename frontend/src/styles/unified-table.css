@@ -11,7 +11,7 @@
   text-align: center;
   vertical-align: middle;
   white-space: nowrap;
-  background: linear-gradient(180deg, var(--sidebar-bg) 0%, #1a252f 100%) !important;
+  background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-light) 100%) !important;
   color: var(--text-white) !important;
   border: none !important;
   border-right: 1px solid rgba(255, 255, 255, 0.2) !important;

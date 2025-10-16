@@ -55,7 +55,7 @@
   width: 100%;
 }
 
-/* 响应式设计 */
+/* Responsive Design */
 @media (max-width: 768px) {
   .footer-content {
     flex-direction: column;

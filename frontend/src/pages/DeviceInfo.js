@@ -1387,7 +1387,7 @@ const DeviceInfo = () => {
                               variant="outline-primary"
                               size="sm"
                               onClick={() => {
-                                // 保存OSPF配置
+                                // Save OSPF configuration
                                 console.log('Save OSPF config for', iface.name);
                               }}
                             >

@@ -105,7 +105,7 @@ apt-get install -y wget curl || error_exit "Failed to install wget/curl"
 # Now install MongoDB dependencies with correct Ubuntu 24.04 package names
 apt-get install -y libcurl4 libgssapi-krb5-2 libwrap0 libsasl2-2 libsasl2-modules libsasl2-modules-gssapi-mit libnuma1 snmp libldap-common libldap2 || error_exit "Failed to install dependencies"
 
-# 检查是否已经安装了MongoDB
+# Check if MongoDB is already installed
 if [[ -f "/opt/mongodb-current/bin/mongod" ]]; then
     log "MongoDB appears to be already installed, checking if we need to reinstall..."
     if [[ "$CLEAN" == 1 ]]; then
@@ -113,7 +113,7 @@ if [[ -f "/opt/mongodb-current/bin/mongod" ]]; then
     else
         log "MongoDB already installed, skipping download and extraction"
         log "Proceeding to start instances and configure replica set"
-        # 跳过下载和提取，直接进入启动阶段
+        # Skip download and extraction, proceed directly to startup phase
         goto_start_instances=true
     fi
 fi
@@ -233,7 +233,7 @@ if ! /opt/mongodb-current/bin/mongod --version; then
     error_exit "MongoDB binary test failed"
 fi
 
-# 检查是否已经有实例在运行，如果有则跳过启动
+# Check if instances are already running, skip startup if so
 instances_running=0
 for port in "${USED_PORTS[@]}"; do
     if ss -tuln | grep -q ":$port "; then
@@ -246,7 +246,7 @@ if [[ $instances_running -eq $MAX_INSTANCES ]]; then
     log "All MongoDB instances are already running, skipping startup"
 else
     for port in "${USED_PORTS[@]}"; do
-        # 如果端口已经在使用，跳过启动
+        # If port is already in use, skip startup
         if ss -tuln | grep -q ":$port "; then
             log "Port $port already in use, skipping startup"
             continue

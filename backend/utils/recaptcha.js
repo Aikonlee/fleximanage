@@ -2,7 +2,8 @@
  * This module verifies google recaptcha
  */
 const fetch = require('fetch-with-proxy').default;
-const verifyURL = 'https://www.google.com/recaptcha/api/siteverify';
+// Use Cloudflare Turnstile endpoint
+const verifyURL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 class ReCaptcha {
   constructor (secretKey) {
@@ -16,15 +17,17 @@ class ReCaptcha {
      * @param  {string}         token captcha to verify
      * @return {boolean|Object}       false if verification failed, verification result otherwise
      */
-  async verifyReCaptcha (token) {
+  async verifyReCaptcha (token, remoteip = undefined) {
     // For an empty key (development), return true
     if (this.secretKey === '') return Promise.resolve(true);
 
     const headers = {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'flexiWAN reCapcha checker'
+      'User-Agent': 'flexiWAN Turnstile checker'
     };
+    // Cloudflare Turnstile expects: secret, response, optionally remoteip
     const params = { secret: this.secretKey, response: token };
+    if (remoteip) params.remoteip = remoteip;
     const encodedParams = Object.keys(params).map((key) => {
       return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
     }).join('&');
@@ -48,11 +51,9 @@ class ReCaptcha {
         throw error;
       })
       .then(response => {
-        if (response.ok) {
-          // Success handling
-          if (response.message.success === true) return true;
-          return false;
-        } else return false;
+        // Cloudflare Turnstile returns { success: true/false, ... }
+        if (response.message && response.message.success === true) return true;
+        return false;
       })
       .catch((error) => {
         // General error handling

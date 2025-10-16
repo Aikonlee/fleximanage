@@ -225,12 +225,7 @@ class ExpressServer {
     this.app.use('/spec', express.static(path.join(__dirname, 'api', 'openapi.yaml')));
     this.app.get('/hello', (req, res) => res.send('Hello World'));
 
-    this.app.get('/api/version', (req, res) => res.json({
-      version,
-      management: version,
-      device: '6.4.32',
-      upgradeDeadline: 'Dec 02, 2024, 08:00 AM'
-    }));
+    this.app.get('/api/version', (req, res) => res.json({ version }));
     this.app.get('/api/restServers', (req, res) => res.json({ version }));
 
     this.app.use(cors.corsWithOptions);
@@ -243,6 +238,8 @@ class ExpressServer {
       // this.app.use('/api/devicestats', require('./routes/deviceStats'));
       // this.app.use('/api/jobs', require('./routes/deviceQueue'));
       this.app.use('/api/portals', require('./routes/portals'));
+      // Interface routing configuration routes
+      this.app.use(require('./routes/interfaces-routing'));
     } catch (error) {
       logger.error('Error: Can\'t connect OLD routes');
     }

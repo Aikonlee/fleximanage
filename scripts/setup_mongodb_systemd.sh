@@ -82,7 +82,7 @@ User=${MONGODB_USER}
 Group=${MONGODB_GROUP}
 
 # PID file location
-PIDFile=/var/run/mongodb/mongod-${port}.pid
+PIDFile=/run/mongodb/mongod-${port}.pid
 
 # Start with config inline (fork mode)
 ExecStart=${MONGO_BIN} \\
@@ -92,7 +92,7 @@ ExecStart=${MONGO_BIN} \\
     --bind_ip_all \\
     --oplogSize ${OPLOG_SIZE_MB} \\
     --wiredTigerCacheSizeGB 0.25 \\
-    --pidfilepath /var/run/mongodb/mongod-${port}.pid \\
+    --pidfilepath /run/mongodb/mongod-${port}.pid \\
     --fork \\
     --logpath ${LOG_DIR}/mongod-${port}.log
 
@@ -124,13 +124,13 @@ done
 
 # Create PID directory
 log "Creating PID directory..."
-mkdir -p /var/run/mongodb
-chown -R ${MONGODB_USER}:${MONGODB_GROUP} /var/run/mongodb
+mkdir -p /run/mongodb
+chown -R ${MONGODB_USER}:${MONGODB_GROUP} /run/mongodb
 
 # Create systemd tmpfiles.d config to ensure PID directory persists across reboots
 cat > /etc/tmpfiles.d/mongodb.conf <<EOF
 # MongoDB runtime directory
-d /var/run/mongodb 0755 ${MONGODB_USER} ${MONGODB_GROUP} -
+d /run/mongodb 0755 ${MONGODB_USER} ${MONGODB_GROUP} -
 EOF
 
 log "Created tmpfiles.d configuration"

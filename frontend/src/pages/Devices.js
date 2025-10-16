@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Badge, Card, Row, Col, Alert, Form, ButtonGroup } from 'react-bootstrap';
+import { Button, Badge, Card, Row, Col, Alert, Form, ButtonGroup, Modal } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaPlay, FaStop, FaSync, FaTrash, FaServer } from 'react-icons/fa';
 import api from '../services/api';
@@ -10,6 +10,9 @@ const Devices = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedDevices, setSelectedDevices] = useState(new Set());
+  const [showTunnelModal, setShowTunnelModal] = useState(false);
+  const [tunnelTopology, setTunnelTopology] = useState('full-mesh');
+  const [creatingTunnels, setCreatingTunnels] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,9 +73,12 @@ const Devices = () => {
           .join(', ') || 'N/A',
         status: device.isApproved ? 'Approved' : 'Pending',
         connection: device.isConnected ? 'Connected' : 'Not Connected',
+        isConnected: device.isConnected,
+        isApproved: device.isApproved,
         pps: device.stats?.pps || 'N/A',
         bps: device.stats?.bps || 'N/A',
-        vRouter: device.state || device.sync?.state || device.deviceState || 'Unknown',
+        vRouter: device.state || '',
+        syncState: device.sync?.state || 'unknown',
         location: device.location || '',
         lastSeen: device.lastSeen || '',
         serial: device.serial || 'N/A',
@@ -108,40 +114,47 @@ const Devices = () => {
     return <Badge bg={variants[connection] || 'secondary'}>{connection}</Badge>;
   };
 
-  const getVRouterBadge = (vRouterStatus) => {
-    let status;
-    if (typeof vRouterStatus === 'object' && vRouterStatus !== null) {
-      status = vRouterStatus.state;
-    } else {
-      status = vRouterStatus;
+  const getVRouterBadge = (vRouterStatus, isConnected) => {
+    // Don't show status if device is not connected
+    if (!isConnected) {
+      return <Badge bg="secondary">Offline</Badge>;
     }
 
-    const statusText = status === 'running' ? 'Running' : 
-                    status === 'stopped' ? 'Not Running' :
-                    status === 'synced' ? 'Synced' :
-                    status === 'syncing' ? 'Syncing...' :
-                    status === 'starting' ? 'Starting...' :
-                    status === 'stopping' ? 'Stopping...' :
-                    status || 'Unknown';
+    let statusText, variant;
     
-    const variants = {
-      'running': 'success',
-      'Running': 'success',
-      'stopped': 'danger', 
-      'Not Running': 'danger',
-      'synced': 'info',
-      'Synced': 'info',
-      'syncing': 'warning',
-      'Syncing...': 'warning',
-      'starting': 'warning',
-      'Starting...': 'warning',
-      'stopping': 'warning',
-      'Stopping...': 'warning',
-      'pending': 'warning',
-      'Pending': 'warning'
-    };
+    switch(vRouterStatus) {
+      case 'running':
+        statusText = 'Running';
+        variant = 'success';
+        break;
+      case 'stopped':
+        statusText = 'Stopped';
+        variant = 'secondary';
+        break;
+      case 'failed':
+        statusText = 'Failed';
+        variant = 'danger';
+        break;
+      case 'pending':
+        statusText = 'Pending';
+        variant = 'warning';
+        break;
+      case 'starting':
+        statusText = 'Starting...';
+        variant = 'warning';
+        break;
+      case 'stopping':
+        statusText = 'Stopping...';
+        variant = 'warning';
+        break;
+      case '':
+      default:
+        statusText = 'Not Running';
+        variant = 'secondary';
+        break;
+    }
     
-    return <Badge bg={variants[status] || variants[statusText] || 'secondary'}>{statusText}</Badge>;
+    return <Badge bg={variant}>{statusText}</Badge>;
   };
 
   const handleDeviceSelect = (deviceId, isSelected) => {
@@ -295,6 +308,70 @@ const Devices = () => {
     }
   };
 
+  const handleCreateTunnels = () => {
+    if (selectedDevices.size < 2) {
+      alert('Please select at least 2 devices to create tunnels');
+      return;
+    }
+    setShowTunnelModal(true);
+  };
+
+  const handleTunnelModalClose = () => {
+    setShowTunnelModal(false);
+    setTunnelTopology('full-mesh');
+  };
+
+  const handleCreateTunnelsSubmit = async () => {
+    try {
+      setCreatingTunnels(true);
+      const deviceIds = Array.from(selectedDevices);
+      
+      // Build devices object for official API
+      const devicesObj = {};
+      deviceIds.forEach(id => {
+        devicesObj[id] = true;
+      });
+      
+      // Map topology to official format
+      const topology = tunnelTopology === 'hub-spoke' ? 'hubAndSpoke' : 'fullMesh';
+      
+      // Use official /devices/apply endpoint with method='tunnels'
+      const response = await apiCall('/api/devices/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: 'tunnels',
+          devices: devicesObj,
+          meta: {
+            tunnelType: 'site-to-site',
+            pathLabels: [],
+            topology: topology,
+            hub: null,
+            advancedOptions: {
+              routing: 'ospf'
+            }
+          }
+        })
+      });
+
+      if (response && response.ok) {
+        await response.json().catch(() => ({}));
+        alert(`Tunnels are being created in ${tunnelTopology} topology! Please check the Tunnels page in a moment.`);
+        setShowTunnelModal(false);
+        setSelectedDevices(new Set());
+        setTimeout(() => fetchDevices(), 2000);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || `Failed to create tunnels: ${response?.status}`);
+      }
+    } catch (error) {
+      console.error('Error creating tunnels:', error);
+      alert(`Error creating tunnels: ${error.message}`);
+    } finally {
+      setCreatingTunnels(false);
+    }
+  };
+
   return (
     <div className="devices-page">
       <div className="page-header">
@@ -339,6 +416,9 @@ const Devices = () => {
                 </Col>
                 <Col md={6} className="text-end">
                   <ButtonGroup>
+                    <Button variant="primary" size="sm" onClick={handleCreateTunnels} disabled={selectedDevices.size < 2}>
+                      <FaSync className="me-1" />Create Tunnels
+                    </Button>
                     <Button variant="success" size="sm" onClick={() => Array.from(selectedDevices).forEach(handleStartDevice)}>
                       <FaPlay className="me-1" />Start
                     </Button>
@@ -401,7 +481,7 @@ const Devices = () => {
                       </div>
                     </Col>
                     <Col xs={2}>
-                      {getVRouterBadge(device.vRouter)}
+                      {getVRouterBadge(device.vRouter, device.isConnected)}
                     </Col>
                     <Col xs={2}>
                       <div className="small">
@@ -417,7 +497,19 @@ const Devices = () => {
                           variant="success"
                           size="sm"
                           onClick={() => handleStartDevice(device.id)}
-                          disabled={device.vRouter === 'running' || device.vRouter === 'starting'}
+                          disabled={
+                            !device.isConnected ||
+                            !device.isApproved ||
+                            device.vRouter === 'running' ||
+                            device.vRouter === 'starting' ||
+                            device.vRouter === 'pending'
+                          }
+                          title={
+                            !device.isConnected ? 'Device must be connected' :
+                            !device.isApproved ? 'Device must be approved' :
+                            device.vRouter === 'running' ? 'Device is already running' :
+                            'Start vRouter'
+                          }
                         >
                           <FaPlay />
                         </Button>
@@ -425,7 +517,20 @@ const Devices = () => {
                           variant="danger"
                           size="sm"
                           onClick={() => handleStopDevice(device.id)}
-                          disabled={device.vRouter === 'stopped' || device.vRouter === 'stopping'}
+                          disabled={
+                            !device.isConnected ||
+                            !device.isApproved ||
+                            device.vRouter === 'stopped' ||
+                            device.vRouter === '' ||
+                            device.vRouter === 'stopping' ||
+                            device.vRouter === 'pending'
+                          }
+                          title={
+                            !device.isConnected ? 'Device must be connected' :
+                            !device.isApproved ? 'Device must be approved' :
+                            (device.vRouter === 'stopped' || device.vRouter === '') ? 'Device is not running' :
+                            'Stop vRouter'
+                          }
                         >
                           <FaStop />
                         </Button>
@@ -453,6 +558,42 @@ const Devices = () => {
           </Card>
         </div>
       )}
+
+      {/* Tunnel Creation Modal */}
+      <Modal show={showTunnelModal} onHide={handleTunnelModalClose}>
+        <Modal.Header closeButton>
+          <Modal.Title>Create Tunnels</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>
+            You have selected <strong>{selectedDevices.size}</strong> devices to create tunnels.
+          </p>
+          <Form.Group className="mb-3">
+            <Form.Label>Tunnel Topology</Form.Label>
+            <Form.Select 
+              value={tunnelTopology} 
+              onChange={(e) => setTunnelTopology(e.target.value)}
+            >
+              <option value="full-mesh">Full Mesh</option>
+              <option value="hub-spoke">Hub and Spoke</option>
+            </Form.Select>
+            <Form.Text className="text-muted">
+              {tunnelTopology === 'full-mesh' 
+                ? `Full Mesh will create ${(selectedDevices.size * (selectedDevices.size - 1)) / 2} bidirectional tunnels connecting all devices.`
+                : 'Hub and Spoke will create tunnels from a central hub to all spoke devices.'
+              }
+            </Form.Text>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleTunnelModalClose} disabled={creatingTunnels}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleCreateTunnelsSubmit} disabled={creatingTunnels}>
+            {creatingTunnels ? 'Creating...' : 'Create Tunnels'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

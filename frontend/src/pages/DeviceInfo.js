@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Row, Col, Badge, Button, Alert, Spinner, Tab, Tabs, Form, Modal, Dropdown, Table } from 'react-bootstrap';
-import { FaArrowLeft, FaServer, FaNetworkWired, FaChartLine, FaCog, FaSave, FaMicrochip, FaChevronDown, FaSync, FaSortUp, FaSortDown, FaPlay, FaStop, FaCheck, FaTimes, FaEdit, FaTrash } from 'react-icons/fa';
+import { FaArrowLeft, FaServer, FaNetworkWired, FaChartLine, FaCog, FaSave, FaMicrochip, FaChevronDown, FaSortUp, FaSortDown, FaPlay, FaStop, FaCheck, FaTimes, FaEdit, FaTrash, FaInfoCircle } from 'react-icons/fa';
 import api from '../services/api'; // Import the configured API service
 import './DeviceInfo.css';
 import '../styles/unified-table.css';
@@ -49,6 +49,21 @@ const DeviceInfo = () => {
   const [showDhcpModal, setShowDhcpModal] = useState(false);
   const [dhcpModalInterface, setDhcpModalInterface] = useState(null);
   const [dhcpModalIP, setDhcpModalIP] = useState('');
+  
+  // Static Routes state
+  const [staticRoutes, setStaticRoutes] = useState([]);
+  const [showRouteModal, setShowRouteModal] = useState(false);
+  const [editingRoute, setEditingRoute] = useState(null);
+  const [routeForm, setRouteForm] = useState({
+    destination: '',
+    gateway: '',
+    ifname: '',
+    metric: '',
+    redistributeViaOSPF: false,
+    redistributeViaBGP: false,
+    onLink: false,
+    conditions: []
+  });
   
   
 
@@ -206,11 +221,101 @@ const DeviceInfo = () => {
     }
   }, [deviceId, apiCall]);
 
+  // Fetch static routes
+  const fetchStaticRoutes = useCallback(async () => {
+    try {
+      const response = await apiCall(`/devices/${deviceId}/staticroutes`, {
+        method: 'GET'
+      });
+      
+      if (response && response.ok) {
+        const data = await response.json();
+        // OpenAPI already returns destination and gateway (not destination_network/gateway_ip)
+        const transformedData = (data || []).map(route => ({
+          ...route,
+          _id: route._id || route.id
+        }));
+        setStaticRoutes(transformedData);
+      }
+    } catch (error) {
+      console.error('Error fetching static routes:', error);
+    }
+  }, [deviceId, apiCall]);
+
+  // Handle add/edit route
+  const handleSaveRoute = async () => {
+    try {
+      const routeData = {
+        destination: routeForm.destination,  // OpenAPI uses 'destination', not 'destination_network'
+        gateway: routeForm.gateway,           // OpenAPI uses 'gateway', not 'gateway_ip'
+        ifname: routeForm.ifname,
+        metric: routeForm.metric,
+        redistributeViaOSPF: routeForm.redistributeViaOSPF,
+        redistributeViaBGP: routeForm.redistributeViaBGP,
+        onLink: routeForm.onLink,
+        conditions: routeForm.conditions
+      };
+
+      const payload = {
+        staticRouteRequest: routeData
+      };
+
+      console.log('Saving route with data:', routeData);
+      console.log('Device ID:', deviceId);
+      console.log('Editing route:', editingRoute);
+
+      if (editingRoute) {
+        // Update existing route
+  await api.patch(`/devices/${deviceId}/staticroutes/${editingRoute._id}`, payload);
+        setShowRouteModal(false);
+        fetchStaticRoutes();
+        alert('Route updated successfully');
+      } else {
+        // Create new route
+  const response = await api.post(`/devices/${deviceId}/staticroutes`, payload);
+        console.log('Route creation response:', response.data);
+        setShowRouteModal(false);
+        fetchStaticRoutes();
+        alert('Route added successfully');
+      }
+    } catch (error) {
+      console.error('Error saving route:', error);
+      console.error('Error response:', error.response);
+      const errorMsg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+      alert('Failed to save route: ' + errorMsg);
+    }
+  };
+
+  // Handle delete route
+  const handleDeleteRoute = async (routeId) => {
+    if (!window.confirm('Are you sure you want to delete this route?')) {
+      return;
+    }
+
+    try {
+      const response = await apiCall(`/devices/${deviceId}/staticroutes/${routeId}`, {
+        method: 'DELETE'
+      });
+
+      if (response && response.ok) {
+        fetchStaticRoutes();
+        alert('Route deleted successfully');
+      } else {
+        const error = await response.text();
+        alert('Failed to delete route: ' + error);
+      }
+    } catch (error) {
+      console.error('Error deleting route:', error);
+      alert('Error deleting route: ' + error.message);
+    }
+  };
+
   // Initial fetch of device information
   useEffect(() => {
     // fetchDeviceInfo is stable (useCallback) so safe to add as dependency
     fetchDeviceInfo();
-  }, [fetchDeviceInfo]);
+    fetchStaticRoutes();
+  }, [fetchDeviceInfo, fetchStaticRoutes]);
 
   const handleSave = async () => {
     try {
@@ -639,6 +744,7 @@ const DeviceInfo = () => {
                 <Table striped bordered hover responsive className="unified-table interfaces-table">
                   <thead className="table-dark">
                     <tr>
+                      <th>Actions</th>
                       <th 
                         style={{ cursor: 'pointer', userSelect: 'none' }}
                         onClick={handleNameSort}
@@ -667,12 +773,30 @@ const DeviceInfo = () => {
                       <th>IPv6</th>
                       <th>Link Status</th>
                       <th>Description</th>
-                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {getSortedInterfaces(device.interfaces).map((iface, index) => (
                       <tr key={index}>
+                        <td>
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm" 
+                            className="me-1" 
+                            title="Edit interface configuration"
+                            onClick={() => setEditingInterface(iface)}
+                          >
+                            <FaCog />
+                          </Button>
+                          <Button 
+                            variant="outline-info" 
+                            size="sm" 
+                            title="Interface diagnostics"
+                            onClick={() => handleInterfaceDiagnostic(iface)}
+                          >
+                            <FaNetworkWired />
+                          </Button>
+                        </td>
                         <td><strong>{iface.name || `eth${index}`}</strong></td>
                         <td>
                           <Badge bg={iface.type === 'WAN' ? 'primary' : iface.type === 'LAN' ? 'success' : 'secondary'}>
@@ -780,9 +904,31 @@ const DeviceInfo = () => {
                           )}
                         </td>
                         <td>
-                          <Badge bg={iface.routing === 'OSPF' ? 'warning' : iface.routing === 'BGP' ? 'info' : 'secondary'}>
-                            {iface.routing || 'NONE'}
-                          </Badge>
+                          <Form.Select
+                            size="sm"
+                            style={{ width: '140px', fontSize: '0.85rem' }}
+                            value={
+                              interfaceChanges[iface._id]?.routing !== undefined 
+                                ? interfaceChanges[iface._id]?.routing 
+                                : (iface.routing || 'NONE')
+                            }
+                            onChange={(e) => handleInterfaceEdit(iface, 'routing', e.target.value)}
+                            disabled={!(interfaceChanges[iface._id]?.isAssigned !== undefined 
+                              ? interfaceChanges[iface._id]?.isAssigned 
+                              : iface.isAssigned)}
+                            title={
+                              !(interfaceChanges[iface._id]?.isAssigned !== undefined 
+                                ? interfaceChanges[iface._id]?.isAssigned 
+                                : iface.isAssigned)
+                                ? "Interface must be assigned to configure routing"
+                                : "Select routing protocol"
+                            }
+                          >
+                            <option value="NONE">None</option>
+                            <option value="OSPF">OSPF (Enable & Publish network)</option>
+                            <option value="BGP">BGP (Publish network)</option>
+                            <option value="OSPF-BGP">OSPF + BGP</option>
+                          </Form.Select>
                         </td>
                         <td>
                           <Badge bg={iface.dhcp === 'yes' ? 'primary' : 'secondary'}>
@@ -826,25 +972,6 @@ const DeviceInfo = () => {
                             <span className="text-muted">-</span>
                           )}
                         </td>
-                        <td>
-                          <Button 
-                            variant="outline-primary" 
-                            size="sm" 
-                            className="me-1" 
-                            title="Edit interface configuration"
-                            onClick={() => setEditingInterface(iface)}
-                          >
-                            <FaCog />
-                          </Button>
-                          <Button 
-                            variant="outline-info" 
-                            size="sm" 
-                            title="Interface diagnostics"
-                            onClick={() => handleInterfaceDiagnostic(iface)}
-                          >
-                            <FaNetworkWired />
-                          </Button>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -869,18 +996,6 @@ const DeviceInfo = () => {
                           `${Object.keys(interfaceChanges).length} interface configurations pending sync`
                         }
                       </small>
-                    </div>
-                    <div>
-                      <Button 
-                        variant="info" 
-                        size="sm" 
-                        className="me-2"
-                        disabled={Object.keys(interfaceChanges).length === 0 || syncingConfig}
-                        onClick={syncDeviceConfig}
-                      >
-                        <FaSync className={`me-1 ${syncingConfig ? 'fa-spin' : ''}`} />
-                        {syncingConfig ? 'Syncing...' : 'Sync'}
-                      </Button>
                     </div>
                   </div>
                 </div>
@@ -908,11 +1023,142 @@ const DeviceInfo = () => {
       case 'static-routes':
         return (
           <div>
-            <h5><FaCog className="me-2" />Static Routes Configuration</h5>
-            <Alert variant="info">
-              <Alert.Heading>Feature Coming Soon</Alert.Heading>
-              <p>Static routes configuration will be available in a future update.</p>
-            </Alert>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5><FaCog className="me-2" />Static Routing Table</h5>
+              <Button 
+                variant="primary" 
+                size="sm"
+                onClick={() => {
+                  setEditingRoute(null);
+                  setRouteForm({
+                    destination: '',
+                    gateway: '',
+                    ifname: '',
+                    metric: '',
+                    redistributeViaOSPF: false,
+                    redistributeViaBGP: false,
+                    onLink: false,
+                    conditions: []
+                  });
+                  setShowRouteModal(true);
+                }}
+              >
+                Add Route
+              </Button>
+            </div>
+            
+            <Table striped bordered hover responsive className="unified-table">
+              <thead className="table-dark">
+                <tr>
+                  <th>Route</th>
+                  <th>Redistribution</th>
+                  <th>Advanced</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staticRoutes && staticRoutes.length > 0 ? (
+                  staticRoutes.map((route, index) => (
+                    <tr key={route._id || index}>
+                      <td>
+                        <div>
+                          <strong>Destination:</strong> <code>{route.destination}</code>
+                        </div>
+                        <div>
+                          <strong>Gateway:</strong> <code>{route.gateway}</code>
+                        </div>
+                        {route.ifname && (
+                          <div className="text-muted small">
+                            Interface: {route.ifname}
+                          </div>
+                        )}
+                        {route.metric && (
+                          <div className="text-muted small">
+                            Metric: {route.metric}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {route.redistributeViaOSPF && (
+                          <Badge bg="info" className="me-1">OSPF</Badge>
+                        )}
+                        {route.redistributeViaBGP && (
+                          <Badge bg="info">BGP</Badge>
+                        )}
+                        {!route.redistributeViaOSPF && !route.redistributeViaBGP && (
+                          <span className="text-muted">None</span>
+                        )}
+                      </td>
+                      <td>
+                        {route.onLink && (
+                          <Badge bg="secondary" className="me-1">On-Link</Badge>
+                        )}
+                        {route.conditions && route.conditions.length > 0 ? (
+                          <Badge bg="warning">
+                            {route.conditions.length} Condition(s)
+                          </Badge>
+                        ) : (
+                          !route.onLink && <span className="text-muted">None</span>
+                        )}
+                      </td>
+                      <td>
+                        <Badge bg={
+                          route.status === 'complete' ? 'success' :
+                          route.status === 'waiting' ? 'warning' :
+                          route.status === 'pending' ? 'info' :
+                          'secondary'
+                        }>
+                          {route.status || 'N/A'}
+                        </Badge>
+                      </td>
+                      <td>
+                        <Button 
+                          variant="outline-primary" 
+                          size="sm" 
+                          className="me-1"
+                          onClick={() => {
+                            setEditingRoute(route);
+                            setRouteForm({
+                              destination: route.destination || '',
+                              gateway: route.gateway || '',
+                              ifname: route.ifname || '',
+                              metric: route.metric || '',
+                              redistributeViaOSPF: route.redistributeViaOSPF || false,
+                              redistributeViaBGP: route.redistributeViaBGP || false,
+                              onLink: route.onLink || false,
+                              conditions: route.conditions || []
+                            });
+                            setShowRouteModal(true);
+                          }}
+                        >
+                          <FaEdit />
+                        </Button>
+                        <Button 
+                          variant="outline-danger" 
+                          size="sm"
+                          onClick={() => handleDeleteRoute(route._id)}
+                        >
+                          <FaTrash />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="text-center text-muted">
+                      No Static Routes available
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+            
+            {staticRoutes && (
+              <div className="text-muted small">
+                Showing {staticRoutes.length > 0 ? `1 to ${staticRoutes.length}` : '0 to 0'} of {staticRoutes.length} Results
+              </div>
+            )}
           </div>
         );
       
@@ -920,10 +1166,314 @@ const DeviceInfo = () => {
         return (
           <div>
             <h5><FaCog className="me-2" />OSPF Configuration</h5>
-            <Alert variant="info">
-              <Alert.Heading>Feature Coming Soon</Alert.Heading>
-              <p>OSPF configuration will be available in a future update.</p>
-            </Alert>
+            
+            <Form>
+              <Row className="mb-4">
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label><strong>Router ID</strong></Form.Label>
+                    <Form.Control
+                      type="text"
+                      placeholder="e.g., 1.1.1.1"
+                      value={device?.ospf?.routerId || ''}
+                      onChange={(e) => {
+                        setDevice(prev => ({
+                          ...prev,
+                          ospf: {
+                            ...prev.ospf,
+                            routerId: e.target.value
+                          }
+                        }));
+                      }}
+                    />
+                    <Form.Text className="text-muted">
+                      OSPF Router ID (IPv4 format)
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Check
+                      type="checkbox"
+                      label="Redistribute BGP Routes"
+                      checked={device?.ospf?.redistributeBgp || false}
+                      onChange={(e) => {
+                        setDevice(prev => ({
+                          ...prev,
+                          ospf: {
+                            ...prev.ospf,
+                            redistributeBgp: e.target.checked
+                          }
+                        }));
+                      }}
+                      style={{ marginTop: '32px' }}
+                    />
+                    <Form.Text className="text-muted">
+                      Redistribute BGP routes into OSPF
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row className="mb-4">
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label><strong>Hello Interval (seconds)</strong></Form.Label>
+                    <Form.Control
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={device?.ospf?.helloInterval || 10}
+                      onChange={(e) => {
+                        setDevice(prev => ({
+                          ...prev,
+                          ospf: {
+                            ...prev.ospf,
+                            helloInterval: parseInt(e.target.value) || 10
+                          }
+                        }));
+                      }}
+                    />
+                    <Form.Text className="text-muted">
+                      Interval between hello packets (default: 10)
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label><strong>Dead Interval (seconds)</strong></Form.Label>
+                    <Form.Control
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={device?.ospf?.deadInterval || 40}
+                      onChange={(e) => {
+                        setDevice(prev => ({
+                          ...prev,
+                          ospf: {
+                            ...prev.ospf,
+                            deadInterval: parseInt(e.target.value) || 40
+                          }
+                        }));
+                      }}
+                    />
+                    <Form.Text className="text-muted">
+                      Interval before declaring neighbor dead (default: 40)
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <h6 className="mt-4 mb-3"><FaNetworkWired className="me-2" />Networks</h6>
+              <Table striped bordered hover responsive className="unified-table">
+                <thead className="table-dark">
+                  <tr>
+                    <th>Interface</th>
+                    <th>Network</th>
+                    <th>Area</th>
+                    <th>Authentication Key ID</th>
+                    <th>Authentication Key</th>
+                    <th>Cost</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {device?.interfaces && device.interfaces.length > 0 ? (
+                    device.interfaces
+                      .filter(iface => iface.isAssigned && iface.routing === 'OSPF')
+                      .map((iface, index) => (
+                        <tr key={index}>
+                          <td><strong>{iface.name}</strong></td>
+                          <td>
+                            <code>
+                              {iface.IPv4 ? `${iface.IPv4}${iface.IPv4Mask ? `/${iface.IPv4Mask}` : ''}` : 'N/A'}
+                            </code>
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="text"
+                              size="sm"
+                              style={{ width: '100px' }}
+                              value={iface.ospf?.area || '0'}
+                              onChange={(e) => {
+                                const updatedInterfaces = [...device.interfaces];
+                                const idx = updatedInterfaces.findIndex(i => i._id === iface._id);
+                                if (idx !== -1) {
+                                  updatedInterfaces[idx] = {
+                                    ...updatedInterfaces[idx],
+                                    ospf: {
+                                      ...updatedInterfaces[idx].ospf,
+                                      area: e.target.value
+                                    }
+                                  };
+                                  setDevice(prev => ({ ...prev, interfaces: updatedInterfaces }));
+                                }
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="text"
+                              size="sm"
+                              style={{ width: '80px' }}
+                              placeholder="1"
+                              value={iface.ospf?.keyId || ''}
+                              onChange={(e) => {
+                                const updatedInterfaces = [...device.interfaces];
+                                const idx = updatedInterfaces.findIndex(i => i._id === iface._id);
+                                if (idx !== -1) {
+                                  updatedInterfaces[idx] = {
+                                    ...updatedInterfaces[idx],
+                                    ospf: {
+                                      ...updatedInterfaces[idx].ospf,
+                                      keyId: e.target.value
+                                    }
+                                  };
+                                  setDevice(prev => ({ ...prev, interfaces: updatedInterfaces }));
+                                }
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="password"
+                              size="sm"
+                              style={{ width: '120px' }}
+                              placeholder="auth key"
+                              maxLength={16}
+                              value={iface.ospf?.key || ''}
+                              onChange={(e) => {
+                                const updatedInterfaces = [...device.interfaces];
+                                const idx = updatedInterfaces.findIndex(i => i._id === iface._id);
+                                if (idx !== -1) {
+                                  updatedInterfaces[idx] = {
+                                    ...updatedInterfaces[idx],
+                                    ospf: {
+                                      ...updatedInterfaces[idx].ospf,
+                                      key: e.target.value
+                                    }
+                                  };
+                                  setDevice(prev => ({ ...prev, interfaces: updatedInterfaces }));
+                                }
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <Form.Control
+                              type="number"
+                              size="sm"
+                              style={{ width: '80px' }}
+                              min="1"
+                              max="65535"
+                              value={iface.ospf?.cost || 10}
+                              onChange={(e) => {
+                                const updatedInterfaces = [...device.interfaces];
+                                const idx = updatedInterfaces.findIndex(i => i._id === iface._id);
+                                if (idx !== -1) {
+                                  updatedInterfaces[idx] = {
+                                    ...updatedInterfaces[idx],
+                                    ospf: {
+                                      ...updatedInterfaces[idx].ospf,
+                                      cost: parseInt(e.target.value) || 10
+                                    }
+                                  };
+                                  setDevice(prev => ({ ...prev, interfaces: updatedInterfaces }));
+                                }
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <Button
+                              variant="outline-primary"
+                              size="sm"
+                              onClick={() => {
+                                // 保存OSPF配置
+                                console.log('Save OSPF config for', iface.name);
+                              }}
+                            >
+                              <FaSave className="me-1" />
+                              Save
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                  ) : (
+                    <tr>
+                      <td colSpan="7" className="text-center text-muted">
+                        No OSPF-enabled interfaces available
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </Table>
+
+              <Alert variant="info" className="mt-3">
+                <Alert.Heading>
+                  <FaInfoCircle className="me-2" />
+                  OSPF Configuration Guide
+                </Alert.Heading>
+                <div className="small">
+                  <p className="mb-2"><strong>To enable OSPF on an interface:</strong></p>
+                  <ol className="mb-2">
+                    <li>Go to <strong>Configuration → Interfaces</strong></li>
+                    <li>Set the interface <strong>Routing</strong> field to <strong>OSPF</strong></li>
+                    <li>Come back here to configure OSPF-specific settings</li>
+                  </ol>
+                  <p className="mb-0">
+                    <strong>Note:</strong> Only assigned interfaces with routing set to OSPF will appear in the Networks table.
+                  </p>
+                </div>
+              </Alert>
+
+              <div className="mt-4 text-end">
+                <Button
+                  variant="primary"
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      setError(null);
+
+                      const ospfConfig = {
+                        routerId: device.ospf?.routerId || '',
+                        helloInterval: device.ospf?.helloInterval || 10,
+                        deadInterval: device.ospf?.deadInterval || 40,
+                        redistributeBgp: device.ospf?.redistributeBgp || false
+                      };
+
+                      const updateData = {
+                        ospf: ospfConfig,
+                        interfaces: device.interfaces
+                      };
+
+                      console.log('Saving OSPF configuration:', updateData);
+
+                      const response = await apiCall(`/devices/${deviceId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updateData)
+                      });
+
+                      if (!response || !response.ok) {
+                        throw new Error('Failed to save OSPF configuration');
+                      }
+
+                      alert('OSPF configuration saved successfully!');
+                      await fetchDeviceInfo(true);
+                    } catch (err) {
+                      console.error('Error saving OSPF configuration:', err);
+                      setError(err.message || 'Failed to save OSPF configuration');
+                      alert('Error saving OSPF configuration: ' + err.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                >
+                  <FaSave className="me-2" />
+                  {loading ? 'Saving...' : 'Save OSPF Configuration'}
+                </Button>
+              </div>
+            </Form>
           </div>
         );
       
@@ -1669,22 +2219,7 @@ const DeviceInfo = () => {
             {loading ? 'Stopping...' : 'Stop Device'}
           </Button>
 
-          <Button 
-            variant="info" 
-            onClick={syncDeviceConfig}
-            disabled={loading || !device?.isConnected || syncingConfig}
-            className="me-2"
-            title={
-              !device?.isConnected 
-                ? 'Device must be connected to sync configuration' 
-                : syncingConfig
-                ? 'Configuration sync in progress'
-                : 'Synchronize device configuration'
-            }
-          >
-            <FaSync className={`me-2 ${syncingConfig ? 'fa-spin' : ''}`} />
-            {syncingConfig ? 'Syncing...' : 'Sync'}
-          </Button>
+          {/* Sync button removed - functionality integrated into Update Device */}
 
           {/* Device Status Indicator */}
           <div className="d-inline-block me-2">
@@ -2246,6 +2781,62 @@ const DeviceInfo = () => {
                   onChange={(e) => handleInterfaceEdit(editingInterface, 'metric', e.target.value)}
                 />
               </Form.Group>
+              
+              {/* Bandwidth Configuration */}
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>TX Bandwidth (Mbps)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      placeholder="1000"
+                      min="1"
+                      max="100000"
+                      value={interfaceChanges[editingInterface._id]?.bandwidthMbps?.tx || editingInterface.bandwidthMbps?.tx || ''}
+                      onChange={(e) => {
+                        const currentBw = interfaceChanges[editingInterface._id]?.bandwidthMbps || editingInterface.bandwidthMbps || {};
+                        handleInterfaceEdit(editingInterface, 'bandwidthMbps', {
+                          ...currentBw,
+                          tx: parseInt(e.target.value) || 0
+                        });
+                      }}
+                    />
+                    <Form.Text className="text-muted">
+                      Upload bandwidth in Mbps (e.g., 1000 for 1 Gbps)
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>RX Bandwidth (Mbps)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      placeholder="1000"
+                      min="1"
+                      max="100000"
+                      value={interfaceChanges[editingInterface._id]?.bandwidthMbps?.rx || editingInterface.bandwidthMbps?.rx || ''}
+                      onChange={(e) => {
+                        const currentBw = interfaceChanges[editingInterface._id]?.bandwidthMbps || editingInterface.bandwidthMbps || {};
+                        handleInterfaceEdit(editingInterface, 'bandwidthMbps', {
+                          ...currentBw,
+                          rx: parseInt(e.target.value) || 0
+                        });
+                      }}
+                    />
+                    <Form.Text className="text-muted">
+                      Download bandwidth in Mbps (e.g., 1000 for 1 Gbps)
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+              </Row>
+              
+              {editingInterface?.type === 'WAN' && (
+                <Alert variant="warning" className="mt-2">
+                  <strong>⚠️ WAN Interface Bandwidth:</strong> This setting affects tunnel performance. 
+                  Set to match your actual link speed (e.g., 1000 for Gigabit, 100 for Fast Ethernet).
+                  Changes require device update and may need tunnel recreation for full effect.
+                </Alert>
+              )}
             </Form>
           )}
         </Modal.Body>
@@ -2379,6 +2970,136 @@ const DeviceInfo = () => {
           >
             <FaCheck className="me-1" />
             Yes, Enable DHCP Server
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Static Route Add/Edit Modal */}
+      <Modal show={showRouteModal} onHide={() => setShowRouteModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>{editingRoute ? 'Edit Static Route' : 'Add Static Route'}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Destination Network *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="192.168.10.0/24"
+                    value={routeForm.destination}
+                    onChange={(e) => setRouteForm({...routeForm, destination: e.target.value})}
+                  />
+                  <Form.Text className="text-muted">
+                    Network address with CIDR notation
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Gateway *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="192.168.1.1"
+                    value={routeForm.gateway}
+                    onChange={(e) => setRouteForm({...routeForm, gateway: e.target.value})}
+                  />
+                  <Form.Text className="text-muted">
+                    Next hop IP address
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Interface (Optional)</Form.Label>
+                  <Form.Select
+                    value={routeForm.ifname}
+                    onChange={(e) => setRouteForm({...routeForm, ifname: e.target.value})}
+                  >
+                    <option value="">Auto-detect</option>
+                    {device?.interfaces?.map((iface) => (
+                      <option key={iface.devId} value={iface.devId}>
+                        {iface.name} ({iface.devId})
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Metric (Optional)</Form.Label>
+                  <Form.Control
+                    type="number"
+                    placeholder="100"
+                    value={routeForm.metric}
+                    onChange={(e) => setRouteForm({...routeForm, metric: e.target.value})}
+                  />
+                  <Form.Text className="text-muted">
+                    Route priority (lower is preferred)
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <h6 className="mt-3">Redistribution</h6>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Check
+                    type="checkbox"
+                    label="Redistribute via OSPF"
+                    checked={routeForm.redistributeViaOSPF}
+                    onChange={(e) => setRouteForm({...routeForm, redistributeViaOSPF: e.target.checked})}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Check
+                    type="checkbox"
+                    label="Redistribute via BGP"
+                    checked={routeForm.redistributeViaBGP}
+                    onChange={(e) => setRouteForm({...routeForm, redistributeViaBGP: e.target.checked})}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <h6 className="mt-3">Advanced Options</h6>
+            <Form.Group className="mb-3">
+              <Form.Check
+                type="checkbox"
+                label="On-Link Route"
+                checked={routeForm.onLink}
+                onChange={(e) => setRouteForm({...routeForm, onLink: e.target.checked})}
+              />
+              <Form.Text className="text-muted">
+                Indicates that the destination is directly attached to this link
+              </Form.Text>
+            </Form.Group>
+
+            <Alert variant="info" className="mt-3">
+              <small>
+                <strong>Note:</strong> Static routes will be applied to the device after saving.
+                Make sure the gateway is reachable and the destination network is valid.
+              </small>
+            </Alert>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowRouteModal(false)}>
+            Cancel
+          </Button>
+          <Button 
+            variant="primary" 
+            onClick={handleSaveRoute}
+            disabled={!routeForm.destination || !routeForm.gateway}
+          >
+            {editingRoute ? 'Update Route' : 'Add Route'}
           </Button>
         </Modal.Footer>
       </Modal>

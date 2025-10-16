@@ -5,6 +5,34 @@ This project provides a comprehensive, production-ready administration console t
 
 > The project includes both responsive UI components and real-time dashboard functionality with live traffic statistics and device monitoring.
 
+---
+
+## 📊 Development Progress Summary
+
+**Last Updated**: October 15, 2025  
+**Version**: 6.3.37  
+**Status**: ✅ Production Ready
+
+### Recent Milestones
+
+- ✅ **October 15, 2025**: Complete MongoDB and Tunnels documentation committed (3,420+ lines)
+- ✅ **October 14, 2025**: MongoDB systemd auto-start configuration with standardized paths
+- ✅ **October 14, 2025**: Tunnels page implementation with full CRUD operations
+- ✅ **October 13, 2025**: FlexiManage systemd service integration with PM2
+- ✅ **October 12, 2025**: Frontend README update with deployment guide
+
+### System Architecture Status
+
+| Component | Status | Version | Auto-Start | Details |
+|-----------|--------|---------|------------|---------|
+| **Frontend** | ✅ Running | Build: latest | Via Backend | Served as static files |
+| **Backend** | ✅ Running | 6.3.37 | systemd + PM2 | Port 3443 (HTTPS) |
+| **MongoDB** | ✅ Running | 8.0.15 ARM64 | systemd (3 nodes) | Ports 27017-27019 |
+| **Redis** | ✅ Running | 5.0.5+ | systemd | Port 6379 |
+| **Email** | ✅ Running | aiosmtpd | systemd | Port 1025 |
+
+---
+
 ## 🚀 Current Implementation Status
 
 ### ✅ **Fully Implemented Features**
@@ -21,12 +49,25 @@ This project provides a comprehensive, production-ready administration console t
   - Device information modal with detailed hardware specs
   - Real-time connection status monitoring
   - Device configuration and approval workflow
+  - ✅ Bulk device selection for tunnel creation
+  - ✅ "Create Tunnels" button with topology selection
+  - ✅ Device status tracking (Connected, Running, Approved)
+  - ✅ Interface management and configuration
 
-- **🔗 Tunnel Management**: 
-  - Tunnel overview and status monitoring
-  - Bandwidth allocation tracking
-  - Connection state management
-  - Tunnel configuration interface
+- **🔗 Tunnel Management** (Updated Oct 14, 2025): 
+  - ✅ Complete tunnel listing page with real-time data
+  - ✅ Tunnel creation via Devices page (Full Mesh / Hub-Spoke topologies)
+  - ✅ Tunnel deletion with confirmation dialogs
+  - ✅ Auto-refresh every 30 seconds
+  - ✅ Statistics dashboard (Total, Connected, Inactive)
+  - ✅ Detailed tunnel information display:
+    - Device A/B names and interfaces
+    - Path labels and encryption methods
+    - Average latency and drop rate
+    - Connection status with color-coded badges
+  - ✅ Official FlexiWAN API integration (`POST /devices/apply`)
+  - ✅ Backend unchanged (using official API only)
+  - 📄 Documentation: `/docs/TUNNELS_PAGE_GUIDE.md`
 
 - **🌐 Network Management**: 
   - Network topology visualization
@@ -57,6 +98,37 @@ This project provides a comprehensive, production-ready administration console t
 - **Role-Based Access Control**: Permission-based route guards
 - **JWT Token Management**: Secure token handling with refresh capabilities
 - **Session Management**: Persistent login with secure storage
+
+### 🆕 **Recent Improvements** (October 2025)
+
+#### Tunnel Management Enhancements
+- ✅ **New Tunnels Page**: Complete rewrite with modern UI
+  - Real-time data fetching from official API
+  - Device name resolution with interface details
+  - Color-coded status badges (Connected/Inactive)
+  - Encryption method indicators (PSK/None)
+  - Statistics cards showing tunnel counts
+- ✅ **Tunnel Creation**: Integrated into Devices page
+  - Full Mesh topology: Creates n×(n-1)/2 tunnels
+  - Hub-and-Spoke topology: Creates n-1 tunnels
+  - Real-time tunnel count preview
+  - Official API compliance (`POST /devices/apply`)
+- ✅ **Documentation**: Comprehensive guides added
+  - User guide: `/docs/TUNNELS_PAGE_GUIDE.md`
+  - API documentation: `/docs/TUNNEL_CREATION_OFFICIAL_API.md`
+  - Limits analysis: `/docs/TUNNEL_CREATION_LIMITS_ANALYSIS.md`
+
+#### MongoDB Configuration Fixes
+- ✅ **Standardized Paths**: All services use `/run/mongodb/` (not `/var/run/`)
+- ✅ **Corrected Parameters**: Fixed `--pidfilepath` (lowercase, official format)
+- ✅ **Auto-Start Configuration**: Systemd services for 3-node replica set
+- ✅ **Documentation**: `/scripts/README_MONGODB_SYSTEMD_EN.md`
+
+#### System Stability Improvements
+- ✅ **Swap Configuration**: 1GB swapfile created and enabled
+- ✅ **Service Dependencies**: Proper systemd dependency chain
+- ✅ **PM2 Integration**: Backend managed by PM2 under systemd
+- ✅ **Boot Auto-Start**: All services (MongoDB, Redis, FlexiManage) start on boot
 
 ## 🛠️ Technology Stack
 
@@ -856,13 +928,267 @@ journalctl -u redis-server -f
 
 ---
 
-## 📞 Support & Documentation
+## 🧪 Testing & Verification
 
-- **Backend Repository**: [FlexiManage Backend](https://github.com/Miwide-Info/fleximanage)
+### Test Scripts
+
+The project includes automated test scripts for verification:
+
+```bash
+# Test Tunnels API endpoints
+bash /root/fleximanage/scripts/test_tunnels_api.sh
+
+# Verify complete deployment
+bash /root/fleximanage/scripts/verify_tunnels_deployment.sh
+```
+
+### Manual Testing Checklist
+
+#### Frontend Testing
+- [ ] Access web UI: `https://manage.miwide.com:3443`
+- [ ] Login with admin credentials
+- [ ] Check Dashboard displays device statistics
+- [ ] Navigate to Devices page
+- [ ] Navigate to Tunnels page
+- [ ] Verify all data loads correctly
+- [ ] Test tunnel creation (select devices → Create Tunnels)
+- [ ] Test tunnel deletion
+- [ ] Check auto-refresh functionality
+
+#### Backend API Testing
+```bash
+# Get authentication token
+TOKEN=$(curl -s -k -X POST https://manage.miwide.com:3443/api/tokens \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin@example.com","password":"your_password"}' \
+  | jq -r '.token')
+
+# Test devices endpoint
+curl -k -H "Authorization: Bearer $TOKEN" \
+  https://manage.miwide.com:3443/api/devices
+
+# Test tunnels endpoint
+curl -k -H "Authorization: Bearer $TOKEN" \
+  https://manage.miwide.com:3443/api/tunnels
+
+# Test dashboard stats
+curl -k https://manage.miwide.com:3443/api/dashboard/stats
+```
+
+#### Database Testing
+```bash
+# Check MongoDB replica set status
+mongosh --port 27017 --eval 'rs.status()' | grep -E '"stateStr"|"name"'
+
+# Count active tunnels
+mongosh flexiwan --quiet --eval 'db.tunnels.find({isActive: true}).count()'
+
+# List devices
+mongosh flexiwan --quiet --eval 'db.devices.find({}, {name:1, hostname:1, isConnected:1}).limit(5)'
+
+# Check jobs queue
+mongosh flexiwan --quiet --eval 'db.jobs.find().sort({_id:-1}).limit(5).pretty()'
+```
+
+---
+
+## � Troubleshooting
+
+### Common Issues
+
+#### Issue: Frontend doesn't load / 502 Bad Gateway
+
+**Solution**:
+```bash
+# Check if backend is running
+pm2 list | grep fleximanage
+
+# Check systemd service
+systemctl status fleximanage
+
+# Restart services
+systemctl restart fleximanage
+pm2 restart fleximanage-backend
+
+# Check logs
+pm2 logs fleximanage-backend
+journalctl -u fleximanage -n 50
+```
+
+#### Issue: MongoDB connection failed
+
+**Solution**:
+```bash
+# Check MongoDB services
+systemctl status mongod-27017 mongod-27018 mongod-27019
+
+# Check if replica set is initialized
+mongosh --port 27017 --eval 'rs.status()'
+
+# Restart MongoDB services
+systemctl restart mongod-27017 mongod-27018 mongod-27019
+
+# Check MongoDB logs
+journalctl -u mongod-27017 -n 50
+```
+
+#### Issue: Tunnels page shows no data
+
+**Solution**:
+```bash
+# Check if tunnels exist in database
+mongosh flexiwan --eval "db.tunnels.find({isActive: true}).count()"
+
+# Check API response
+curl -k -H "Authorization: Bearer $TOKEN" \
+  https://manage.miwide.com:3443/api/tunnels | jq
+
+# Check backend logs for errors
+pm2 logs fleximanage-backend | grep -i tunnel
+
+# Clear browser cache and reload
+# Press Ctrl+Shift+Delete → Clear cache
+```
+
+#### Issue: Services don't start on boot
+
+**Solution**:
+```bash
+# Verify services are enabled
+systemctl is-enabled mongod-27017 mongod-27018 mongod-27019
+systemctl is-enabled redis-server
+systemctl is-enabled fleximanage
+
+# Enable services if needed
+sudo systemctl enable mongod-27017 mongod-27018 mongod-27019
+sudo systemctl enable redis-server
+sudo systemctl enable fleximanage
+
+# Check service dependencies
+systemctl list-dependencies fleximanage
+```
+
+#### Issue: High memory usage
+
+**Solution**:
+```bash
+# Check memory usage
+free -h
+ps aux | grep -E 'mongod|node|redis' | sort -k4 -rn
+
+# Adjust MongoDB cache size (edit service files)
+# Adjust Node.js memory limit in PM2 config
+
+# Monitor swap usage
+swapon --show
+vmstat 5
+
+# Add more swap if needed (already have 1GB)
+```
+
+### Log Locations
+
+| Service | Log Location |
+|---------|--------------|
+| FlexiManage Backend | `pm2 logs fleximanage-backend` |
+| FlexiManage Systemd | `journalctl -u fleximanage` |
+| MongoDB (27017) | `/var/log/mongodb/mongod-27017.log` |
+| MongoDB (27018) | `/var/log/mongodb/mongod-27018.log` |
+| MongoDB (27019) | `/var/log/mongodb/mongod-27019.log` |
+| Redis | `journalctl -u redis-server` |
+| System | `/var/log/syslog` |
+| PM2 | `~/.pm2/logs/` |
+
+---
+
+## 📚 Additional Documentation
+
+### Project Documentation Files
+
+| Document | Purpose | Location |
+|----------|---------|----------|
+| **MongoDB Setup** | Systemd service configuration | `/scripts/README_MONGODB_SYSTEMD_EN.md` |
+| **Tunnels Guide** | Complete user guide | `/docs/TUNNELS_PAGE_GUIDE.md` |
+| **Tunnels API** | Official API adaptation | `/docs/TUNNEL_CREATION_OFFICIAL_API.md` |
+| **Limits Analysis** | System constraints | `/docs/TUNNEL_CREATION_LIMITS_ANALYSIS.md` |
+| **Quick Test** | Quick testing guide | `/docs/QUICK_TEST_GUIDE.md` |
+| **Git Guide** | Commit recommendations | `/GIT_COMMIT_RECOMMENDATION.md` |
+
+### Quick Reference Commands
+
+```bash
+# Start all services
+sudo systemctl start mongod-27017 mongod-27018 mongod-27019
+sudo systemctl start redis-server
+sudo systemctl start fleximanage
+
+# Stop all services
+sudo systemctl stop fleximanage
+sudo systemctl stop redis-server
+sudo systemctl stop mongod-27017 mongod-27018 mongod-27019
+
+# Restart FlexiManage only
+sudo systemctl restart fleximanage
+pm2 restart fleximanage-backend
+
+# View all service statuses
+systemctl status mongod-27017 mongod-27018 mongod-27019 redis-server fleximanage
+
+# Check port usage
+ss -tlnp | grep -E ':(3002|3443|27017|27018|27019|6379|1025)'
+
+# View real-time logs
+pm2 logs --lines 100
+journalctl -f -u fleximanage -u mongod-27017 -u redis-server
+```
+
+---
+
+## �📞 Support & Documentation
+
+- **Backend Repository**: [FlexiManage Backend](https://github.com/Aikonlivecn/fleximanage)
+- **Original Project**: [FlexiWAN flexiManage](https://github.com/flexiwan/fleximanage)
 - **API Documentation**: Available at `/api/docs` when backend is running
 - **Issue Tracking**: Use GitHub Issues for bug reports and feature requests
-- **Development Chat**: Contact the FlexiWAN development team
+- **Development Team**: Miwide Info Technology Co., Ltd.
 
-**Version**: 1.0.0 (Production Ready)  
-**Last Updated**: October 2025  
-**License**: AGPL-3.0
+### Key Contributors
+- System Architecture & MongoDB Configuration
+- Tunnels Page Implementation
+- Official API Integration
+- Documentation & Testing Scripts
+
+---
+
+## 📈 Development Roadmap
+
+### Completed ✅
+- [x] MongoDB systemd auto-start (3-node replica set)
+- [x] Redis systemd integration
+- [x] FlexiManage systemd service with PM2
+- [x] Tunnels page with full CRUD operations
+- [x] Official API integration (no backend modifications)
+- [x] Comprehensive documentation (3,420+ lines)
+- [x] Test and verification scripts
+- [x] Swap configuration for stability
+- [x] Boot auto-start for all services
+
+### In Progress 🚧
+- [ ] Investigate device 10.248.5.14 tunnel creation issue
+- [ ] Monitor tunnel statistics (latency, drop rate)
+- [ ] Performance optimization for large datasets
+
+### Planned 📋
+- [ ] Enhanced tunnel editing capabilities
+- [ ] Bulk tunnel operations
+- [ ] Advanced filtering and search
+- [ ] Export functionality (CSV/JSON)
+- [ ] Real-time WebSocket updates
+- [ ] Mobile app support
+
+---
+
+**Version**: 6.3.37 (Production Ready)  
+**Last Updated**: October 15, 2025  
+**License**: AGPL-3.0  
+**Environment**: Ubuntu 24.04.3 LTS ARM64

@@ -1,9 +1,9 @@
 // Script to create a default admin user for testing
 const mongoose = require('mongoose');
-const User = require('./models/users');
-const Account = require('./models/accounts');
-const { membership, preDefinedPermissions } = require('./models/membership');
-const configs = require('./configs')();
+const User = require('../backend/models/users');
+const Account = require('../backend/models/accounts');
+const { membership, preDefinedPermissions } = require('../backend/models/membership');
+const configs = require('../backend/configs')();
 
 async function createDefaultAdmin () {
   try {

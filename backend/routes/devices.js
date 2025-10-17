@@ -536,6 +536,111 @@ devicesRouter.route('/:deviceId/routes')
     }
   });
 
+// Retrieves CPU optimization recommendations for device
+devicesRouter.route('/:deviceId/cpu-optimization')
+  .options(cors.corsWithOptions,
+    verifyPermission('devices', 'get'),
+    async (req, res) => { res.sendStatus(200); })
+  .get(cors.corsWithOptions, async (req, res, next) => {
+    try {
+      const { calculateRecommendedVppCores, getCpuInfo } = require('../utils/deviceUtils');
+      
+      const deviceObject = await devices.findOne({
+        _id: mongoose.Types.ObjectId(req.params.deviceId)
+      }).populate('policies.qos.policy', '_id name');
+
+      if (!deviceObject) {
+        return next(createError(404, 'Device not found'));
+      }
+
+      const cpuInfo = getCpuInfo(deviceObject.cpuInfo);
+      const hasQos = !!(deviceObject.policies?.qos?.policy);
+      const wanInterfaces = deviceObject.interfaces.filter(
+        ifc => ifc.isAssigned && ifc.type === 'WAN'
+      ).length;
+
+      // Calculate recommended cores
+      const recommendedCores = calculateRecommendedVppCores(deviceObject);
+
+      // Calculate current utilization
+      const currentUtilization = cpuInfo.hwCores > 0
+        ? ((cpuInfo.vppCores + 1) / cpuInfo.hwCores * 100).toFixed(1)
+        : 0;
+
+      const recommendedUtilization = cpuInfo.hwCores > 0
+        ? ((recommendedCores + 1) / cpuInfo.hwCores * 100).toFixed(1)
+        : 0;
+
+      // Estimate performance improvement
+      const performanceMultiplier = recommendedCores / Math.max(cpuInfo.vppCores, 1);
+      const estimatedImprovementPercent = Math.round((performanceMultiplier - 1) * 100);
+
+      // Generate optimization status
+      let status = 'optimal';
+      let message = 'Device CPU configuration is optimal';
+      let canOptimize = false;
+
+      if (cpuInfo.hwCores <= 2) {
+        status = 'minimal';
+        message = 'Device has minimal CPU configuration (2 cores). No optimization available.';
+      } else if (cpuInfo.vppCores < recommendedCores) {
+        status = 'underutilized';
+        message = `Device is using ${cpuInfo.vppCores} vRouter core${cpuInfo.vppCores > 1 ? 's' : ''} ` +
+                  `but can benefit from ${recommendedCores} cores for better performance.`;
+        canOptimize = true;
+      } else if (cpuInfo.vppCores === recommendedCores) {
+        status = 'optimal';
+        message = 'Device CPU configuration is optimal for current workload';
+      } else {
+        status = 'over-allocated';
+        message = `Device is using ${cpuInfo.vppCores} vRouter cores, ` +
+                  `which may be more than needed. Recommended: ${recommendedCores} cores.`;
+      }
+
+      // QoS compatibility check
+      const qosCompatible = cpuInfo.vppCores >= 2 && cpuInfo.hwCores >= 3;
+      const qosRecommendation = hasQos
+        ? (qosCompatible ? 'QoS is supported with current configuration' : 'Increase to 2+ vRouter cores for QoS')
+        : (qosCompatible ? 'Device is ready for QoS deployment' : 'QoS requires 2+ vRouter cores');
+
+      const optimization = {
+        deviceId: req.params.deviceId,
+        hostname: deviceObject.hostname,
+        current: {
+          hwCores: cpuInfo.hwCores,
+          vppCores: cpuInfo.vppCores,
+          configuredVppCores: cpuInfo.configuredVppCores,
+          powerSaving: cpuInfo.powerSaving,
+          utilization: `${currentUtilization}%`
+        },
+        recommended: {
+          vppCores: recommendedCores,
+          utilization: `${recommendedUtilization}%`,
+          improvement: canOptimize ? `+${estimatedImprovementPercent}%` : 'N/A'
+        },
+        optimization: {
+          status: status,
+          message: message,
+          canOptimize: canOptimize,
+          estimatedThroughputGain: canOptimize
+            ? `${performanceMultiplier.toFixed(1)}x (${estimatedImprovementPercent}% improvement)`
+            : 'N/A'
+        },
+        workload: {
+          wanInterfaces: wanInterfaces,
+          hasQos: hasQos,
+          qosCompatible: qosCompatible,
+          qosRecommendation: qosRecommendation
+        }
+      };
+
+      return res.status(200).json(optimization);
+    } catch (err) {
+      console.error('Error fetching CPU optimization:', err);
+      return next(createError(500, 'Failed to fetch CPU optimization'));
+    }
+  });
+
 // Retrieves the list of static routes from device
 devicesRouter.route('/:deviceId/staticroutes')
   .options(cors.corsWithOptions,

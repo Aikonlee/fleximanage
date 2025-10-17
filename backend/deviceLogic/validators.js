@@ -18,7 +18,7 @@
 const configs = require('../configs')();
 const net = require('net');
 const cidr = require('cidr-tools');
-const { getBridges, getCpuInfo, validateFirewallRules, isEmpty } = require('../utils/deviceUtils');
+const { getBridges, getCpuInfo, validateFirewallRules, isEmpty, calculateRecommendedVppCores } = require('../utils/deviceUtils');
 const { generateTunnelParams } = require('../utils/tunnelUtils');
 const { getMajorVersion, getMinorVersion } = require('../versioning');
 const keyBy = require('lodash/keyBy');
@@ -966,11 +966,26 @@ const validateQOSPolicy = (devices) => {
     };
   }
 
-  // QoS requires multi-core
-  if (devices.some(device => getCpuInfo(device.cpuInfo).vppCores < 2)) {
+  // QoS requires multi-core - Enhanced validation with recommendations
+  const insufficientDevices = devices.filter(device => {
+    const cpuInfo = getCpuInfo(device.cpuInfo);
+    return cpuInfo.vppCores < 2;
+  });
+
+  if (insufficientDevices.length > 0) {
+    // Generate specific recommendations for each device
+    const deviceRecommendations = insufficientDevices.map(device => {
+      const cpuInfo = getCpuInfo(device.cpuInfo);
+      const recommended = calculateRecommendedVppCores(device);
+      return `${device.hostname || 'Device'} (current: ${cpuInfo.vppCores} core${cpuInfo.vppCores > 1 ? 's' : ''}, ` +
+             `recommended: ${recommended} core${recommended > 1 ? 's' : ''})`;
+    }).join('; ');
+
     return {
       valid: false,
-      err: 'QoS feature requires 3 or more CPU cores and at least 2 vRouter cores'
+      err: `QoS feature requires 3 or more CPU cores and at least 2 vRouter cores. ` +
+           `Insufficient devices: ${deviceRecommendations}. ` +
+           `Please increase vRouter cores in Device Settings before enabling QoS.`
     };
   }
 

@@ -31,7 +31,7 @@ const logger = require('../logging/logging')({ module: module.filename, type: 'r
 const { getAgentBroker } = require('../utils/httpUtils');
 // billing support
 const flexibilling = require('../flexibilling');
-const { mapLteNames, getCpuInfo } = require('../utils/deviceUtils');
+const { mapLteNames, getCpuInfo, getOptimizedCpuInfo } = require('../utils/deviceUtils');
 const geoip = require('geoip-lite');
 const validators = require('../models/validators.js');
 const connectRouter = express.Router();
@@ -246,7 +246,31 @@ connectRouter.route('/register')
 
               const requestCpuInfo = req.body.cpuInfo
                 ?.replaceAll('\'', '"').replaceAll('False', 'false').replaceAll('True', 'true');
-              const cpuInfo = getCpuInfo(requestCpuInfo ? JSON.parse(requestCpuInfo) : null);
+              const parsedCpuInfo = requestCpuInfo ? JSON.parse(requestCpuInfo) : null;
+              
+              // Count WAN interfaces for optimization
+              const wanInterfaceCount = interfaces.filter(ifc => ifc.type === 'WAN').length;
+              
+              // Get optimized CPU configuration with intelligent defaults
+              const cpuInfo = getOptimizedCpuInfo(parsedCpuInfo, {
+                hasQos: false, // New devices don't have QoS yet
+                wanInterfaces: wanInterfaceCount || 1
+              });
+              
+              // Log optimization if applied
+              if (parsedCpuInfo?.hwCores > 2 && 
+                  (!parsedCpuInfo?.vppCores || parsedCpuInfo.vppCores === 1) &&
+                  cpuInfo.vppCores > 1) {
+                logger.info('Auto-optimized VPP cores for multi-core device', {
+                  params: {
+                    machineId: req.body.machine_id,
+                    hwCores: cpuInfo.hwCores,
+                    optimizedVppCores: cpuInfo.vppCores,
+                    wanInterfaces: wanInterfaceCount
+                  }
+                });
+              }
+              
               const requestDistro = JSON.parse(req.body.distro?.replaceAll('\'', '"') || '{}');
 
               // Check that account didn't cross its device limit

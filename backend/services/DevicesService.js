@@ -48,7 +48,7 @@ const {
 } = require('../deviceLogic/validators');
 const { validateFQDN } = require('../models/validators');
 const {
-  mapLteNames, mapWifiNames, getBridges, parseLteStatus, getCpuInfo
+  mapLteNames, mapWifiNames, getBridges, parseLteStatus, getCpuInfo, calculateRecommendedVppCores, calculateOptimalVppCores
 } = require('../utils/deviceUtils');
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 const { generateTunnelParams } = require('../utils/tunnelUtils');
@@ -4024,5 +4024,156 @@ async function updatePin (data, device, interfaceId, lteInterface) {
 
   deviceStatus.setDeviceLteStatus(machineId, devId, updated);
 }
+
+/**
+ * Get CPU optimization recommendations for a device
+ * @param {String} id - Device ID
+ * @param {Object} org - Organization ID
+ * @returns {Object} CPU optimization recommendations
+ */
+DevicesService.devicesIdCpuOptimizationGET = async ({ id, org }) => {
+  try {
+    const device = await devices.findOne(
+      { _id: mongoose.Types.ObjectId(id), org: org },
+      '_id hostname cpuInfo interfaces policies versions'
+    ).populate('policies.qos.policy', '_id name');
+
+    if (!device) {
+      return Service.rejectResponse('Device not found', 404);
+    }
+
+    const cpuInfo = getCpuInfo(device.cpuInfo);
+    const hasQos = !!(device.policies?.qos?.policy);
+    const wanInterfaces = device.interfaces.filter(
+      ifc => ifc.isAssigned && ifc.type === 'WAN'
+    ).length;
+
+    // Calculate recommended cores
+    const recommendedCores = calculateRecommendedVppCores(device);
+
+    // Calculate current utilization
+    const currentUtilization = cpuInfo.hwCores > 0
+      ? ((cpuInfo.vppCores + 1) / cpuInfo.hwCores * 100).toFixed(1)
+      : 0;
+
+    const recommendedUtilization = cpuInfo.hwCores > 0
+      ? ((recommendedCores + 1) / cpuInfo.hwCores * 100).toFixed(1)
+      : 0;
+
+    // Estimate performance improvement
+    const performanceMultiplier = recommendedCores / Math.max(cpuInfo.vppCores, 1);
+    const estimatedImprovementPercent = Math.round((performanceMultiplier - 1) * 100);
+
+    // Generate optimization status
+    let status = 'optimal';
+    let message = 'Device CPU configuration is optimal';
+    let canOptimize = false;
+
+    if (cpuInfo.hwCores <= 2) {
+      status = 'minimal';
+      message = 'Device has minimal CPU configuration (2 cores). No optimization available.';
+    } else if (cpuInfo.vppCores < recommendedCores) {
+      status = 'underutilized';
+      message = `Device is using ${cpuInfo.vppCores} vRouter core${cpuInfo.vppCores > 1 ? 's' : ''} ` +
+                `but can benefit from ${recommendedCores} cores for better performance.`;
+      canOptimize = true;
+    } else if (cpuInfo.vppCores === recommendedCores) {
+      status = 'optimal';
+      message = 'Device CPU configuration is optimal for current workload';
+    } else {
+      status = 'over-allocated';
+      message = `Device is using ${cpuInfo.vppCores} vRouter cores, ` +
+                `which may be more than needed. Recommended: ${recommendedCores} cores.`;
+    }
+
+    // QoS compatibility check
+    const qosCompatible = cpuInfo.vppCores >= 2 && cpuInfo.hwCores >= 3;
+    const qosRecommendation = hasQos
+      ? (qosCompatible ? 'QoS is supported with current configuration' : 'Increase to 2+ vRouter cores for QoS')
+      : (qosCompatible ? 'Device is ready for QoS deployment' : 'QoS requires 2+ vRouter cores');
+
+    const optimization = {
+      deviceId: id,
+      hostname: device.hostname,
+      current: {
+        hwCores: cpuInfo.hwCores,
+        vppCores: cpuInfo.vppCores,
+        configuredVppCores: cpuInfo.configuredVppCores,
+        powerSaving: cpuInfo.powerSaving,
+        utilization: `${currentUtilization}%`
+      },
+      recommended: {
+        vppCores: recommendedCores,
+        utilization: `${recommendedUtilization}%`,
+        improvement: canOptimize ? `+${estimatedImprovementPercent}%` : 'N/A'
+      },
+      optimization: {
+        status: status,
+        message: message,
+        canOptimize: canOptimize,
+        estimatedThroughputGain: canOptimize
+          ? `${performanceMultiplier.toFixed(1)}x (${estimatedImprovementPercent}% improvement)`
+          : 'N/A'
+      },
+      workload: {
+        wanInterfaces: wanInterfaces,
+        hasQos: hasQos,
+        qosCompatible: qosCompatible,
+        qosRecommendation: qosRecommendation
+      },
+      recommendations: []
+    };
+
+    // Generate specific recommendations
+    if (canOptimize) {
+      optimization.recommendations.push({
+        priority: 'high',
+        action: 'increase_vpp_cores',
+        description: `Increase vRouter cores from ${cpuInfo.vppCores} to ${recommendedCores}`,
+        expectedBenefit: `Estimated ${estimatedImprovementPercent}% throughput improvement`,
+        steps: [
+          'Go to Device Settings → Hardware Configuration',
+          `Set vRouter Cores to ${recommendedCores}`,
+          'Apply changes (device will restart)'
+        ]
+      });
+    }
+
+    if (!qosCompatible && cpuInfo.hwCores >= 3) {
+      optimization.recommendations.push({
+        priority: 'medium',
+        action: 'enable_qos_support',
+        description: 'Increase cores to enable QoS traffic shaping',
+        expectedBenefit: 'Enable advanced traffic management and prioritization',
+        steps: [
+          'Increase vRouter cores to at least 2',
+          'Navigate to Policies → QoS',
+          'Apply QoS policy to device'
+        ]
+      });
+    }
+
+    if (cpuInfo.powerSaving && cpuInfo.vppCores === 1 && cpuInfo.hwCores > 2) {
+      optimization.recommendations.push({
+        priority: 'low',
+        action: 'disable_power_saving',
+        description: 'Disable power saving to enable multi-core operation',
+        expectedBenefit: 'Allow using multiple VPP cores for better performance',
+        steps: [
+          'Go to Device Settings → Hardware Configuration',
+          'Disable Power Saving mode',
+          'Increase vRouter cores as needed'
+        ]
+      });
+    }
+
+    return Service.successResponse(optimization);
+  } catch (e) {
+    return Service.rejectResponse(
+      e.message || 'Internal Server Error',
+      e.status || 500
+    );
+  }
+};
 
 module.exports = DevicesService;

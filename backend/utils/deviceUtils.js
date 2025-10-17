@@ -218,6 +218,112 @@ const lteConfigurationSchema = Joi.object().keys({
 });
 
 const allowedSecurityModes = ['open', 'wpa-psk', 'wpa2-psk'];
+
+/**
+ * Calculate optimal VPP cores based on device hardware and workload
+ * @param {Object} params - Device parameters
+ * @param {Number} params.hwCores - Total hardware cores
+ * @param {Boolean} params.hasQos - Whether QoS is enabled/planned
+ * @param {Number} params.wanInterfaces - Number of WAN interfaces
+ * @returns {Number} Recommended VPP cores
+ */
+const calculateOptimalVppCores = (params) => {
+  const { hwCores = 2, hasQos = false, wanInterfaces = 1 } = params;
+
+  // Reserve 1 core for system
+  const availableCores = hwCores - 1;
+
+  // Minimum requirements validation
+  if (hwCores < 2) {
+    return 1; // Absolute minimum
+  }
+
+  // QoS requires at least 2 VPP cores
+  if (hasQos && availableCores < 2) {
+    throw new Error(`Insufficient cores for QoS: need 3+ total cores, have ${hwCores}`);
+  }
+
+  // Allocation strategy based on hardware capacity
+  if (hwCores <= 2) {
+    // Minimal deployment: 2 total cores
+    return 1;
+  } else if (hwCores <= 4) {
+    // Small deployment: 3-4 cores
+    // Use 2 VPP cores for QoS support, otherwise 2 for better performance
+    return hasQos ? 2 : Math.min(2, availableCores);
+  } else if (hwCores <= 8) {
+    // Medium deployment: 5-8 cores
+    // Use 60% of available cores, minimum 2 for QoS
+    const baseAllocation = Math.floor(availableCores * 0.6);
+    return Math.max(baseAllocation, hasQos ? 2 : 2);
+  } else if (hwCores <= 16) {
+    // High-end deployment: 9-16 cores
+    // Use 60% of available cores for balanced performance
+    const baseAllocation = Math.floor(availableCores * 0.6);
+    // Scale with WAN interfaces (2 workers per WAN)
+    const interfaceBased = wanInterfaces * 2;
+    // Use the higher of base allocation or interface-based, capped at 75% of available
+    const maxAllocation = Math.floor(availableCores * 0.75);
+    const recommended = Math.max(baseAllocation, Math.min(interfaceBased, maxAllocation));
+    return Math.max(recommended, hasQos ? 2 : 2);
+  } else {
+    // Enterprise deployment: 16+ cores
+    // Use 60% as base, scale with interfaces up to 75%
+    const baseAllocation = Math.floor(availableCores * 0.6);
+    const maxAllocation = Math.floor(availableCores * 0.75);
+    const interfaceBased = wanInterfaces * 2;
+    // Use the higher of base or interface-based, capped at max
+    const recommended = Math.max(baseAllocation, Math.min(interfaceBased, maxAllocation));
+    return Math.max(recommended, 4); // Minimum 4 cores for enterprise
+  }
+};
+
+/**
+ * Calculate recommended VPP cores for an existing device
+ * @param {Object} device - Device object with interfaces and policies
+ * @returns {Number} Recommended VPP cores
+ */
+const calculateRecommendedVppCores = (device) => {
+  const hwCores = device?.cpuInfo?.hwCores || 2;
+  const hasQos = !!(device?.policies?.qos?.policy);
+  const wanInterfaces = device?.interfaces?.filter
+    ? device.interfaces.filter(ifc => ifc.isAssigned && ifc.type === 'WAN').length
+    : 1;
+
+  return calculateOptimalVppCores({ hwCores, hasQos, wanInterfaces });
+};
+
+/**
+ * Get optimized CPU info with intelligent defaults
+ * @param {object} cpuInfo - Raw CPU info from device
+ * @param {object} deviceContext - Device context (interfaces, policies)
+ * @returns {object} Optimized CPU info
+ */
+const getOptimizedCpuInfo = (cpuInfo, deviceContext = {}) => {
+  const baseCpuInfo = getCpuInfo(cpuInfo);
+
+  // If device has more than 2 cores and is using default 1 VPP core, optimize
+  if (baseCpuInfo.hwCores > 2 && baseCpuInfo.vppCores === 1) {
+    try {
+      const recommendedCores = calculateOptimalVppCores({
+        hwCores: baseCpuInfo.hwCores,
+        hasQos: deviceContext.hasQos || false,
+        wanInterfaces: deviceContext.wanInterfaces || 1
+      });
+
+      // Only auto-optimize if user hasn't explicitly configured
+      if (!cpuInfo?.configuredVppCores || cpuInfo.configuredVppCores === 1) {
+        baseCpuInfo.vppCores = recommendedCores;
+        baseCpuInfo.configuredVppCores = recommendedCores;
+      }
+    } catch (err) {
+      // If optimization fails, keep defaults
+      console.warn('CPU optimization warning:', err.message);
+    }
+  }
+
+  return baseCpuInfo;
+};
 const shared = {
   enable: Joi.boolean().required(),
   ssid: Joi.alternatives().conditional('enable', {
@@ -606,6 +712,9 @@ module.exports = {
   parseLteStatus,
   mapWifiNames,
   getCpuInfo,
+  getOptimizedCpuInfo,
+  calculateOptimalVppCores,
+  calculateRecommendedVppCores,
   validateConfiguration,
   validateFirewallRules,
   isEmpty

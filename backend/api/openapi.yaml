@@ -2240,6 +2240,77 @@ paths:
       x-swagger-router-controller: Devices
       x-openapi-router-controller: DevicesController
       x-openapi-router-service: DevicesService
+  /devices/{id}/cpu-optimization:
+    get:
+      operationId: devicesIdCpuOptimizationGET
+      parameters:
+      - description: Numeric ID of the Device
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CpuOptimization'
+          description: Successful operation
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Device not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Get CPU optimization recommendations for a device
+      tags:
+      - Devices
+      x-swagger-router-controller: Devices
+      x-openapi-router-controller: DevicesController
+      x-openapi-router-service: DevicesService
   /devices/{id}/staticroutes:
     post:
       operationId: devicesIdStaticroutesPOST
@@ -12390,6 +12461,60 @@ components:
                 tunnelId:
                   type: number
       type: object
+    CpuOptimization:
+      type: object
+      properties:
+        isOptimized:
+          type: boolean
+          description: Whether the device is using optimal VPP core configuration
+        currentVppCores:
+          type: integer
+          description: Current number of VPP cores in use
+        recommendedVppCores:
+          type: integer
+          description: Recommended number of VPP cores
+        expectedThroughput:
+          type: number
+          description: Expected throughput in Gbps with recommended configuration
+        expectedImprovement:
+          type: string
+          description: Expected performance improvement percentage (e.g., "+300%")
+        reason:
+          type: string
+          description: Explanation for the recommendation
+        hardwareInfo:
+          type: object
+          properties:
+            totalCores:
+              type: integer
+              description: Total CPU cores available
+            hasQos:
+              type: boolean
+              description: Whether QoS policies are configured
+            wanInterfaces:
+              type: integer
+              description: Number of WAN interfaces
+        optimizationSteps:
+          type: array
+          items:
+            type: string
+          description: Step-by-step guide to apply optimization
+      example:
+        isOptimized: false
+        currentVppCores: 1
+        recommendedVppCores: 4
+        expectedThroughput: 9.6
+        expectedImprovement: "+300%"
+        reason: "8-core device with QoS enabled"
+        hardwareInfo:
+          totalCores: 8
+          hasQos: true
+          wanInterfaces: 2
+        optimizationSteps:
+          - "Navigate to General tab"
+          - "Click 'Hardware Configuration' button"
+          - "Set vRouter cores to 4"
+          - "Click 'Apply Configuration'"
     StaticRoute:
       example:
         destination: destination

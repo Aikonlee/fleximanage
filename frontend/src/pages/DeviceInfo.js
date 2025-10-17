@@ -33,6 +33,8 @@ const DeviceInfo = () => {
   const [vRouterCores, setVRouterCores] = useState('');
   const [powerSaving, setPowerSaving] = useState(false);
   const [applyingConfig, setApplyingConfig] = useState(false);
+  const [cpuOptimization, setCpuOptimization] = useState(null);
+  const [loadingOptimization, setLoadingOptimization] = useState(false);
   
   // Interface editing state
   const [editingInterface, setEditingInterface] = useState(null);
@@ -213,11 +215,36 @@ const DeviceInfo = () => {
       setVRouterCores(deviceData?.vRouterCores || '1');
       setPowerSaving(Boolean(deviceData?.powerSaving));
 
+      // Fetch CPU optimization recommendations
+      fetchCpuOptimization();
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching device info:', error);
       setError(error.message || 'Failed to fetch device information');
       setLoading(false);
+    }
+  }, [deviceId, apiCall]);
+
+  // Fetch CPU optimization recommendations
+  const fetchCpuOptimization = useCallback(async () => {
+    if (!deviceId) return;
+    
+    setLoadingOptimization(true);
+    try {
+      const response = await apiCall(`/devices/${deviceId}/cpu-optimization`, {
+        method: 'GET'
+      });
+      
+      if (response && response.ok) {
+        const data = await response.json();
+        setCpuOptimization(data);
+      }
+    } catch (error) {
+      console.error('Error fetching CPU optimization:', error);
+      // Don't show error to user, optimization is optional
+    } finally {
+      setLoadingOptimization(false);
     }
   }, [deviceId, apiCall]);
 
@@ -2604,7 +2631,7 @@ const DeviceInfo = () => {
       </Tabs>
 
       {/* Hardware Configuration Modal */}
-      <Modal show={showHardwareModal} onHide={handleCancelHardwareConfig} centered>
+      <Modal show={showHardwareModal} onHide={handleCancelHardwareConfig} centered size="lg">
         <Modal.Header closeButton>
           <Modal.Title>
             <FaMicrochip className="me-2" />
@@ -2643,6 +2670,63 @@ const DeviceInfo = () => {
                 max={hwCpuCores}
               />
             </Form.Group>
+
+            {/* CPU Optimization Recommendation */}
+            {cpuOptimization && !loadingOptimization && (
+              <div className={`alert ${cpuOptimization.optimization?.status === 'optimal' ? 'alert-success' : 'alert-warning'} mb-3`}>
+                <h6 className="mb-2">
+                  <FaMicrochip className="me-2" />
+                  CPU Optimization Analysis
+                </h6>
+                {cpuOptimization.optimization?.status === 'optimal' ? (
+                  <div>
+                    <strong>✓ Optimally Configured</strong>
+                    <p className="mb-1 small">{cpuOptimization.optimization?.message}</p>
+                    <div className="small text-muted mt-2">
+                      <div>Current: {cpuOptimization.current?.vppCores} VPP cores ({cpuOptimization.current?.utilization} utilization)</div>
+                      <div>Hardware: {cpuOptimization.current?.hwCores} cores total</div>
+                      {cpuOptimization.workload?.hasQos && <div className="text-success">✓ QoS Enabled</div>}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <strong>⚠ {cpuOptimization.optimization?.status === 'underutilized' ? 'Optimization Available' : cpuOptimization.optimization?.message}</strong>
+                    <p className="mb-1 small">
+                      {cpuOptimization.optimization?.message}
+                    </p>
+                    {cpuOptimization.optimization?.canOptimize && (
+                      <>
+                        <p className="mb-1 small">
+                          <strong>Recommended:</strong> {cpuOptimization.recommended?.vppCores} VPP cores 
+                          {cpuOptimization.current?.vppCores && ` (currently ${cpuOptimization.current?.vppCores})`}
+                        </p>
+                        <p className="mb-1 small text-success">
+                          <strong>Expected gain: {cpuOptimization.optimization?.estimatedThroughputGain}</strong>
+                        </p>
+                      </>
+                    )}
+                    <div className="small text-muted mt-2">
+                      <div>Current utilization: {cpuOptimization.current?.utilization}</div>
+                      <div>Recommended utilization: {cpuOptimization.recommended?.utilization}</div>
+                      <div>WAN interfaces: {cpuOptimization.workload?.wanInterfaces}</div>
+                      <div className={cpuOptimization.workload?.qosCompatible ? 'text-success' : 'text-warning'}>
+                        {cpuOptimization.workload?.qosRecommendation}
+                      </div>
+                    </div>
+                    {cpuOptimization.optimization?.canOptimize && (
+                      <Button 
+                        size="sm" 
+                        variant="outline-primary" 
+                        className="mt-2"
+                        onClick={() => setVRouterCores(cpuOptimization.recommended?.vppCores?.toString() || '2')}
+                      >
+                        Apply Recommended Configuration
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <Form.Group className="mb-3">
               <Form.Label><strong>Power Saving:</strong></Form.Label>

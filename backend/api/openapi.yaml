@@ -2256,7 +2256,7 @@ paths:
         explode: true
         in: query
         name: org
-        required: true
+        required: false
         schema:
           type: string
       responses:

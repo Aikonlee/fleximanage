@@ -541,7 +541,7 @@ devicesRouter.route('/:deviceId/cpu-optimization')
   .options(cors.corsWithOptions,
     verifyPermission('devices', 'get'),
     async (req, res) => { res.sendStatus(200); })
-  .get(cors.corsWithOptions, async (req, res, next) => {
+  .get(cors.corsWithOptions, verifyPermission('devices', 'get'), async (req, res, next) => {
     try {
       const { calculateRecommendedVppCores, getCpuInfo } = require('../utils/deviceUtils');
       

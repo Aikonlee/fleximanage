@@ -37,9 +37,9 @@ const configEnv = {
     // Whether to validate open API response. True for testing and dev, False for production,
     // to remove unneeded fields from the response, use validateOpenAPIResponse = { removeAdditional: 'failing' }
     validateOpenAPIResponse: true,
-    // Whether to validate open API request, now False for all.
+    // Whether to validate open API request.
     // Not described in schema fields will be removed if true,
-    validateOpenAPIRequest: false,
+    validateOpenAPIRequest: true,
     // Number of REST requests allowed in 5 min per IP address, more requests will be rate limited
     userIpReqRateLimit: 300,
     // Unread notification email period (in msec), a mail is sent once a period
@@ -139,9 +139,7 @@ const configEnv = {
       'http://manage.miwide.com:3000',
       'https://manage.miwide.com:3443',
       'http://localhost:3000',
-      'https://localhost:3443',
-      'http://0.0.0.0:3000',
-      'https://0.0.0.0:3443'
+      'https://localhost:3443'
     ],
     // Client static root directory
     clientStaticDir: '../frontend/build',
@@ -176,7 +174,7 @@ const configEnv = {
     // Web hooks register device URL, used to send for new registered devices, '' to bypass hook
     webHookRegisterDeviceUrl: '',
     // Web hooks register device secret, send in addition to the message for filtering
-    webHookRegisterDeviceSecret: 'ABC',
+    webHookRegisterDeviceSecret: '',
     // Global app identification rules file location
     appRulesUrl: 'https://sandbox.flexiwan.com/Protocols/app-rules.json',
     // Global applications file locations
@@ -277,14 +275,18 @@ const configEnv = {
     SwRepositoryUrl: 'https://deb.flexiwan.com/info/flexiwan-router/latest-testing',
     userTokenExpiration: 604800,
     logLevel: 'debug',
-    mailerPort: 1025
+    mailerPort: 1025,
+    userTokenSecretKey: 'dev_user_key',
+    deviceTokenSecretKey: 'dev_device_key'
   },
   testing: {
     // Mgmt-Agent protocol version for testing purposes
     agentApiVersion: '6.0.0',
     // Kue prefix
     kuePrefix: 'testq',
-    logLevel: 'debug'
+    logLevel: 'debug',
+    userTokenSecretKey: 'test_user_key',
+    deviceTokenSecretKey: 'test_device_key'
   },
   // Override for production environment
   production: {
@@ -455,6 +457,11 @@ class Configs {
     if (!combinedConfig.deviceTokenSecretKey) {
       console.error('ERROR: DEVICE_SECRET_KEY environment variable is missing. The application cannot start without this security key.');
       process.exit(1);
+    }
+
+    // Validation for Mongo auth in production
+    if (environment === 'production' && combinedConfig.mongoUrl && !combinedConfig.mongoUrl.includes('@')) {
+      console.warn('WARNING: MongoDB connection string does not contain authentication credentials. This is insecure for production.');
     }
 
     this.config_values = combinedConfig;

@@ -41,6 +41,8 @@ const morgan = require('morgan');
 const logger = require('./logging/logging')({ module: module.filename, type: 'req' });
 const { reqLogger, errLogger } = require('./logging/request-logging');
 const serialize = require('serialize-javascript');
+const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
 
 // periodic tasks
 const deviceStatus = require('./periodic/deviceStatus')();
@@ -124,8 +126,9 @@ class ExpressServer {
     this.app.use(reqLogger);
     this.app.set('trust proxy', true); // Needed to get the public IP if behind a proxy
 
-    // Don't expose system internals in response headers
-    this.app.disable('x-powered-by');
+    // Security Middleware
+    this.app.use(helmet());
+    this.app.use(mongoSanitize());
 
     // Use morgan request logger in development mode
     if (configs.get('environment') === 'development') this.app.use(morgan('dev'));

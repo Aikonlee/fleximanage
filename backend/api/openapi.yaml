@@ -93,6 +93,14 @@ paths:
         schema:
           type: integer
         style: form
+      - description: Cache-busting timestamp parameter (ignored by server)
+        explode: true
+        in: query
+        name: _t
+        required: false
+        schema:
+          type: string
+        style: form
       - description: Organization to be filtered by
         explode: true
         in: query
@@ -5289,6 +5297,28 @@ paths:
         schema:
           type: integer
         style: form
+      - description: Search query to filter members by name or email
+        explode: true
+        in: query
+        name: q
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Comma-separated list of user states to filter by (e.g. "unverified,verified")
+        allowReserved: true
+        in: query
+        name: state
+        required: false
+        schema:
+          type: string
+      - description: Sort expression (comma-separated list, prefix with - for desc)
+        allowReserved: true
+        in: query
+        name: sort
+        required: false
+        schema:
+          type: string
       responses:
         "200":
           content:

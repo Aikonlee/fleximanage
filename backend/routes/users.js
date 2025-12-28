@@ -373,6 +373,30 @@ router.route('/verify-account')
       });
   });
 
+// Change password (logged in user)
+router.route('/change-password')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, auth.verifyUserJWT, async (req, res, next) => {
+    try {
+      if (!req.body.oldPassword || !req.body.newPassword) {
+        return next(createError(400, 'Missing fields'));
+      }
+
+      // Use passport-local-mongoose's changePassword
+      req.user.changePassword(req.body.oldPassword, req.body.newPassword, (err) => {
+        if (err) {
+          if (err.name === 'IncorrectPasswordError') {
+            return next(createError(403, 'Incorrect old password'));
+          }
+          return next(createError(500, err.message));
+        }
+        res.status(200).json({ status: 'password changed' });
+      });
+    } catch (err) {
+      return next(createError(500, err.message));
+    }
+  });
+
 /**
  * Send reset password mail
  * @param {Object} req = request
@@ -533,6 +557,30 @@ router.route('/login/methods')
     }
 
     res.status(200).json({ methods });
+  });
+
+// Get current user info
+router.route('/me')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .get(cors.corsWithOptions, auth.verifyUserJWT, async (req, res) => {
+    try {
+      const orgs = await getUserOrganizations(req.user);
+      res.status(200).json({
+        _id: req.user._id,
+        email: req.user.email,
+        name: req.user.name,
+        lastName: req.user.lastName,
+        username: req.user.username,
+        jobTitle: req.user.jobTitle,
+        phoneNumber: req.user.phoneNumber,
+        state: req.user.state,
+        admin: req.user.admin,
+        orgs: Object.keys(orgs)
+      });
+    } catch (err) {
+      logger.error('Get user info failed', { params: { error: err.message } });
+      res.status(500).json({ error: 'Failed to fetch user info' });
+    }
   });
 
 // Authentication check is done within passport, if passed, no login error exists

@@ -275,7 +275,7 @@ const getAccessTokenOrgList = async (
     } else {
       if (!orgId) {
         // 5. No access token return user orgId if no orgId found
-        return [user.defaultOrg._id.toString()];
+        return user.defaultOrg ? [user.defaultOrg._id.toString()] : [];
       } else {
         // 6. For UI token, orgId must not be specified when orgRequired
         throw new Error('Organization query parameter is only available in Access Key');
@@ -284,7 +284,7 @@ const getAccessTokenOrgList = async (
   } else {
     if (groups.length === 0) {
       // Default case
-      if (!user.accessToken) return [user.defaultOrg._id.toString()];
+      if (!user.accessToken) return user.defaultOrg ? [user.defaultOrg._id.toString()] : [];
       const orgs = await validateOrgAccess(user, user.tokenTo,
         user.tokenTo === 'organization' ? user.tokenOrganization
           : user.tokenTo === 'group' ? user.tokenGroup

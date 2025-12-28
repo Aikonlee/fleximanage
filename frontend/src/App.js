@@ -12,6 +12,7 @@ import AccountNotificationsSettings from './pages/account/NotificationsSettings'
 import AccountBilling from './pages/account/Billing';
 import AccountAccessKeys from './pages/account/AccessKeys';
 import AccountMembers from './pages/account/Members';
+import UserProfile from './pages/UserProfile';
 import Organizations from './pages/Organizations';
 import AddOrganization from './pages/AddOrganization';
 import EditOrganization from './pages/EditOrganization';
@@ -100,6 +101,7 @@ function App() {
             <Route path="/account/notifications" element={<Guard permKey="notifications" element={<AccountNotificationsSettings />} />} />
             <Route path="/account/billing" element={<Guard permKey="billing" element={<AccountBilling />} />} />
             { /* Users page guarded by dedicated 'members' permission */ }
+            <Route path="/users/profile" element={<UserProfile />} />
             <Route path="/users" element={<Guard permKey="members" element={<AccountMembers />} />} />
             <Route path="/account/members" element={<Navigate to="/users" replace />} />
             <Route path="/account/access-keys" element={<Guard permKey="accesstokens" element={<AccountAccessKeys />} />} />

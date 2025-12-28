@@ -200,15 +200,15 @@ class ExpressServer {
       }
     });
 
+    // initialize passport and authentication
+    this.app.use(passport.initialize());
+
     // no authentication
     this.app.use('/api/connect', connectRouter);
     this.app.use('/api/users', require('./routes/users'));
 
     // add API documentation
     this.app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(this.schema));
-
-    // initialize passport and authentication
-    this.app.use(passport.initialize());
 
     // Enable db admin only in development mode
     if (configs.get('environment') === 'development') {

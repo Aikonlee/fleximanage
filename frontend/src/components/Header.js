@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Navbar, Nav, Dropdown } from 'react-bootstrap';
 import { FaUser, FaSignOutAlt, FaBell, FaCog, FaBars } from 'react-icons/fa';
 import './Header.css';
@@ -44,7 +45,7 @@ const Header = ({ onLogout }) => {
           </Dropdown.Toggle>
 
           <Dropdown.Menu>
-            <Dropdown.Item href="#profile">
+            <Dropdown.Item as={Link} to="/users/profile">
               <FaUser className="me-2" />
               Profile
             </Dropdown.Item>

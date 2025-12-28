@@ -127,7 +127,24 @@ class ExpressServer {
     this.app.set('trust proxy', true); // Needed to get the public IP if behind a proxy
 
     // Security Middleware
-    this.app.use(helmet());
+    // Default helmet CSP blocks external scripts; allow Cloudflare Turnstile so the
+    // frontend can dynamically load the captcha widget (https://challenges.cloudflare.com)
+    this.app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", 'https://challenges.cloudflare.com'],
+          styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+          frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'self'"]
+        }
+      }
+    }));
     this.app.use(mongoSanitize());
 
     // Use morgan request logger in development mode
@@ -180,7 +197,7 @@ class ExpressServer {
     this.app.use(rateLimiter);
 
     // General settings here
-    this.app.use(cors.cors);
+    this.app.use(cors.corsWithOptions);
     this.app.use(bodyParser.json());
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: false }));
@@ -209,6 +226,7 @@ class ExpressServer {
     // no authentication
     this.app.use('/api/connect', connectRouter);
     this.app.use('/api/users', require('./routes/users'));
+    this.app.use('/api/public', require('./routes/public'));
 
     // add API documentation
     this.app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(this.schema));
@@ -231,7 +249,6 @@ class ExpressServer {
     this.app.get('/api/version', (req, res) => res.json({ version }));
     this.app.get('/api/restServers', (req, res) => res.json({ version }));
 
-    this.app.use(cors.corsWithOptions);
     this.app.use(auth.verifyUserJWT);
     // this.app.use(auth.verifyPermission);
 
@@ -283,7 +300,7 @@ class ExpressServer {
         ? origIndex.replace('<title>flexiWAN Management</title>',
           `<title>${configs.get('companyName')} Management</title>`)
         : origIndex;
-      const m = modifiedIndex.match(/const __FLEXIWAN_SERVER_CONFIG__=(.*?);/);
+      const m = modifiedIndex.match(/const __FLEXIWAN_SERVER_CONFIG__=({.*?});?/);
       if (m instanceof Array && m.length > 0) { // successful match
         // eslint-disable-next-line no-eval
         const newConfig = eval('(' + m[1] + ')');
@@ -319,6 +336,29 @@ class ExpressServer {
     // Set log severity on the request to log errors only for 5xx status codes.
     this.app.use((err, req, res, next) => {
       req.logSeverity = err.status || 500;
+      next(err);
+    });
+    // Log client (4xx) errors to a separate file for easier debugging
+    this.app.use((err, req, res, next) => {
+      try {
+        if (err && err.status && err.status >= 400 && err.status < 500) {
+          const clientErrLog = {
+            timestamp: new Date().toISOString(),
+            status: err.status,
+            message: err.message || err.error || '',
+            method: req.method,
+            url: req.originalUrl || req.url,
+            user: req.userId || (req.user && req.user.email) || '',
+            query: req.query || {},
+            body: req.body || {}
+          };
+          const logPath = '/root/fleximanage/logs/client-errors.log';
+          require('fs').appendFileSync(logPath, JSON.stringify(clientErrLog) + '\n');
+        }
+      } catch (e) {
+        // Swallow logging errors to avoid interfering with response
+        console.error('Failed to write client error log', e.message);
+      }
       next(err);
     });
     this.app.use(errLogger);

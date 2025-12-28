@@ -301,6 +301,10 @@ organizationsRouter.route('/summary')
     try {
       const orgId = req.user.defaultOrg;
       
+      logger.info('Getting organization summary', {
+        params: { orgId: orgId ? orgId.toString() : 'none', userId: req.user._id }
+      });
+      
       if (!orgId) {
         return res.status(200).json({
           devices: { total: 0, running: 0, connected: 0, approved: 0 },
@@ -336,7 +340,10 @@ organizationsRouter.route('/summary')
       const deviceList = await devices.find({ org: orgId }).select('_id machineId').lean();
       const deviceIds = deviceList.map(d => d._id);
       
+      let totalBytesPerSecond = 0;
       let totalBytes = 0;
+      let lastUpdateTime = null;
+      
       if (deviceIds.length > 0) {
         try {
           // Get the latest stats for each device
@@ -353,7 +360,9 @@ organizationsRouter.route('/summary')
             {
               $group: {
                 _id: '$device',
-                latestStats: { $first: '$stats' }
+                latestStats: { $first: '$stats' },
+                latestTime: { $first: '$time' },
+                latestCreated: { $first: '$createdAt' }
               }
             }
           ]);
@@ -362,18 +371,31 @@ organizationsRouter.route('/summary')
             params: { orgId, deviceCount: deviceIds.length, statsCount: latestStats.length }
           });
 
-          // Aggregate rx_bytes and tx_bytes from all device interfaces
+          // Aggregate rx_bps and tx_bps from all device interfaces
+          // Note: deviceStats stores rates in bytes per second (Bps)
           latestStats.forEach(deviceStat => {
             if (deviceStat.latestStats) {
+              // Update last update time with the most recent timestamp
+              const statTime = deviceStat.latestCreated || new Date(deviceStat.latestTime * 1000);
+              if (!lastUpdateTime || statTime > lastUpdateTime) {
+                lastUpdateTime = statTime;
+              }
+              
+              // Sum up bytes per second from all interfaces
               Object.values(deviceStat.latestStats).forEach(interfaceStats => {
-                if (interfaceStats.rx_bytes) totalBytes += interfaceStats.rx_bytes;
-                if (interfaceStats.tx_bytes) totalBytes += interfaceStats.tx_bytes;
+                if (interfaceStats.rx_bps) totalBytesPerSecond += interfaceStats.rx_bps;
+                if (interfaceStats.tx_bps) totalBytesPerSecond += interfaceStats.tx_bps;
               });
             }
           });
 
-          logger.debug('Calculated total traffic bytes', {
-            params: { orgId, totalBytes }
+          // Estimate cumulative bytes based on average rate over polling period
+          // This gives an approximate total for display purposes
+          const statsPollPeriodSeconds = 300; // 5 minutes default
+          totalBytes = Math.round(totalBytesPerSecond * statsPollPeriodSeconds);
+
+          logger.debug('Calculated total traffic', {
+            params: { orgId, totalBytesPerSecond, estimatedBytes: totalBytes, lastUpdate: lastUpdateTime }
           });
         } catch (err) {
           logger.error('Error querying device stats', {
@@ -413,9 +435,20 @@ organizationsRouter.route('/summary')
           total: parseFloat(total),
           unit: unit,
           totalBytes: totalBytes,
-          lastUpdate: new Date()
+          lastUpdate: lastUpdateTime || new Date()
         }
       };
+
+      logger.info('Returning organization summary', {
+        params: { 
+          orgId: orgId.toString(),
+          devices: totalDevices,
+          tunnels: totalTunnels,
+          trafficTotal: total,
+          trafficUnit: unit,
+          trafficBytes: totalBytes
+        }
+      });
 
       return res.status(200).json(summary);
     } catch (err) {

@@ -34,7 +34,7 @@ const Tokens = require('../models/tokens');
 const AccessTokens = require('../models/accesstokens');
 const MultiLinkPolicies = require('../models/mlpolicies');
 const PathLabels = require('../models/pathlabels');
-const { deviceAggregateStats } = require('../models/analytics/deviceStats');
+const { deviceStats, deviceAggregateStats } = require('../models/analytics/deviceStats');
 const { membership } = require('../models/membership');
 const QosPolicies = require('../models/qosPolicies');
 const Connections = require('../websocket/Connections')();
@@ -102,6 +102,12 @@ class OrganizationsService {
 
       return Service.successResponse(result);
     } catch (e) {
+      logger.error('organizationsSummaryGET failed', {
+        error: e.message,
+        stack: e.stack,
+        orgList,
+        user
+      });
       return Service.rejectResponse(
         e.message || 'Internal Server Error',
         e.status || 500
@@ -600,7 +606,10 @@ class OrganizationsService {
         tunnelsRes.length > 0
           ? tunnelsRes[0]
           : { tunConnected: 0, tunWarning: 0, tunUnknown: 0, tunTotal: 0 };
-      const bytesRes = await deviceAggregateStats.aggregate(bytesPipeline).allowDiskUse(true);
+      
+      // Query traffic data from deviceAggregateStats (monthly aggregated data)
+      // This returns an array of { month, bytes, deviceCount } objects
+      const bytesRes = await deviceAggregateStats.aggregate(bytesPipeline);
 
       const response = {
         devices: { connected, approved, running, warning, total },
@@ -610,11 +619,21 @@ class OrganizationsService {
           unknown: tunUnknown,
           total: tunTotal
         },
-        traffic: bytesRes
+        traffic: bytesRes  // Array of monthly traffic data
       };
 
+      logger.debug('Final response object', { 
+        trafficCount: bytesRes.length,
+        devicesTotal: total,
+        tunnelsTotal: tunTotal
+      });
       return Service.successResponse(response);
     } catch (e) {
+      logger.error('Error in organizationsSummaryGET', {
+        message: e.message,
+        stack: e.stack,
+        status: e.status
+      });
       return Service.rejectResponse(
         e.message || 'Internal Server Error',
         e.status || 500

@@ -107,17 +107,13 @@ router.route('/register')
     logger.info('Create account request', {
       params: {
         account: req.body.accountName,
-        firstName: req.body.userFirstName,
-        lastName: req.body.userLastName,
-        email: req.body.email,
-        jobTitle: req.body.userJobTitle,
-        phoneNumber: req.body.userPhoneNumber,
+        // PII masked
+        email: req.body.email ? '***' : '',
+        phoneNumber: req.body.userPhoneNumber ? '***' : '',
         country: req.body.country,
         companySize: req.body.companySize,
         usageType: req.body.serviceType,
-        numSites: req.body.numberSites,
-        companyType: '',
-        companyDesc: ''
+        numSites: req.body.numberSites
       }
     });
 

@@ -36,14 +36,28 @@ const Register = () => {
   const buildTimeKey = process.env.REACT_APP_TURNSTILE_SITE_KEY;
   const injectedKey = (typeof window !== 'undefined' && (window.__TURNSTILE_SITE_KEY__ || window.__FLEXIWAN_SERVER_CONFIG__?.captchaSiteKey)) || '';
   const [runtimeCaptchaKey, setRuntimeCaptchaKey] = useState('');
-  const TURNSTILE_SITE_KEY = buildTimeKey || injectedKey || runtimeCaptchaKey;
-  const captchaKeySource = buildTimeKey ? 'build' : (injectedKey ? 'injected' : (runtimeCaptchaKey ? 'runtime' : 'none'));
+  // Priority: 1. Runtime API Key, 2. Injected Window Key, 3. Build-time Env Key
+  const TURNSTILE_SITE_KEY = runtimeCaptchaKey || injectedKey || buildTimeKey;
+  const captchaKeySource = runtimeCaptchaKey ? 'runtime' : (injectedKey ? 'injected' : (buildTimeKey ? 'build' : 'none'));
   const CAPTCHA_DEBUG = (
     (process.env.REACT_APP_CAPTCHA_DEBUG === '1') ||
     (typeof window !== 'undefined' && (window.__CAPTCHA_DEBUG__ === true || localStorage.getItem('captchaDebug') === '1'))
   );
+  const [captchaWarning, setCaptchaWarning] = useState('');
 
-
+  // Fetch runtime config
+  useEffect(() => {
+    api.get('/public/config')
+      .then(res => {
+        if (res.data?.captchaSiteKey) {
+          setRuntimeCaptchaKey(res.data.captchaSiteKey);
+        }
+      })
+      .catch(err => {
+        // eslint-disable-next-line no-console
+        console.warn('Failed to fetch public config', err);
+      });
+  }, []);
 
   // Load script & render captcha when key available
   useEffect(() => {
@@ -61,10 +75,13 @@ const Register = () => {
           'timeout-callback': () => setCaptchaToken('')
         });
         captchaRenderedRef.current = true;
+        // Clear any previous warnings
+        setCaptchaWarning('');
         CAPTCHA_DEBUG && console.log('[captcha][register] widget rendered id=', widgetId);
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn('Turnstile render failed (register)', e);
+        setCaptchaWarning('CAPTCHA widget failed to render. Please check console for details and ensure site key and network connectivity are correct.');
         CAPTCHA_DEBUG && console.warn('[captcha][register] render exception', e);
       }
     };
@@ -73,6 +90,10 @@ const Register = () => {
       script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
       script.async = true;
       script.defer = true;
+      script.onerror = () => {
+        // surface load failure to UI
+        setCaptchaWarning('CAPTCHA failed to load. Please check your network connection to Cloudflare (challenges.cloudflare.com).');
+      };
       script.onload = ensureRender;
       document.head.appendChild(script);
       CAPTCHA_DEBUG && console.log('[captcha][register] script tag injected');
@@ -217,7 +238,9 @@ const Register = () => {
                       required
                     >
                       <option value="">-- {t('register.labels.serviceType')} --</option>
-                      {SERVICE_TYPES.map(st => <option key={st} value={st}>{st}</option>)}
+                      {SERVICE_TYPES.map(st => (
+                        <option key={st} value={st}>{st}</option>
+                      ))}
                     </Form.Select>
                     <Form.Control.Feedback type="invalid">
                       {fieldErrors.serviceType || t('register.validation.serviceType')}
@@ -239,7 +262,7 @@ const Register = () => {
 
                 {CAPTCHA_DEBUG && (
                   <div className="mb-2 small alert alert-info p-2">
-                    <div><strong>{t('register.debug')}</strong></div>
+                    <div><strong>{t('debug')}</strong></div>
                     <div>source: {captchaKeySource} | hasKey: {TURNSTILE_SITE_KEY ? 'yes' : 'no'} | scriptLoaded: {typeof window !== 'undefined' && window.turnstile ? 'yes' : 'no'}</div>
                     <div>token: {captchaToken ? (captchaToken.substring(0, 12) + '...') : '(empty)'}</div>
                   </div>
@@ -250,11 +273,16 @@ const Register = () => {
                     {loading ? t('register.labels.submit') + '...' : t('register.labels.submit')}
                   </Button>
                 </div>
+
                 <div className="text-center mt-3">
-                  <small className="text-muted">{t('register.helper.haveAccount')} <Link to="/login">{t('register.helper.signIn')}</Link></small>
+                  <small className="text-muted">
+                    {t('register.helper.haveAccount')} <Link to="/login">{t('register.helper.signIn')}</Link>
+                  </small>
                 </div>
                 <div className="text-center mt-2">
-                  <small className="text-muted">{t('register.helper.requiredNote')}</small>
+                  <small className="text-muted">
+                    {t('register.helper.requiredNote')}
+                  </small>
                 </div>
               </Form>
             </Card.Body>

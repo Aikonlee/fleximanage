@@ -296,7 +296,7 @@ const configEnv = {
     redirectHttpsPort: 443,
     agentBroker: ['manage.miwide.com:3443'],
     validateOpenAPIResponse: false,
-    clientStaticDir: '../frontend/build',
+    clientStaticDir: './public',
     // 'billingConfigSite': 'flexiwan-test',
     // 'billingDefaultPlan': 'enterprise',
     // 'useFlexiBilling': true,
@@ -318,7 +318,7 @@ const configEnv = {
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
     validateOpenAPIResponse: false,
-    clientStaticDir: '../frontend/build',
+    clientStaticDir: './public',
     billingConfigSite: 'flexiwan',
     billingDefaultPlan: 'enterprise',
     useFlexiBilling: true,
@@ -337,7 +337,7 @@ const configEnv = {
     kuePrefix: 'mngdeviceq',
     agentBroker: ['manage.miwide.com:3443'],
     validateOpenAPIResponse: false,
-    clientStaticDir: '../frontend/build',
+    clientStaticDir: './public',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan',
@@ -361,7 +361,7 @@ const configEnv = {
     unreadNotificationPeriod: 300000,
     userRefreshTokenExpiration: 86400,
     agentBroker: ['manage.miwide.com:3443'],
-    clientStaticDir: '../frontend/build',
+    clientStaticDir: './public',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan-test',
@@ -386,7 +386,7 @@ const configEnv = {
     unreadNotificationPeriod: 300000,
     userRefreshTokenExpiration: 86400,
     agentBroker: ['manage.miwide.com:3443'],
-    clientStaticDir: '../frontend/build',
+    clientStaticDir: './public',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan-test',
@@ -473,7 +473,7 @@ class Configs {
 
   getEnv () {
     if (process.argv[1].indexOf('jest') !== -1) return 'testing';
-    return process.argv[2] || 'development';
+    return process.env.NODE_ENV || process.argv[2] || 'development';
   }
 
   // Get the config parameter and convert it from string to the desired type

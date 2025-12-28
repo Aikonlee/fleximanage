@@ -248,7 +248,7 @@ const configEnv = {
     // Repository setup URL
     agentRepositoryUrl: 'https://deb.flexiwan.com/setup',
     // Captcha client key for flexiwan domain
-    captchaSiteKey: '6LfkP8IUAAAAABt2dxrb9U2WzxonxJlhs0_2Hadi',
+    captchaSiteKey: '',
     // HTML content of the UI about page
     aboutContent: '',
     // UI URL for feedback
@@ -535,6 +535,7 @@ class Configs {
       contactUsUrl: this.get('contactUsUrl'),
       agentRepositoryUrl: this.get('agentRepositoryUrl'),
       captchaSiteKey: this.get('captchaSiteKey'),
+      captchaEnforced: !!this.get('captchaKey'),
       aboutContent: this.get('aboutContent'),
       feedbackUrl: this.get('feedbackUrl'),
       showDeviceLimitAlert: this.get('showDeviceLimitAlert', 'boolean'),

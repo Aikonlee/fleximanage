@@ -293,6 +293,9 @@ router.route('/register')
 router.route('/reverify-account')
   .options(cors.cors, (req, res) => { res.sendStatus(200); })
   .post(cors.cors, async (req, res, next) => {
+    if (typeof req.body.email !== 'string') {
+      return next(createError(400, 'Invalid email format'));
+    }
     const validateKey = randomKey(30);
     User.findOneAndUpdate(
       // Query, use the email
@@ -342,7 +345,7 @@ router.route('/reverify-account')
 router.route('/verify-account')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .post(cors.cors, async (req, res, next) => {
-    if (!req.body.id || !req.body.token || req.body.id === '' || req.body.token === '') {
+    if (!req.body.id || !req.body.token || typeof req.body.id !== 'string' || typeof req.body.token !== 'string' || req.body.id === '' || req.body.token === '') {
       return next(createError(500, 'Verification Error'));
     }
 

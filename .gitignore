@@ -49,3 +49,7 @@ backend/logs/
 
 # Frontend build artifacts
 frontend/build/
+
+# myself readme
+docs/
+scripts/

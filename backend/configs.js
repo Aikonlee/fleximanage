@@ -33,7 +33,7 @@ const configEnv = {
     // URL of the UI server
     uiServerUrl: ['http://manage.miwide.com:3000'],
     // Key used for users tokens, override default with environment variable USER_SECRET_KEY
-    userTokenSecretKey: 'abcdefg1234567',
+    userTokenSecretKey: '',
     // Whether to validate open API response. True for testing and dev, False for production,
     // to remove unneeded fields from the response, use validateOpenAPIResponse = { removeAdditional: 'failing' }
     validateOpenAPIResponse: true,
@@ -61,7 +61,7 @@ const configEnv = {
     // The time to retain jobs until deleted from the database, in msec
     jobRetainTimeout: 604800000,
     // Key used for device tokens, override default with environment variable DEVICE_SECRET_KEY
-    deviceTokenSecretKey: 'abcdefg1234567',
+    deviceTokenSecretKey: '',
     // Key used to validate google captcha token, generated at https://www.google.com/u/1/recaptcha/admin/create
     // Default value is not set, which only validate the client side captcha
     captchaKey: '',
@@ -172,7 +172,7 @@ const configEnv = {
     // Web hooks add user URL, used to send for new uses, '' to bypass hook
     webHookAddUserUrl: '',
     // Web hooks add user secret, send in addition to the message for filtering
-    webHookAddUserSecret: 'ABC',
+    webHookAddUserSecret: '',
     // Web hooks register device URL, used to send for new registered devices, '' to bypass hook
     webHookRegisterDeviceUrl: '',
     // Web hooks register device secret, send in addition to the message for filtering
@@ -445,6 +445,16 @@ class Configs {
       const regex = /Templates.*\//g;
       const templateDirName = combinedConfig.SwVersionUpdateUrl.match(regex)[0];
       combinedConfig.applicationsUrl = combinedConfig.applicationsUrl.replace('Templates/', templateDirName);
+    }
+
+    // Validation for critical secrets
+    if (!combinedConfig.userTokenSecretKey) {
+      console.error('ERROR: USER_SECRET_KEY environment variable is missing. The application cannot start without this security key.');
+      process.exit(1);
+    }
+    if (!combinedConfig.deviceTokenSecretKey) {
+      console.error('ERROR: DEVICE_SECRET_KEY environment variable is missing. The application cannot start without this security key.');
+      process.exit(1);
     }
 
     this.config_values = combinedConfig;

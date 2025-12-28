@@ -196,7 +196,7 @@ class DeviceStatus {
         leases: Joi.array().items(Joi.object({
           address: Joi.string().ip({ version: ['ipv4'] }),
           hwaddr: Joi.string(),
-          client_id: Joi.string().optional(),
+          client_id: Joi.string().allow('').optional(),
           valid_lifetime: Joi.string().optional(),
           expire: Joi.string().optional(),
           subnet_id: Joi.string().optional(),

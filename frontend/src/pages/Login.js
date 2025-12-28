@@ -27,7 +27,7 @@ const Login = ({ onLogin }) => {
   const buildTimeKey = process.env.REACT_APP_TURNSTILE_SITE_KEY;
   const injectedKey = (typeof window !== 'undefined' && (window.__TURNSTILE_SITE_KEY__ || window.__FLEXIWAN_SERVER_CONFIG__?.captchaSiteKey)) || '';
   const [runtimeCaptchaKey, setRuntimeCaptchaKey] = useState('');
-  const [captchaEnforced, setCaptchaEnforced] = useState(false);
+  const [captchaEnforced, setCaptchaEnforced] = useState(true);
   const [captchaWarning, setCaptchaWarning] = useState('');
   const TURNSTILE_SITE_KEY = buildTimeKey || injectedKey || runtimeCaptchaKey;
   const captchaKeySource = buildTimeKey ? 'build' : (injectedKey ? 'injected' : (runtimeCaptchaKey ? 'runtime' : 'none'));

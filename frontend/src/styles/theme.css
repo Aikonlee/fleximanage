@@ -514,7 +514,7 @@ body {
 }
 
 .table thead th {
-  background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  background: var(--primary-color);
   color: var(--text-white);
   font-weight: 600;
   font-size: var(--font-size-sm);

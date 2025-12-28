@@ -210,10 +210,10 @@ const DeviceInfo = () => {
       setOriginalIsApproved(approvedStatus);
 
       // Initialize hardware configuration fields
-      setHwCpuCores(deviceData?.cpuInfo?.cores || '4');
-      setCurrentVRouterCores(deviceData?.vRouterCores || '1');
-      setVRouterCores(deviceData?.vRouterCores || '1');
-      setPowerSaving(Boolean(deviceData?.powerSaving));
+      setHwCpuCores(deviceData?.cpuInfo?.hwCores || '4');
+      setCurrentVRouterCores(deviceData?.cpuInfo?.vppCores || '1');
+      setVRouterCores(deviceData?.cpuInfo?.configuredVppCores || deviceData?.cpuInfo?.vppCores || '1');
+      setPowerSaving(Boolean(deviceData?.cpuInfo?.powerSaving));
 
       // Fetch CPU optimization recommendations
       fetchCpuOptimization();
@@ -2246,6 +2246,16 @@ const DeviceInfo = () => {
             {loading ? 'Stopping...' : 'Stop Device'}
           </Button>
 
+          <Button 
+            variant="outline-primary" 
+            onClick={() => setShowHardwareModal(true)}
+            className="me-2"
+            title="Configure hardware settings (CPU cores and power saving)"
+          >
+            <FaMicrochip className="me-2" />
+            Hardware Configuration
+          </Button>
+
           {/* Sync button removed - functionality integrated into Update Device */}
 
           {/* Device Status Indicator */}
@@ -2414,7 +2424,7 @@ const DeviceInfo = () => {
                       
                       <Row className="mb-2">
                         <Col md={3}><strong>Hardware:</strong></Col>
-                        <Col md={9}>CPU cores: {device?.cpuInfo?.cores || '4'}, vRouter cores: {device?.vRouterCores || '1'}, Power Saving: {device?.powerSaving ? 'On' : 'Off'}</Col>
+                        <Col md={9}>CPU cores: {device?.cpuInfo?.hwCores || '4'}, vRouter cores: {device?.cpuInfo?.vppCores || '1'}, Power Saving: {device?.cpuInfo?.powerSaving ? 'On' : 'Off'}</Col>
                       </Row>
                       
                       <Row className="mb-2">
@@ -2481,17 +2491,6 @@ const DeviceInfo = () => {
             </Card>
           )}
 
-          {/* Hardware Configuration Button - Only shown on General tab */}
-          <div className="text-center mt-4">
-            <Button 
-              variant="outline-primary" 
-              size="lg"
-              onClick={() => setShowHardwareModal(true)}
-            >
-              <FaMicrochip className="me-2" />
-              Hardware Configuration
-            </Button>
-          </div>
         </Tab>
 
         <Tab eventKey="configuration" title={<><FaCog className="me-1" />Configuration</>}>
@@ -2665,10 +2664,22 @@ const DeviceInfo = () => {
               <Form.Control
                 type="number"
                 value={vRouterCores}
-                onChange={(e) => setVRouterCores(e.target.value)}
+                onChange={(e) => {
+                  const newCores = e.target.value;
+                  setVRouterCores(newCores);
+                  // Automatically disable power saving if cores > 1
+                  if (parseInt(newCores) > 1 && powerSaving) {
+                    setPowerSaving(false);
+                  }
+                }}
                 min="1"
                 max={hwCpuCores}
               />
+              {parseInt(vRouterCores) > 1 && (
+                <Form.Text className="text-muted">
+                  Note: Power saving will be automatically disabled for multicore configuration
+                </Form.Text>
+              )}
             </Form.Group>
 
             {/* CPU Optimization Recommendation */}
@@ -2737,7 +2748,13 @@ const DeviceInfo = () => {
                   label={powerSaving ? 'Enabled' : 'Disabled'}
                   checked={powerSaving}
                   onChange={(e) => setPowerSaving(e.target.checked)}
+                  disabled={parseInt(vRouterCores) > 1}
                 />
+                {parseInt(vRouterCores) > 1 && (
+                  <Form.Text className="text-warning d-block mt-1">
+                    ⚠ Power saving must be disabled when using multiple vRouter cores
+                  </Form.Text>
+                )}
               </div>
             </Form.Group>
           </Form>

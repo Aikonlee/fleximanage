@@ -4031,10 +4031,13 @@ async function updatePin (data, device, interfaceId, lteInterface) {
  * @param {Object} org - Organization ID
  * @returns {Object} CPU optimization recommendations
  */
-DevicesService.devicesIdCpuOptimizationGET = async ({ id, org }) => {
+DevicesService.devicesIdCpuOptimizationGET = async ({ id, org }, { user }) => {
   try {
+    // Get organization list for user access control
+    const orgList = await getAccessTokenOrgList(user, org, false);
+    
     const device = await devices.findOne(
-      { _id: mongoose.Types.ObjectId(id), org: org },
+      { _id: mongoose.Types.ObjectId(id), org: { $in: orgList } },
       '_id hostname cpuInfo interfaces policies versions'
     ).populate('policies.qos.policy', '_id name');
 
@@ -4169,6 +4172,151 @@ DevicesService.devicesIdCpuOptimizationGET = async ({ id, org }) => {
 
     return Service.successResponse(optimization);
   } catch (e) {
+    return Service.rejectResponse(
+      e.message || 'Internal Server Error',
+      e.status || 500
+    );
+  }
+};
+
+/**
+ * Update device hardware configuration (VPP cores and power saving)
+ *
+ * @param {Object} params - Request parameters
+ * @param {string} params.id - Device ID
+ * @param {string} params.org - Organization ID (optional)
+ * @param {number} params.vRouterCores - Number of VPP cores
+ * @param {boolean} params.powerSaving - Power saving mode
+ * @param {Object} context - Request context
+ * @param {Object} context.user - User object
+ * @param {Object} context.server - Server object
+ * @returns {Promise<Object>} Response with job information
+ */
+DevicesService.devicesIdHardwarePUT = async ({ id, org, vRouterCores, powerSaving }, { user, server }, response) => {
+  try {
+    // Validate input
+    if (!vRouterCores || vRouterCores < 1) {
+      return Service.rejectResponse('vRouterCores must be at least 1', 400);
+    }
+
+    // Get organization list for access control
+    const orgList = await getAccessTokenOrgList(user, org, true);
+    
+    // Find the device using find() to get an array (required by dispatcher)
+    const opDevice = await devices.find({
+      _id: mongoose.Types.ObjectId(id),
+      org: { $in: orgList }
+    });
+
+    if (opDevice.length !== 1) {
+      return Service.rejectResponse('Device not found', 404);
+    }
+
+    const device = opDevice[0];
+
+    // Check if device is approved
+    if (!device.isApproved) {
+      return Service.rejectResponse('Device must be approved before modifying hardware configuration', 400);
+    }
+
+    // Validate vRouterCores against hardware limits
+    const hwCores = device.cpuInfo?.hwCores || 2;
+    if (vRouterCores >= hwCores) {
+      return Service.rejectResponse(
+        `vRouterCores (${vRouterCores}) must be less than hardware cores (${hwCores}). ` +
+        'At least 1 core must be reserved for the system.',
+        400
+      );
+    }
+
+    // Check if change is needed
+    // Use vppCores (actual device state) for comparison, not configuredVppCores
+    // This ensures we retry if the device failed to apply previous configuration
+    const currentVppCores = device.cpuInfo?.vppCores || 1;
+    const currentPowerSaving = device.cpuInfo?.powerSaving || false;
+    const configuredVppCores = device.cpuInfo?.configuredVppCores || currentVppCores;
+    
+    logger.info('Hardware configuration check', {
+      deviceId: id,
+      currentVppCores,
+      configuredVppCores,
+      currentPowerSaving,
+      requestedVppCores: vRouterCores,
+      requestedPowerSaving: powerSaving,
+      cpuInfo: device.cpuInfo
+    });
+    
+    // Skip if both actual state and target config match the request
+    if (currentVppCores === vRouterCores && 
+        configuredVppCores === vRouterCores && 
+        currentPowerSaving === powerSaving) {
+      return Service.successResponse({
+        message: 'Hardware configuration is already set to these values and device is synchronized',
+        changed: false
+      });
+    }
+
+    // Update the device configuration in database
+    device.cpuInfo = device.cpuInfo || {};
+    device.cpuInfo.configuredVppCores = vRouterCores;
+    
+    if (powerSaving !== undefined) {
+      device.cpuInfo.powerSaving = powerSaving;
+    }
+
+    await device.save();
+
+    logger.info('Applying hardware configuration through dispatcher', {
+      deviceId: id,
+      vRouterCores,
+      powerSaving
+    });
+
+    // Apply the configuration through dispatcher using modifyHardware method
+    // The modifyHardware expects meta.cpuInfo with configuredVppCores
+    const {
+      ids, status, message, errorCodes = []
+    } = await dispatcher.apply(opDevice, 'modifyHardware',
+      user, { 
+        org: orgList[0],
+        meta: {
+          cpuInfo: {
+            configuredVppCores: vRouterCores,
+            powerSaving: powerSaving !== undefined ? powerSaving : currentPowerSaving
+          }
+        }
+      });
+
+    logger.info('Dispatcher apply result', {
+      ids,
+      status,
+      message,
+      errorCodes
+    });
+
+    // Set location header for created jobs
+    DevicesService.setLocationHeader(server, response, ids, orgList[0]);
+
+    return Service.successResponse({
+      message: 'Hardware configuration update initiated successfully',
+      jobId: ids && ids.length > 0 ? ids[0] : null,
+      status: status,
+      details: message,
+      errorCodes: errorCodes,
+      configuration: {
+        vRouterCores: vRouterCores,
+        powerSaving: powerSaving !== undefined ? powerSaving : currentPowerSaving,
+        previous: {
+          vRouterCores: currentVppCores,
+          powerSaving: currentPowerSaving
+        }
+      }
+    }, 200);
+  } catch (e) {
+    logger.error('Error updating hardware configuration', {
+      params: { id, org, vRouterCores, powerSaving },
+      err: e.message
+    });
     return Service.rejectResponse(
       e.message || 'Internal Server Error',
       e.status || 500

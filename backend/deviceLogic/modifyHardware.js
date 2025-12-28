@@ -44,13 +44,21 @@ const apply = async (devicesList, user, data) => {
     const { machineId, _id, cpuInfo } = device;
 
     // check if device.cpuInfo is different than data.cpuInfo
-    // If so, generate a job
-    if (meta?.cpuInfo && !isEqual(cpuInfo.toObject(), meta.cpuInfo)) {
+    // OR if the device's actual vppCores doesn't match the configured target
+    // (this handles cases where a previous configuration failed to apply)
+    const cpuInfoChanged = meta?.cpuInfo && !isEqual(cpuInfo.toObject(), meta.cpuInfo);
+    const needsReapply = meta?.cpuInfo && 
+      (cpuInfo.vppCores !== meta.cpuInfo.configuredVppCores || 
+       cpuInfo.powerSaving !== meta.cpuInfo.powerSaving);
+    
+    if (cpuInfoChanged || needsReapply) {
       if (meta.cpuInfo.configuredVppCores > 1 && meta.cpuInfo.powerSaving) {
         throw new Error('Power saving should be disabled if multicore is used.');
       }
 
-      logger.info('Changing CPU info:', { params: { machineId, user, data } });
+      logger.info('Changing CPU info:', { 
+        params: { machineId, user, data, reason: cpuInfoChanged ? 'config_changed' : 'reapply_needed' }
+      });
 
       modified = true;
 

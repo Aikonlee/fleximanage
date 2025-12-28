@@ -102,6 +102,10 @@ class DevicesController {
     await Controller.handleRequest(request, response, this.service.devicesIdCpuOptimizationGET);
   }
 
+  async devicesIdHardwarePUT (request, response) {
+    await Controller.handleRequest(request, response, this.service.devicesIdHardwarePUT);
+  }
+
   async devicesIdStaticroutesGET (request, response) {
     await Controller.handleRequest(request, response, this.service.devicesIdStaticroutesGET);
   }

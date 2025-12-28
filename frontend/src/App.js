@@ -17,12 +17,7 @@ import AddOrganization from './pages/AddOrganization';
 import EditOrganization from './pages/EditOrganization';
 import Devices from './pages/Devices';
 import DeviceInfo from './pages/DeviceInfo';
-import Network from './pages/Network';
 import Tunnels from './pages/Tunnels';
-import Firewall from './pages/Firewall';
-import QoS from './pages/QoS';
-import Monitoring from './pages/Monitoring';
-import Settings from './pages/Settings';
 import Tokens from './pages/Tokens';
 import Login from './pages/Login';
 import VerifyAccount from './pages/VerifyAccount';
@@ -113,13 +108,8 @@ function App() {
             <Route path="/organizations/edit/:id" element={<Guard permKey="organizations" element={<EditOrganization />} />} />
             <Route path="/devices" element={<Guard permKey="devices" element={<Devices />} />} />
             <Route path="/devices/:deviceId" element={<Guard permKey="devices" element={<DeviceInfo />} />} />
-            <Route path="/network" element={<Guard permKey="organizations" element={<Network />} />} />
             <Route path="/tunnels" element={<Guard permKey="tunnels" element={<Tunnels />} />} />
-            <Route path="/firewall" element={<Guard permKey="firewallpolicies" element={<Firewall />} />} />
-            <Route path="/qos" element={<Guard permKey="qospolicies" element={<QoS />} />} />
-            <Route path="/monitoring" element={<Guard permKey="devices" element={<Monitoring />} />} />
             <Route path="/tokens" element={<Guard permKey="accesstokens" element={<Tokens />} />} />
-            <Route path="/settings" element={<Settings />} />
             <Route path="/about" element={<About />} />
           </Routes>
         </div>

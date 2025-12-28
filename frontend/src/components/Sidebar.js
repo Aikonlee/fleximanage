@@ -5,10 +5,7 @@ import { Nav } from 'react-bootstrap';
 import {
   FaHome,
   FaServer,
-  FaNetworkWired,
   FaRoute,
-  FaShieldAlt,
-  FaTachometerAlt,
   FaCog,
   FaChevronDown,
   FaUsers,
@@ -44,8 +41,6 @@ const Sidebar = ({ collapsed }) => {
       children: [
         { path: '/account/profile', label: 'Profile' },
         { path: '/organizations', label: 'Organizations' },
-        { path: '/account/notifications', label: 'Notifications Settings' },
-        { path: '/account/billing', label: 'Billing' },
         { path: '/account/access-keys', label: 'Access Keys' },
       ]
     },
@@ -60,12 +55,7 @@ const Sidebar = ({ collapsed }) => {
         { path: '/tokens', label: 'Tokens' }
       ]
     },
-    { type: 'item', path: '/network', icon: <FaNetworkWired />, label: 'Network' },
     { type: 'item', path: '/tunnels', icon: <FaRoute />, label: 'Tunnels' },
-    { type: 'item', path: '/firewall', icon: <FaShieldAlt />, label: 'Firewall' },
-    { type: 'item', path: '/qos', icon: <FaTachometerAlt />, label: 'QoS' },
-    { type: 'item', path: '/monitoring', icon: <FaTachometerAlt />, label: 'Monitoring' },
-    { type: 'item', path: '/settings', icon: <FaCog />, label: 'Settings' },
     { type: 'item', path: '/about', icon: <FaInfoCircle />, label: 'About' },
   ];
 

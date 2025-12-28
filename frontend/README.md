@@ -1,17 +1,22 @@
+# OpenSource-OpenNetworking
+# Open SD-WAN Management Platform
 # FlexiManage Frontend
 
 React Web UI for the flexiWAN (flexiManage) backend – an open source SD‑WAN management platform.  
 This project provides a comprehensive, production-ready administration console targeting the APIs exposed by the flexiManage backend.
 
-> The project includes both responsive UI components and real-time dashboard functionality with live traffic statistics and device monitoring.
+> **Production Status**: ✅ Fully operational at https://manage.miwide.com:3443
 
 ---
 
 ## 📊 Development Progress Summary
 
-**Last Updated**: October 15, 2025  
+**Last Updated**: October 18, 2025  
 **Version**: 6.3.37  
 **Status**: ✅ Production Ready
+
+> 📚 For complete development history and technical details, see:  
+> [`/docs/DEVELOPMENT_PROGRESS_SUMMARY.md`](../docs/DEVELOPMENT_PROGRESS_SUMMARY.md)
 
 ### Recent Milestones
 

@@ -50,7 +50,7 @@ const Tokens = () => {
       setTokens(mapped.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
       setPage(0);
     } catch (e) {
-      setError(e.message || 'Failed to load tokens');
+      setError((e.response && e.response.data && e.response.data.error) || e.message || 'Failed to load tokens');
     } finally {
       setLoading(false);
     }

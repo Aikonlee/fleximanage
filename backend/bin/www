@@ -17,6 +17,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const configs = require('../configs')();
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 

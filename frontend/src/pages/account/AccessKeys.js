@@ -104,7 +104,7 @@ const AccountAccessKeys = () => {
       setKeys(mapped);
       setPage(0); // reset page on reload
     } catch (e) {
-      setError(e.message || 'Failed to load access keys');
+      setError((e.response && e.response.data && e.response.data.error) || e.message || 'Failed to load access keys');
     } finally {
       setLoading(false);
     }

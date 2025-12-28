@@ -56,7 +56,9 @@ export default function AccountMembers () {
         setServerMeta({ offset: data.offset || offset, limit: data.limit || ps, total: data.total ?? (offset + (data.items?.length || 0)) });
       }
     } catch (e) {
-      setError(e.message || 'Failed to load members');
+      // Prefer API-provided error message when available to avoid showing
+      // generic axios messages like "Request failed with status code 400"
+      setError((e.response && e.response.data && e.response.data.error) || e.message || 'Failed to load members');
     } finally {
       setLoading(false);
     }

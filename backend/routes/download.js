@@ -33,7 +33,7 @@ const formatErr = (err, msg) => {
 
 // Get downloadable link
 downloadRouter.route('/:fileId/:fileName')
-  .get(cors.cors, verifyPermission('organizations', 'get'), (req, res, next) => {
+  .get(cors.corsWithOptions, verifyPermission('organizations', 'get'), (req, res, next) => {
     resourcesModel.find({ key: req.params.fileId })
       .then((resp) => {
         const obj = resp[0];

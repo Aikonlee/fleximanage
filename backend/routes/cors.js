@@ -19,7 +19,8 @@ var configs = require('../configs.js')();
 const cors = require('cors');
 
 // Whitelist of origins allowed to access resources
-const whitelist = configs.get('corsWhiteList', 'list');
+const rawWhitelist = configs.get('corsWhiteList');
+const whitelist = Array.isArray(rawWhitelist) ? rawWhitelist : (typeof rawWhitelist === 'string' ? rawWhitelist.split(/,\s*/) : []);
 
 // CORS handler
 var corsOptionsCheck = (req, callback) => {
@@ -34,9 +35,13 @@ var corsOptionsCheck = (req, callback) => {
     ] 
   };
   if (req.header('Origin') && whitelist.indexOf(req.header('Origin')) !== -1) {
+    console.log(`[CORS] Match found for Origin: ${req.header('Origin')}`);
     // In whitelist, allow the request to be accepted
     corsOptions.origin = true;
   } else {
+    if (req.header('Origin')) {
+      console.log(`[CORS] No match for Origin: ${req.header('Origin')}. Whitelist: ${JSON.stringify(whitelist)}`);
+    }
     // Not in whitelist, don't include allow-origin
     corsOptions.origin = false;
   }

@@ -127,7 +127,7 @@ function getCoordinates (interfaces, sourceIp) {
 // 408 - Mongo error
 // 500 - General Error
 connectRouter.route('/register')
-  .post(cors.cors, checkDeviceVersion, (req, res, next) => {
+  .post(cors.corsWithOptions, checkDeviceVersion, (req, res, next) => {
     var sourceIP = req.ip || 'Unknown';
     if (sourceIP.substr(0, 7) === '::ffff:') sourceIP = sourceIP.substr(7);
     jwt.verify(req.body.token, configs.get('deviceTokenSecretKey'), function (err, decoded) {

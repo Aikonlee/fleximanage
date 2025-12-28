@@ -97,8 +97,8 @@ const formatErr = (err, msg) => {
 
 // register user
 router.route('/register')
-  .options(cors.cors, (req, res) => { res.sendStatus(200); })
-  .post(cors.cors, async (req, res, next) => {
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, async (req, res, next) => {
     let session = null;
     let registerUser = null;
     let registerAccount = null;
@@ -287,8 +287,8 @@ router.route('/register')
 
 // verify account again if user did not received a verification email
 router.route('/reverify-account')
-  .options(cors.cors, (req, res) => { res.sendStatus(200); })
-  .post(cors.cors, async (req, res, next) => {
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, async (req, res, next) => {
     if (typeof req.body.email !== 'string') {
       return next(createError(400, 'Invalid email format'));
     }
@@ -340,7 +340,7 @@ router.route('/reverify-account')
 // verify account
 router.route('/verify-account')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .post(cors.cors, async (req, res, next) => {
+  .post(cors.corsWithOptions, async (req, res, next) => {
     if (!req.body.id || !req.body.token || typeof req.body.id !== 'string' || typeof req.body.token !== 'string' || req.body.id === '' || req.body.token === '') {
       return next(createError(500, 'Verification Error'));
     }
@@ -504,8 +504,8 @@ const updatePassword = (req, res, next) => {
  * 2) type = update - make the actual update of the password
  */
 router.route('/reset-password')
-  .options(cors.cors, (req, res) => { res.sendStatus(200); })
-  .post(cors.cors, async (req, res, next) => {
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, async (req, res, next) => {
     if (!req.body.type) return next(createError(500, 'Password Reset Error'));
 
     // Call function based on request type
@@ -581,8 +581,8 @@ router.route('/me')
 
 // Authentication check is done within passport, if passed, no login error exists
 router.route('/auth')
-  .options(cors.cors, (req, res) => { res.sendStatus(200); })
-  .post(cors.cors, auth.verifyUserLocal, async (req, res) => {
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .post(cors.corsWithOptions, auth.verifyUserLocal, async (req, res) => {
     const orgs = await getUserOrganizations(req.user);
     res.status(200).json({
       email: req.user.email,

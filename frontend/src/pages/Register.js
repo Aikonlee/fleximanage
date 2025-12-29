@@ -129,14 +129,27 @@ const Register = () => {
         body.numberSites = '1'; // Default number of sites
       }
       
-      if (TURNSTILE_SITE_KEY) {
-        if (!captchaToken) {
+      // Only require CAPTCHA if it's configured AND the token was successfully obtained
+      // This allows for graceful degradation if Turnstile fails due to browser restrictions
+      if (TURNSTILE_SITE_KEY && !captchaToken) {
+        // Check if Turnstile widget was rendered (it will be if CAPTCHA_DEBUG is enabled or widget loaded)
+        const turnstileWidget = document.querySelector('[data-sitekey]');
+        if (turnstileWidget) {
+          // Widget exists but no token - likely an error or still loading
           setError(t('register.validation.captcha'));
           setLoading(false);
           return;
         }
+        // Widget doesn't exist or failed to load - proceed without captcha and let backend handle it
+        // eslint-disable-next-line no-console
+        console.warn('[captcha][register] Turnstile widget not found, proceeding without captcha. Backend will validate.');
+      }
+      
+      // Add captcha token if available
+      if (captchaToken) {
         body.captcha = captchaToken;
       }
+      
       const resp = await api.post('/users/register', body);
       const fast = resp.data?.fastVerified ? 1 : 0;
       navigate(`/login?registered=1&fast=${fast}`);

@@ -1630,7 +1630,13 @@ class DevicesService {
 
         // Don't allow any changes if the device is not approved
         if (!origDevice.isApproved && !deviceRequest.isApproved) {
-          throw createError(400, 'Device must be first approved');
+          // Exception: allow changing the name, description and site
+          const allowedKeys = ['name', 'description', 'site'];
+          Object.keys(deviceRequest).forEach(key => {
+            if (!allowedKeys.includes(key)) {
+              delete deviceRequest[key];
+            }
+          });
         }
 
         // check LAN subnet overlap if updated device is running
@@ -2229,7 +2235,7 @@ class DevicesService {
               }
             }
           };
-        } else if (origSystemRules.length > 0) {
+        } else if ('firewall' in deviceRequest && origSystemRules.length > 0) {
           // there are system rules in the origDevice,
           // but incoming modified device has no system rules
           throw new Error('Firewall system rule cannot be deleted');
@@ -2309,13 +2315,19 @@ class DevicesService {
       // If the change made to the device fields requires a change on the
       // device itself, add a 'modify' job to the device's queue.
       const wasApproved = origDevice.isApproved;
-      // if the device was not approved before then send a full sync job with updated parameters
-      const method = wasApproved ? 'modify' : 'sync';
-      const opDevices = wasApproved ? [origDevice]
-        : [{ ...updDevice.toObject(), org: orgList[0] }];
-      const applyData = wasApproved ? { org: orgList[0], newDevice: updDevice } : null;
+      const isApproved = updDevice.isApproved;
 
-      const modifyDevResult = await dispatcher.apply(opDevices, method, user, applyData);
+      let modifyDevResult = { ids: [] };
+
+      if (wasApproved || isApproved) {
+        // if the device was not approved before then send a full sync job with updated parameters
+        const method = wasApproved ? 'modify' : 'sync';
+        const opDevices = wasApproved ? [origDevice]
+          : [{ ...updDevice.toObject(), org: orgList[0] }];
+        const applyData = wasApproved ? { org: orgList[0], newDevice: updDevice } : null;
+
+        modifyDevResult = await dispatcher.apply(opDevices, method, user, applyData);
+      }
 
       if (isNeedToReleasePendingTunnels) {
         const released = await releasePublicAddrLimiterBlockage(updDevice);

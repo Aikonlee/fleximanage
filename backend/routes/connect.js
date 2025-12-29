@@ -132,9 +132,27 @@ connectRouter.route('/register')
     if (sourceIP.substr(0, 7) === '::ffff:') sourceIP = sourceIP.substr(7);
     jwt.verify(req.body.token, configs.get('deviceTokenSecretKey'), function (err, decoded) {
       if (err) {
+        logger.warn('Device registration: JWT verification failed', {
+          params: {
+            machine_id: req.body.machine_id,
+            error: err.message,
+            tokenLength: req.body.token ? req.body.token.length : 0
+          },
+          req: req
+        });
         return next(createError(401, 'Invalid token'));
       } else {
-        if (!decoded.org || !decoded.account) return next(createError(401, 'Invalid token'));
+        if (!decoded.org || !decoded.account) {
+          logger.warn('Device registration: Invalid token claims', {
+            params: {
+              machine_id: req.body.machine_id,
+              hasOrg: !!decoded.org,
+              hasAccount: !!decoded.account
+            },
+            req: req
+          });
+          return next(createError(401, 'Invalid token'));
+        }
         tokens.find({ token: req.body.token, org: decoded.org })
           .then(async (resp) => {
             if (resp.length === 1) { // exactly one token found

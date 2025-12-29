@@ -155,13 +155,18 @@ const Register = () => {
       navigate(`/login?registered=1&fast=${fast}`);
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('Registration error details:', {
-        message: err?.message,
-        code: err?.code,
-        response: err?.response?.status,
-        responseData: err?.response?.data,
-        fullError: err
-      });
+      console.error('Registration error - Full Details:', err);
+      // eslint-disable-next-line no-console
+      console.error('Error message:', err?.message);
+      // eslint-disable-next-line no-console
+      console.error('Error code:', err?.code);
+      // eslint-disable-next-line no-console
+      console.error('Response status:', err?.response?.status);
+      // eslint-disable-next-line no-console
+      console.error('Response data:', err?.response?.data);
+      // eslint-disable-next-line no-console
+      console.error('Request config:', err?.config?.url);
+      
       const apiErr = err?.response?.data?.error || err?.response?.data?.message;
       const displayError = apiErr || err?.message || 'Registration failed. Please try again.';
       setError(displayError); // TODO i18n

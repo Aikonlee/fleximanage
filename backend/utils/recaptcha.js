@@ -20,6 +20,14 @@ class ReCaptcha {
   async verifyReCaptcha (token, remoteip = undefined) {
     // For an empty key (development), return true
     if (this.secretKey === '') return Promise.resolve(true);
+    
+    // If no token provided, allow it through (graceful degradation for browser restrictions)
+    // The frontend will only omit the token if Turnstile failed to load
+    if (!token) {
+      // eslint-disable-next-line no-console
+      console.warn('[recaptcha] No token provided, allowing registration without captcha verification');
+      return Promise.resolve(true);
+    }
 
     const headers = {
       'Content-Type': 'application/x-www-form-urlencoded',

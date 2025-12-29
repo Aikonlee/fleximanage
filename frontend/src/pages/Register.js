@@ -139,89 +139,138 @@ const Register = () => {
               </div>
 
               <Form onSubmit={handleSubmit} autoComplete="off">
-                <div className="mb-2">
-                  <Form.Label className="small mb-1">Company Name *</Form.Label>
-                  <Form.Control 
-                    size="sm"
-                    name="accountName" 
-                    value={form.accountName} 
-                    onChange={handleChange} 
-                    required 
-                    placeholder="Enter your company name"
-                  />
-                </div>
+                {/* Company Name */}
+                <Form.Group className="mb-2">
+                  <Row className="align-items-center">
+                    <Col sm={4}>
+                      <Form.Label className="small mb-0">Company Name *</Form.Label>
+                    </Col>
+                    <Col sm={8}>
+                      <Form.Control 
+                        size="sm"
+                        name="accountName" 
+                        value={form.accountName} 
+                        onChange={handleChange} 
+                        required 
+                        placeholder="Enter your company name"
+                      />
+                    </Col>
+                  </Row>
+                </Form.Group>
 
-                <div className="mb-2">
-                  <Form.Label className="small mb-1">Business Email *</Form.Label>
-                  <Form.Control 
-                    size="sm"
-                    type="email" 
-                    name="email" 
-                    value={form.email} 
-                    onChange={handleChange} 
-                    required 
-                    placeholder="your.email@company.com"
-                  />
-                </div>
+                {/* Business Email */}
+                <Form.Group className="mb-2">
+                  <Row className="align-items-center">
+                    <Col sm={4}>
+                      <Form.Label className="small mb-0">Business Email *</Form.Label>
+                    </Col>
+                    <Col sm={8}>
+                      <Form.Control 
+                        size="sm"
+                        type="email" 
+                        name="email" 
+                        value={form.email} 
+                        onChange={handleChange} 
+                        required 
+                        placeholder="your.email@company.com"
+                      />
+                    </Col>
+                  </Row>
+                </Form.Group>
 
-                <div className="mb-2">
-                  <Form.Label className="small mb-1">First Name *</Form.Label>
-                  <Form.Control 
-                    size="sm"
-                    name="userFirstName" 
-                    value={form.userFirstName} 
-                    onChange={handleChange} 
-                    required 
-                    placeholder="First name"
-                  />
-                </div>
+                {/* First Name */}
+                <Form.Group className="mb-2">
+                  <Row className="align-items-center">
+                    <Col sm={4}>
+                      <Form.Label className="small mb-0">First Name *</Form.Label>
+                    </Col>
+                    <Col sm={8}>
+                      <Form.Control 
+                        size="sm"
+                        name="userFirstName" 
+                        value={form.userFirstName} 
+                        onChange={handleChange} 
+                        required 
+                        placeholder="First name"
+                      />
+                    </Col>
+                  </Row>
+                </Form.Group>
 
-                <div className="mb-2">
-                  <Form.Label className="small mb-1">Last Name *</Form.Label>
-                  <Form.Control 
-                    size="sm"
-                    name="userLastName" 
-                    value={form.userLastName} 
-                    onChange={handleChange} 
-                    required 
-                    placeholder="Last name"
-                  />
-                </div>
+                {/* Last Name */}
+                <Form.Group className="mb-2">
+                  <Row className="align-items-center">
+                    <Col sm={4}>
+                      <Form.Label className="small mb-0">Last Name *</Form.Label>
+                    </Col>
+                    <Col sm={8}>
+                      <Form.Control 
+                        size="sm"
+                        name="userLastName" 
+                        value={form.userLastName} 
+                        onChange={handleChange} 
+                        required 
+                        placeholder="Last name"
+                      />
+                    </Col>
+                  </Row>
+                </Form.Group>
 
-                <div className="mb-2">
-                  <Form.Label className="small mb-1">Job Title</Form.Label>
-                  <Form.Control 
-                    size="sm"
-                    name="userJobTitle" 
-                    value={form.userJobTitle} 
-                    onChange={handleChange} 
-                    placeholder="Your job title"
-                  />
-                </div>
+                {/* Job Title */}
+                <Form.Group className="mb-2">
+                  <Row className="align-items-center">
+                    <Col sm={4}>
+                      <Form.Label className="small mb-0">Job Title</Form.Label>
+                    </Col>
+                    <Col sm={8}>
+                      <Form.Control 
+                        size="sm"
+                        name="userJobTitle" 
+                        value={form.userJobTitle} 
+                        onChange={handleChange} 
+                        placeholder="Your job title"
+                      />
+                    </Col>
+                  </Row>
+                </Form.Group>
 
-                <div className="mb-2">
-                  <Form.Label className="small mb-1">Phone Number</Form.Label>
-                  <Form.Control 
-                    size="sm"
-                    name="userPhoneNumber" 
-                    value={form.userPhoneNumber} 
-                    onChange={handleChange} 
-                    placeholder="+1 (555) 123-4567"
-                  />
-                </div>
+                {/* Phone Number */}
+                <Form.Group className="mb-2">
+                  <Row className="align-items-center">
+                    <Col sm={4}>
+                      <Form.Label className="small mb-0">Phone Number</Form.Label>
+                    </Col>
+                    <Col sm={8}>
+                      <Form.Control 
+                        size="sm"
+                        name="userPhoneNumber" 
+                        value={form.userPhoneNumber} 
+                        onChange={handleChange} 
+                        placeholder="+1 (555) 123-4567"
+                      />
+                    </Col>
+                  </Row>
+                </Form.Group>
 
-                <div className="mb-3">
-                  <Form.Label className="small mb-1">Password *</Form.Label>
-                  <Form.Control 
-                    size="sm"
-                    type="password" 
-                    name="password" 
-                    value={form.password} 
-                    onChange={handleChange} 
-                    required 
-                    placeholder="Create a strong password"
-                  />
-                </div>
+                {/* Password */}
+                <Form.Group className="mb-3">
+                  <Row className="align-items-center">
+                    <Col sm={4}>
+                      <Form.Label className="small mb-0">Password *</Form.Label>
+                    </Col>
+                    <Col sm={8}>
+                      <Form.Control 
+                        size="sm"
+                        type="password" 
+                        name="password" 
+                        value={form.password} 
+                        onChange={handleChange} 
+                        required 
+                        placeholder="Create a strong password"
+                      />
+                    </Col>
+                  </Row>
+                </Form.Group>
 
                 {TURNSTILE_SITE_KEY && (
                   <div className="mb-3">

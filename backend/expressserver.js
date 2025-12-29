@@ -133,15 +133,16 @@ class ExpressServer {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", 'https://challenges.cloudflare.com'],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://challenges.cloudflare.com'],
           styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
           imgSrc: ["'self'", 'data:'],
-          connectSrc: ["'self'"],
+          connectSrc: ["'self'", 'https://manage.miwide.com:3443'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
           formAction: ["'self'"],
-          frameAncestors: ["'self'"]
+          frameAncestors: ["'self'"],
+          fontSrc: ["'self'", 'https:', 'data:']
         }
       }
     }));

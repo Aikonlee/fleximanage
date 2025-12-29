@@ -26,12 +26,12 @@ const hostname = os.hostname();
 const configEnv = {
   // This is the default configuration, override by the following sections
   default: {
-    // URL of the rest server (must match agentBroker format without https:// prefix)
-    restServerUrl: ['manage.miwide.com:3443'],
+    // URL of the rest server (must match agentBroker format with https:// prefix for production)
+    restServerUrl: ['https://manage.miwide.com:3443'],
     // URL of the agent broker server
     agentBroker: ['manage.miwide.com:3443'],
     // URL of the UI server
-    uiServerUrl: ['http://manage.miwide.com:3000'],
+    uiServerUrl: ['https://manage.miwide.com:3443'],
     // Key used for users tokens, override default with environment variable USER_SECRET_KEY
     userTokenSecretKey: '',
     // Whether to validate open API response. True for testing and dev, False for production,
@@ -290,8 +290,8 @@ const configEnv = {
   },
   // Override for production environment
   production: {
-    restServerUrl: ['https://app.flexiwan.com:443'],
-    uiServerUrl: ['https://app.flexiwan.com:443'],
+    restServerUrl: ['https://manage.miwide.com:3443'],
+    uiServerUrl: ['https://manage.miwide.com:3443'],
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
     agentBroker: ['manage.miwide.com:3443'],
@@ -302,10 +302,10 @@ const configEnv = {
     // 'useFlexiBilling': true,
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
-    billingRedirectOkUrl: 'https://app.flexiwan.com/ok.html',
+    billingRedirectOkUrl: 'https://manage.miwide.com:3443/ok.html',
     logLevel: 'info',
     logUserName: true,
-    corsWhiteList: ['https://app.flexiwan.com:443', 'http://app.flexiwan.com:80'],
+    corsWhiteList: ['https://manage.miwide.com:3443', 'http://manage.miwide.com:3000'],
     vpnBaseUrl: ['https://vpn.flexiwan.com']
   },
   hosted: {

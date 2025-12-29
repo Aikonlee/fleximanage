@@ -300,16 +300,35 @@ class ExpressServer {
         ? origIndex.replace('<title>flexiWAN Management</title>',
           `<title>${configs.get('companyName')} Management</title>`)
         : origIndex;
-      const m = modifiedIndex.match(/const __FLEXIWAN_SERVER_CONFIG__=({.*?});?/);
+      
+      // Try to match the old format first
+      let m = modifiedIndex.match(/const __FLEXIWAN_SERVER_CONFIG__=({.*?});?/);
+      
+      // If not found, try the new window format
+      if (!m || m.length === 0) {
+        m = modifiedIndex.match(/window\.__FLEXIWAN_SERVER_CONFIG__\s*=\s*({.*?});?/);
+      }
+      
       if (m instanceof Array && m.length > 0) { // successful match
-        // eslint-disable-next-line no-eval
-        const newConfig = eval('(' + m[1] + ')');
-        // Update default config with backend variables
-        for (const c in clientConfig) {
-          newConfig[c] = clientConfig[c];
+        try {
+          // eslint-disable-next-line no-eval
+          const newConfig = eval('(' + m[1] + ')');
+          // Update default config with backend variables
+          for (const c in clientConfig) {
+            newConfig[c] = clientConfig[c];
+          }
+          const serialized = serialize(newConfig, { isJSON: true });
+          
+          // Replace with new format (window object)
+          if (m[0].includes('window.')) {
+            modifiedIndex = modifiedIndex.replace(m[0], 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';');
+          } else {
+            // Replace old const format with new window format
+            modifiedIndex = modifiedIndex.replace(m[0], 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';');
+          }
+        } catch (e) {
+          logger.warn('Failed to parse/replace server config:', { error: e.message });
         }
-        modifiedIndex = modifiedIndex.replace(m[0],
-          'const __FLEXIWAN_SERVER_CONFIG__=' + serialize(newConfig, { isJSON: true }) + ';');
       }
       return modifiedIndex;
     };

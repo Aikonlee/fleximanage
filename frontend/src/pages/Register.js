@@ -128,7 +128,6 @@ const Register = () => {
             <Card.Body className="p-4">
               <div className="text-center mb-3">
                 <h2 className="login-title">{t('register.title')}</h2>
-                <p className="text-muted small">{t('register.subtitle', BRAND_NAME)}</p>
               </div>
 
               {error && <Alert variant="danger" className="mb-3 py-2">{error}</Alert>}

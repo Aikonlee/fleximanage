@@ -47,7 +47,7 @@ const configEnv = {
     // Max.number of unread notifications included into periodic email
     unreadNotificationsMaxSent: 50,
     // The duration of the user JWT token in seconds
-    userTokenExpiration: 300,
+    userTokenExpiration: 86400,
     // The duration of the user refresh token in seconds
     userRefreshTokenExpiration: 604800,
     // The time to wait for job response before declaring the job as timeout
@@ -357,7 +357,7 @@ const configEnv = {
     uiServerUrl: ['https://appqa01.flexiwan.com:443'],
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
-    userTokenExpiration: 300,
+    userTokenExpiration: 86400,
     userIpReqRateLimit: 3000,
     unreadNotificationPeriod: 300000,
     userRefreshTokenExpiration: 86400,
@@ -382,7 +382,7 @@ const configEnv = {
     uiServerUrl: ['https://appqa02.flexiwan.com:443'],
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
-    userTokenExpiration: 300,
+    userTokenExpiration: 86400,
     userIpReqRateLimit: 3000,
     unreadNotificationPeriod: 300000,
     userRefreshTokenExpiration: 86400,

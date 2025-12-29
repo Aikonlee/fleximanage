@@ -3,8 +3,6 @@ import { BRAND_NAME } from '../constants/branding';
 import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { sortCountries } from '../constants/countries';
-import { SERVICE_TYPES } from '../constants/serviceTypes';
 import { t } from '../i18n';
 
 // Registration page with runtime + debug-enabled Cloudflare Turnstile (mirrors Login implementation)
@@ -27,10 +25,6 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
   const captchaRenderedRef = useRef(false);
-  const [fieldErrors, setFieldErrors] = useState({ country: '', serviceType: '' });
-  const COUNTRY_REGEX = /^[A-Za-z]{2}$/; // exactly 2 letters (ISO alpha-2)
-  const SERVICE_TYPE_REGEX = /^[A-Za-z0-9 -]{2,20}$/; // 2-20 letters/digits/space/dash
-  const sortedCountries = sortCountries();
 
   // Cloudflare Turnstile key resolution precedence
   const buildTimeKey = process.env.REACT_APP_TURNSTILE_SITE_KEY;
@@ -43,7 +37,6 @@ const Register = () => {
     (process.env.REACT_APP_CAPTCHA_DEBUG === '1') ||
     (typeof window !== 'undefined' && (window.__CAPTCHA_DEBUG__ === true || localStorage.getItem('captchaDebug') === '1'))
   );
-  const [captchaWarning, setCaptchaWarning] = useState('');
 
   // Fetch runtime config
   useEffect(() => {
@@ -75,13 +68,10 @@ const Register = () => {
           'timeout-callback': () => setCaptchaToken('')
         });
         captchaRenderedRef.current = true;
-        // Clear any previous warnings
-        setCaptchaWarning('');
         CAPTCHA_DEBUG && console.log('[captcha][register] widget rendered id=', widgetId);
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn('Turnstile render failed (register)', e);
-        setCaptchaWarning('CAPTCHA widget failed to render. Please check console for details and ensure site key and network connectivity are correct.');
         CAPTCHA_DEBUG && console.warn('[captcha][register] render exception', e);
       }
     };
@@ -90,10 +80,6 @@ const Register = () => {
       script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
       script.async = true;
       script.defer = true;
-      script.onerror = () => {
-        // surface load failure to UI
-        setCaptchaWarning('CAPTCHA failed to load. Please check your network connection to Cloudflare (challenges.cloudflare.com).');
-      };
       script.onload = ensureRender;
       document.head.appendChild(script);
       CAPTCHA_DEBUG && console.log('[captcha][register] script tag injected');
@@ -104,17 +90,7 @@ const Register = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    let v = value;
-    if (name === 'country') {
-      v = v.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2); // sanitize to letters only & length 2
-    }
-    setForm(prev => ({ ...prev, [name]: v }));
-    // live validation for modified field
-    if (name === 'country') {
-      setFieldErrors(prev => ({ ...prev, country: v && !COUNTRY_REGEX.test(v) ? t('register.validation.country') : '' }));
-    } else if (name === 'serviceType') {
-      setFieldErrors(prev => ({ ...prev, serviceType: v && !SERVICE_TYPE_REGEX.test(v) ? t('register.validation.serviceType') : '' }));
-    }
+    setForm(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -123,19 +99,6 @@ const Register = () => {
     setLoading(true);
     try {
       const body = { ...form };
-      body.numberSites = parseInt(body.numberSites || 1, 10);
-      // Client-side validation prior to submit
-      const errs = {
-        country: !COUNTRY_REGEX.test(body.country || '') ? t('register.validation.country') : '',
-        serviceType: !SERVICE_TYPE_REGEX.test(body.serviceType || '') ? t('register.validation.serviceType') : ''
-      };
-      setFieldErrors(errs);
-      const firstErr = Object.values(errs).find(Boolean);
-      if (firstErr) {
-        setError(firstErr);
-        setLoading(false);
-        return;
-      }
       if (TURNSTILE_SITE_KEY) {
         if (!captchaToken) {
           setError(t('register.validation.captcha'));
@@ -160,105 +123,113 @@ const Register = () => {
   return (
     <Container fluid className="login-container">
       <Row className="justify-content-center align-items-center min-vh-100">
-        <Col md={8} lg={6} xl={5}>
+        <Col md={8} lg={5} xl={4}>
           <Card className="login-card">
-            <Card.Body className="p-5">
-              <div className="text-center mb-4">
+            <Card.Body className="p-4">
+              <div className="text-center mb-3">
                 <h2 className="login-title">{t('register.title')}</h2>
-                <p className="text-muted">{t('register.subtitle', BRAND_NAME)}</p>
+                <p className="text-muted small">{t('register.subtitle', BRAND_NAME)}</p>
               </div>
 
-              {error && <Alert variant="danger">{error}</Alert>}
+              {error && <Alert variant="danger" className="mb-3 py-2">{error}</Alert>}
+
+              <div className="mb-3 p-3 bg-light rounded small text-secondary">
+                <p className="mb-0">
+                  Proceed to create a new account. You become this account owner.
+                </p>
+              </div>
 
               <Form onSubmit={handleSubmit} autoComplete="off">
-                <Row>
-                  <Col md={6} className="mb-3">
-                    <Form.Label>{t('register.labels.accountName')} *</Form.Label>
-                    <Form.Control name="accountName" value={form.accountName} onChange={handleChange} required />
-                  </Col>
-                  <Col md={3} className="mb-3">
-                    <Form.Label>{t('register.labels.firstName')} *</Form.Label>
-                    <Form.Control name="userFirstName" value={form.userFirstName} onChange={handleChange} required />
-                  </Col>
-                  <Col md={3} className="mb-3">
-                    <Form.Label>{t('register.labels.lastName')} *</Form.Label>
-                    <Form.Control name="userLastName" value={form.userLastName} onChange={handleChange} required />
-                  </Col>
-                </Row>
-                <Row>
-                  <Col md={6} className="mb-3">
-                    <Form.Label>{t('register.labels.email')} *</Form.Label>
-                    <Form.Control type="email" name="email" value={form.email} onChange={handleChange} required />
-                  </Col>
-                  <Col md={6} className="mb-3">
-                    <Form.Label>{t('register.labels.password')} *</Form.Label>
-                    <Form.Control type="password" name="password" value={form.password} onChange={handleChange} required />
-                  </Col>
-                </Row>
-                <Row>
-                  <Col md={6} className="mb-3">
-                    <Form.Label>{t('register.labels.jobTitle')}</Form.Label>
-                    <Form.Control name="userJobTitle" value={form.userJobTitle} onChange={handleChange} />
-                  </Col>
-                  <Col md={6} className="mb-3">
-                    <Form.Label>{t('register.labels.phone')}</Form.Label>
-                    <Form.Control name="userPhoneNumber" value={form.userPhoneNumber} onChange={handleChange} />
-                  </Col>
-                </Row>
-                <Row>
-                  <Col md={4} className="mb-3">
-                    <Form.Label>{t('register.labels.country')}</Form.Label>
-                    <Form.Select
-                      name="country"
-                      value={form.country}
-                      onChange={handleChange}
-                      isInvalid={!!fieldErrors.country}
-                      required
-                    >
-                      <option value="">-- {t('register.labels.country')} --</option>
-                      {sortedCountries.map(c => (
-                        <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
-                      ))}
-                    </Form.Select>
-                    <Form.Control.Feedback type="invalid">
-                      {fieldErrors.country || t('register.validation.country')}
-                    </Form.Control.Feedback>
-                  </Col>
-                  <Col md={4} className="mb-3">
-                    <Form.Label>{t('register.labels.companySize')}</Form.Label>
-                    <Form.Control name="companySize" value={form.companySize} onChange={handleChange} />
-                  </Col>
-                  <Col md={4} className="mb-3">
-                    <Form.Label>{t('register.labels.serviceType')}</Form.Label>
-                    <Form.Select
-                      name="serviceType"
-                      value={form.serviceType}
-                      onChange={handleChange}
-                      isInvalid={!!fieldErrors.serviceType}
-                      required
-                    >
-                      <option value="">-- {t('register.labels.serviceType')} --</option>
-                      {SERVICE_TYPES.map(st => (
-                        <option key={st} value={st}>{st}</option>
-                      ))}
-                    </Form.Select>
-                    <Form.Control.Feedback type="invalid">
-                      {fieldErrors.serviceType || t('register.validation.serviceType')}
-                    </Form.Control.Feedback>
-                  </Col>
-                </Row>
-                <Row>
-                  <Col md={4} className="mb-3">
-                    <Form.Label>{t('register.labels.numberSites')}</Form.Label>
-                    <Form.Control name="numberSites" type="number" min="1" value={form.numberSites} onChange={handleChange} />
-                  </Col>
-                  {TURNSTILE_SITE_KEY && (
-                    <Col md={8} className="mb-3">
-                      <Form.Label>{t('register.labels.captcha')} *</Form.Label>
-                      <div id="register-turnstile" style={{ display: 'flex', justifyContent: 'center' }} />
-                    </Col>
-                  )}
-                </Row>
+                <div className="mb-2">
+                  <Form.Label className="small mb-1">Company Name *</Form.Label>
+                  <Form.Control 
+                    size="sm"
+                    name="accountName" 
+                    value={form.accountName} 
+                    onChange={handleChange} 
+                    required 
+                    placeholder="Enter your company name"
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <Form.Label className="small mb-1">Business Email *</Form.Label>
+                  <Form.Control 
+                    size="sm"
+                    type="email" 
+                    name="email" 
+                    value={form.email} 
+                    onChange={handleChange} 
+                    required 
+                    placeholder="your.email@company.com"
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <Form.Label className="small mb-1">First Name *</Form.Label>
+                  <Form.Control 
+                    size="sm"
+                    name="userFirstName" 
+                    value={form.userFirstName} 
+                    onChange={handleChange} 
+                    required 
+                    placeholder="First name"
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <Form.Label className="small mb-1">Last Name *</Form.Label>
+                  <Form.Control 
+                    size="sm"
+                    name="userLastName" 
+                    value={form.userLastName} 
+                    onChange={handleChange} 
+                    required 
+                    placeholder="Last name"
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <Form.Label className="small mb-1">Job Title</Form.Label>
+                  <Form.Control 
+                    size="sm"
+                    name="userJobTitle" 
+                    value={form.userJobTitle} 
+                    onChange={handleChange} 
+                    placeholder="Your job title"
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <Form.Label className="small mb-1">Phone Number</Form.Label>
+                  <Form.Control 
+                    size="sm"
+                    name="userPhoneNumber" 
+                    value={form.userPhoneNumber} 
+                    onChange={handleChange} 
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+
+                <div className="mb-3">
+                  <Form.Label className="small mb-1">Password *</Form.Label>
+                  <Form.Control 
+                    size="sm"
+                    type="password" 
+                    name="password" 
+                    value={form.password} 
+                    onChange={handleChange} 
+                    required 
+                    placeholder="Create a strong password"
+                  />
+                </div>
+
+                {TURNSTILE_SITE_KEY && (
+                  <div className="mb-3">
+                    <Form.Label className="small mb-2">Verification *</Form.Label>
+                    <div id="register-turnstile" style={{ display: 'flex', justifyContent: 'center' }} />
+                  </div>
+                )}
 
                 {CAPTCHA_DEBUG && (
                   <div className="mb-2 small alert alert-info p-2">
@@ -268,26 +239,21 @@ const Register = () => {
                   </div>
                 )}
 
-                <div className="d-grid mt-2">
-                  <Button type="submit" variant="primary" size="lg" disabled={loading}>
+                <div className="d-grid mt-3 mb-2">
+                  <Button type="submit" variant="primary" size="sm" disabled={loading}>
                     {loading ? t('register.labels.submit') + '...' : t('register.labels.submit')}
                   </Button>
                 </div>
 
-                <div className="text-center mt-3">
-                  <small className="text-muted">
-                    {t('register.helper.haveAccount')} <Link to="/login">{t('register.helper.signIn')}</Link>
-                  </small>
-                </div>
                 <div className="text-center mt-2">
                   <small className="text-muted">
-                    {t('register.helper.requiredNote')}
+                    {t('register.helper.haveAccount')} <Link to="/login" className="text-decoration-none">{t('register.helper.signIn')}</Link>
                   </small>
                 </div>
               </Form>
             </Card.Body>
           </Card>
-          <div className="text-center mt-3">
+          <div className="text-center mt-2">
             <small className="text-muted">
               © OpenSource-OpenNetworking.org 2025.10, All Rights Reserved
             </small>

@@ -59,7 +59,7 @@ const AddOrganization = () => {
         description: formData.description.trim(),
         group: formData.group.trim(),
         encryptionMethod: formData.encryptionMethod,
-        vxlanPort: parseInt(formData.vxlanPort) || 4789,
+        vxlanPort: (parseInt(formData.vxlanPort) || 4789).toString(),
         tunnelRange: tunnelRangeIP
       };
 

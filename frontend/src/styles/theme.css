@@ -4,10 +4,10 @@
 
 :root {
   /* Primary Colors - Blue Theme */
-  --primary-color: #3498db;
-  --primary-hover: #2980b9;
-  --primary-active: #1e6fa8;
-  --primary-light: #5dade2;
+  --primary-color: #5dade2;
+  --primary-hover: #3498db;
+  --primary-active: #2980b9;
+  --primary-light: #aed6f1;
   --primary-lighter: #ebf5fb;
   
   /* Secondary Colors */

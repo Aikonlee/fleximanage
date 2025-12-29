@@ -133,16 +133,18 @@ class ExpressServer {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", 'https://challenges.cloudflare.com'],
-          styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
-          imgSrc: ["'self'", 'data:'],
-          connectSrc: ["'self'", 'https://manage.miwide.com:3443'],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net'],
+          styleSrc: ["'self'", 'https:', "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'", 'https://manage.miwide.com:3443', 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
           formAction: ["'self'"],
           frameAncestors: ["'self'"],
-          fontSrc: ["'self'", 'https:', 'data:']
+          fontSrc: ["'self'", 'https:', 'data:', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+          mediaSrc: ["'self'"],
+          workerSrc: ["'self'", 'blob:']
         }
       }
     }));

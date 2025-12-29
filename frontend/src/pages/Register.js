@@ -38,6 +38,10 @@ const Register = () => {
     (typeof window !== 'undefined' && (window.__CAPTCHA_DEBUG__ === true || localStorage.getItem('captchaDebug') === '1'))
   );
 
+  // Log CAPTCHA debug mode status
+  // eslint-disable-next-line no-console
+  console.log('[captcha][register] Debug mode:', CAPTCHA_DEBUG);
+
   // Fetch runtime config
   useEffect(() => {
     api.get('/public/config')
@@ -63,16 +67,27 @@ const Register = () => {
       try {
         const widgetId = window.turnstile.render('#register-turnstile', {
           sitekey: TURNSTILE_SITE_KEY,
-          callback: (token) => { setCaptchaToken(token); CAPTCHA_DEBUG && console.log('[captcha][register] token received', token ? token.substring(0, 8) + '...' : '(empty)'); },
-          'error-callback': () => setCaptchaToken(''),
-          'timeout-callback': () => setCaptchaToken('')
+          callback: (token) => { 
+            setCaptchaToken(token); 
+            CAPTCHA_DEBUG && console.log('[captcha][register] token received', token ? token.substring(0, 8) + '...' : '(empty)'); 
+          },
+          'error-callback': (error) => {
+            setCaptchaToken('');
+            // eslint-disable-next-line no-console
+            console.error('[captcha][register] Turnstile error callback:', error);
+          },
+          'timeout-callback': () => {
+            setCaptchaToken('');
+            // eslint-disable-next-line no-console
+            console.warn('[captcha][register] Turnstile timeout');
+          }
         });
         captchaRenderedRef.current = true;
         CAPTCHA_DEBUG && console.log('[captcha][register] widget rendered id=', widgetId);
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.warn('Turnstile render failed (register)', e);
-        CAPTCHA_DEBUG && console.warn('[captcha][register] render exception', e);
+        console.error('Turnstile render failed (register):', e);
+        CAPTCHA_DEBUG && console.error('[captcha][register] render exception', e);
       }
     };
     if (!window.turnstile) {

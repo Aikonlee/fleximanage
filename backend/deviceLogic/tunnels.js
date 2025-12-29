@@ -1600,12 +1600,15 @@ const applyTunnelDel = async (devices, user, data) => {
     const { fulfilled, reasons } = promiseStatus.reduce(({ fulfilled, reasons }, elem) => {
       if (elem.status === 'fulfilled') {
         const job = elem.value;
-        if (job.length) {
-          fulfilled.push(job);
+        if (job && Array.isArray(job) && job.length > 0) {
+          fulfilled.push(...job);
         }
       } else {
-        if (!reasons.includes(elem.reason.message)) {
-          reasons.push(elem.reason.message);
+        const errorMsg = elem.reason && typeof elem.reason === 'object' 
+          ? elem.reason.message 
+          : String(elem.reason);
+        if (!reasons.includes(errorMsg)) {
+          reasons.push(errorMsg);
         }
       };
       return { fulfilled, reasons };
@@ -1613,13 +1616,10 @@ const applyTunnelDel = async (devices, user, data) => {
     const status = fulfilled.length < tunnelsArray.length
       ? 'partially completed' : 'completed';
 
-    const desired = delPromises.flat().map(job => job.id);
-    const ids = fulfilled.flat().map(job => job.id);
+    const ids = fulfilled.map(job => job && job.id ? job.id : null).filter(id => id);
     let message = 'tunnel deletion jobs added.';
-    if (desired.length === 0 || fulfilled.flat().length === 0) {
+    if (ids.length === 0) {
       message = 'No ' + message;
-    } else if (ids.length < desired.length) {
-      message = `${ids.length} of ${desired.length} ${message}`;
     } else {
       message = `${ids.length} ${message}`;
     }
@@ -1627,8 +1627,9 @@ const applyTunnelDel = async (devices, user, data) => {
       message = `${message} ${Array.from(reasons).join(' ')}`;
     }
 
-    const deletedTunnelNumbers = fulfilled.flat().map(
-      job => job.data.message.tasks[0].params['tunnel-id'].toString());
+    const deletedTunnelNumbers = fulfilled
+      .filter(job => job && job.data && job.data.message && job.data.message.tasks && job.data.message.tasks[0])
+      .map(job => job.data.message.tasks[0].params['tunnel-id'].toString());
 
     // resolve tunnel notifications
     await notificationsMgr.resolveNotificationsOfDeletedTunnels(

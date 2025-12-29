@@ -99,6 +99,21 @@ const Register = () => {
     setLoading(true);
     try {
       const body = { ...form };
+      
+      // Add default values for fields removed from simplified UI but required by backend
+      if (!body.country) {
+        body.country = 'US'; // Default country
+      }
+      if (!body.companySize) {
+        body.companySize = '1-10'; // Default company size
+      }
+      if (!body.serviceType) {
+        body.serviceType = 'general'; // Default service type
+      }
+      if (!body.numberSites) {
+        body.numberSites = '1'; // Default number of sites
+      }
+      
       if (TURNSTILE_SITE_KEY) {
         if (!captchaToken) {
           setError(t('register.validation.captcha'));

@@ -163,7 +163,11 @@ const Register = () => {
       // eslint-disable-next-line no-console
       console.error('Response status:', err?.response?.status);
       // eslint-disable-next-line no-console
-      console.error('Response data:', err?.response?.data);
+      console.error('Response data:', JSON.stringify(err?.response?.data));
+      // eslint-disable-next-line no-console
+      console.error('Response data.error:', err?.response?.data?.error);
+      // eslint-disable-next-line no-console
+      console.error('Response data.message:', err?.response?.data?.message);
       // eslint-disable-next-line no-console
       console.error('Request config:', err?.config?.url);
       
@@ -171,7 +175,7 @@ const Register = () => {
       const displayError = apiErr || err?.message || 'Registration failed. Please try again.';
       setError(displayError); // TODO i18n
       // eslint-disable-next-line no-console
-      console.error('Setting error to:', displayError);
+      console.error('Final error to display:', displayError);
     } finally {
       setLoading(false);
     }

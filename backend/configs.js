@@ -27,7 +27,7 @@ const configEnv = {
   // This is the default configuration, override by the following sections
   default: {
     // URL of the rest server (must match agentBroker format with https:// prefix for production)
-    restServerUrl: ['https://manage.miwide.com:3443'],
+    restServerUrl: ['https://manage.miwide.com:3443', 'https://localhost:3443', 'https://localhost:3000'],
     // URL of the agent broker server
     agentBroker: ['manage.miwide.com:3443'],
     // URL of the UI server
@@ -290,7 +290,7 @@ const configEnv = {
   },
   // Override for production environment
   production: {
-    restServerUrl: ['https://manage.miwide.com:3443'],
+    restServerUrl: ['https://manage.miwide.com:3443', 'https://localhost:3443', 'https://localhost:3000'],
     uiServerUrl: ['https://manage.miwide.com:3443'],
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,

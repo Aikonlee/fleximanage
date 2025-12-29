@@ -244,7 +244,8 @@ class TokensService {
     if (server) {
       // Remove protocol prefix for comparison if present
       const normalizedServer = server.replace(/^https?:\/\//, '');
-      if (!allowedServers.includes(normalizedServer)) {
+      const normalizedAllowedServers = allowedServers.map(s => s.replace(/^https?:\/\//, ''));
+      if (!normalizedAllowedServers.includes(normalizedServer)) {
         return {
           valid: false,
           message: 'Token error: Server is not allowed'

@@ -1635,7 +1635,7 @@ const applyTunnelDel = async (devices, user, data) => {
     await notificationsMgr.resolveNotificationsOfDeletedTunnels(
       deletedTunnelNumbers, data.org, true);
 
-    return { ids: fulfilled.flat().map(job => job.id), status, message };
+    return { ids: fulfilled.filter(job => job && job.id).map(job => job.id), status, message };
   } else {
     logger.error('Delete tunnels failed. No tunnels\' ids provided or no devices found',
       { params: { tunnelIds, devices } });

@@ -306,7 +306,8 @@ const configEnv = {
     logLevel: 'info',
     logUserName: true,
     corsWhiteList: ['https://manage.miwide.com:3443', 'http://manage.miwide.com:3000'],
-    vpnBaseUrl: ['https://vpn.flexiwan.com']
+    vpnBaseUrl: ['https://vpn.flexiwan.com'],
+    mailerBypassCert: true
   },
   hosted: {
     // modify next params for hosted server

@@ -27,13 +27,13 @@ const configEnv = {
   // This is the default configuration, override by the following sections
   default: {
     // URL of the rest server (must match agentBroker format without https:// prefix)
-    restServerUrl: ['manage.miwide.com:3443'],
+    restServerUrl: (process.env.REST_SERVER_URL || 'manage.miwide.com:3443').split(','),
     // URL of the agent broker server
-    agentBroker: ['manage.miwide.com:3443'],
+    agentBroker: (process.env.AGENT_BROKER_URL || 'manage.miwide.com:3443').split(','),
     // URL of the UI server
-    uiServerUrl: ['http://manage.miwide.com:3000'],
+    uiServerUrl: (process.env.UI_SERVER_URL || 'http://manage.miwide.com:3000').split(','),
     // Key used for users tokens, override default with environment variable USER_SECRET_KEY
-    userTokenSecretKey: 'abcdefg1234567',
+    userTokenSecretKey: process.env.USER_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION',
     // Whether to validate open API response. True for testing and dev, False for production,
     // to remove unneeded fields from the response, use validateOpenAPIResponse = { removeAdditional: 'failing' }
     validateOpenAPIResponse: true,
@@ -61,20 +61,20 @@ const configEnv = {
     // The time to retain jobs until deleted from the database, in msec
     jobRetainTimeout: 604800000,
     // Key used for device tokens, override default with environment variable DEVICE_SECRET_KEY
-    deviceTokenSecretKey: 'abcdefg1234567',
+    deviceTokenSecretKey: process.env.DEVICE_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION',
     // Key used to validate google captcha token, generated at https://www.google.com/u/1/recaptcha/admin/create
     // Default value is not set, which only validate the client side captcha
     captchaKey: '',
     // Mongo main database
-    mongoUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwan?replicaSet=rs`,
+    mongoUrl: process.env.MONGO_URL || `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwan?replicaSet=rs`,
     // Mongo analytics database
-    mongoAnalyticsUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwanAnalytics?replicaSet=rs`,
+    mongoAnalyticsUrl: process.env.MONGO_ANALYTICS_URL || `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwanAnalytics?replicaSet=rs`,
     // Mongo Billing database
-    mongoBillingUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexibilling?replicaSet=rs`,
+    mongoBillingUrl: process.env.MONGO_BILLING_URL || `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexibilling?replicaSet=rs`,
     // Mongo VPN database
-    mongoVpnUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexivpn?replicaSet=rs`,
+    mongoVpnUrl: process.env.MONGO_VPN_URL || `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexivpn?replicaSet=rs`,
     // Billing Redirect OK page url
-    billingRedirectOkUrl: 'https://manage.miwide.com/ok.html',
+    billingRedirectOkUrl: process.env.BILLING_REDIRECT_OK_URL || 'https://manage.miwide.com/ok.html',
     // Biling config site - this is used as the billing site name in ChargeBee
     billingConfigSite: 'flexiwan-test',
     // ChargeBee default plan for a new customer
@@ -90,7 +90,7 @@ const configEnv = {
     autoCollectionCharges: 'off', // "on" or "off"
     // Redis host and port, override default with environment variable REDIS_URL
     // If 'requirepass' enabled in redis configuration use 'redis://authpass@host:port'
-    redisUrl: 'redis://localhost:6379',
+    redisUrl: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
     // Redis connectivity options
     redisTotalRetryTime: 1000 * 60 * 60,
     redisTotalAttempts: 10,
@@ -112,56 +112,49 @@ const configEnv = {
     connectExpireTime: 300,
     // HTTP port of the node server. On production we usually forward port 80 to this port using:
     // sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-port 3000
-    httpPort: 3000,
-    // HTTPS port of the node server. On production weWe usually forward port 443 to this port using:
+    httpPort: parseInt(process.env.HTTP_PORT || '3000', 10),
+    // HTTPS port of the node server. On production we usually forward port 443 to this port using:
     // sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 443 -j REDIRECT --to-port 3443
-    httpsPort: 3443,
+    httpsPort: parseInt(process.env.HTTPS_PORT || '3443', 10),
     // This port is used when redirecting the client
     // In production it can be set
-    redirectHttpsPort: 3443,
+    redirectHttpsPort: parseInt(process.env.REDIRECT_HTTPS_PORT || '3443', 10),
     // Should we redirect to https, should be set to false if running behind a secure proxy such as CloudFlare
     shouldRedirectHttps: true,
     // Certificate key location, under bin directory
     // On production if the key located in the Let's encrypt directory, it's possible to link to it using:
     // sudo ln -s /etc/letsencrypt/live/app.flexiwan.com/privkey.pem ~/FlexiWanSite/bin/cert.app.flexiwan.com/domain.key
-    httpsCertKey: '/cert.manage.miwide.com/domain.key',
+    httpsCertKey: process.env.HTTPS_CERT_KEY || '/cert.manage.miwide.com/domain.key',
     // Certificate location, under bin directory
     // On production if the key located in the Let's encrypt directory, it's possible to link to it using:
     // sudo ln -s /etc/letsencrypt/live/app.flexiwan.com/fullchain.pem ~/FlexiWanSite/bin/cert.app.flexiwan.com/certificate.pem
-    httpsCert: '/cert.manage.miwide.com/certificate.pem',
+    httpsCert: process.env.HTTPS_CERT || '/cert.manage.miwide.com/certificate.pem',
     // Default agent broker the device tries to create connection for
     // The broker is sent to the device when it registers.
     // It's possible to use multiple brokers in case of multiple domains, in that case
     // the system will use the last broker that matches the domain used in the token or the first broker if not found
     agentBroker: ['manage.miwide.com:3443'],
     // Whitelist of allowed domains for CORS checks
-    corsWhiteList: [
-      'http://manage.miwide.com:3000',
-      'https://manage.miwide.com:3443',
-      'http://localhost:3000',
-      'https://localhost:3443',
-      'http://0.0.0.0:3000',
-      'https://0.0.0.0:3443'
-    ],
+    corsWhiteList: (process.env.CORS_WHITELIST || 'http://manage.miwide.com:3000,https://manage.miwide.com:3443,http://localhost:3000,https://localhost:3443,http://0.0.0.0:3000,https://0.0.0.0:3443').split(',').map(url => url.trim()),
     // Client static root directory
     clientStaticDir: '../frontend/build',
     // Mgmt-Agent protocol version
     agentApiVersion: '6.0.0',
     // Mgmt log files
-    logFilePath: './logs/app.log',
-    reqLogFilePath: './logs/req.log',
+    logFilePath: process.env.LOG_FILE_PATH || './logs/app.log',
+    reqLogFilePath: process.env.REQ_LOG_FILE_PATH || './logs/req.log',
     // Logging default level
-    logLevel: 'verbose',
+    logLevel: process.env.LOG_LEVEL || 'verbose',
     // Hostname of SMTP server - for sending mails
-    mailerHost: '127.0.0.1',
+    mailerHost: process.env.MAILER_HOST || '127.0.0.1',
     // Port of SMTP server
-    mailerPort: 25,
+    mailerPort: parseInt(process.env.MAILER_PORT || '25', 10),
     // Bypass mailer certificate validation
-    mailerBypassCert: false,
+    mailerBypassCert: process.env.MAILER_BYPASS_CERT === 'true',
     // From address used when sending emails
-    mailerFromAddress: 'noreply@flexiwan.com',
+    mailerFromAddress: process.env.MAILER_FROM_ADDRESS || 'noreply@flexiwan.com',
     // Mail envelop from address
-    mailerEnvelopeFromAddress: 'flexiWAN <noreply@flexiwan.com>',
+    mailerEnvelopeFromAddress: process.env.MAILER_ENVELOPE_FROM_ADDRESS || 'flexiWAN <noreply@flexiwan.com>',
     // Allow users registration, otherwise by invitation only
     allowUsersRegistration: true,
     // Software version query link
@@ -170,13 +163,13 @@ const configEnv = {
     // eslint-disable-next-line no-template-curly-in-string
     SwVersionUpdateUrl: 'https://sandbox.flexiwan.com/Templates/notification_email_${version}.json',
     // Web hooks add user URL, used to send for new uses, '' to bypass hook
-    webHookAddUserUrl: '',
+    webHookAddUserUrl: process.env.WEB_HOOK_ADD_USER_URL || '',
     // Web hooks add user secret, send in addition to the message for filtering
-    webHookAddUserSecret: 'ABC',
+    webHookAddUserSecret: process.env.WEB_HOOK_ADD_USER_SECRET || '',
     // Web hooks register device URL, used to send for new registered devices, '' to bypass hook
-    webHookRegisterDeviceUrl: '',
+    webHookRegisterDeviceUrl: process.env.WEB_HOOK_REGISTER_DEVICE_URL || '',
     // Web hooks register device secret, send in addition to the message for filtering
-    webHookRegisterDeviceSecret: 'ABC',
+    webHookRegisterDeviceSecret: process.env.WEB_HOOK_REGISTER_DEVICE_SECRET || '',
     // Global app identification rules file location
     appRulesUrl: 'https://sandbox.flexiwan.com/Protocols/app-rules.json',
     // Global applications file locations
@@ -219,18 +212,18 @@ const configEnv = {
     // TCP clamping header size, this value will be reduced from the MTU when calculating the mss clamping size
     tcpClampingHeaderSize: 40,
     // flexiVpn server portal url
-    flexiVpnServer: ['https://localvpn.miwide.com:4443'], // can be string or list
+    flexiVpnServer: (process.env.FLEXIVPN_SERVER_URL || 'https://localvpn.miwide.com:4443').split(',').map(url => url.trim()),
     // After successful vpn client authentication, the OpenVPN server will generate tmp token valid for the below number of seconds.
     // On the following renegotiations, the OpenVPN client will pass this token instead of the users password
     vpnTmpTokenTime: 43200,
     // Ticketing system username
-    ticketingSystemUsername: '',
+    ticketingSystemUsername: process.env.TICKETING_SYSTEM_USERNAME || '',
     // Ticketing system token
-    ticketingSystemToken: '',
+    ticketingSystemToken: process.env.TICKETING_SYSTEM_TOKEN || '',
     // Ticketing system url
-    ticketingSystemUrl: '',
+    ticketingSystemUrl: process.env.TICKETING_SYSTEM_URL || '',
     // Ticketing system account ID to view
-    ticketingSystemAccountId: '',
+    ticketingSystemAccountId: process.env.TICKETING_SYSTEM_ACCOUNT_ID || '',
     // IP mask for tunnel Range
     tunnelRangeMask: '16',
     // Email alerts rate limit in minutes

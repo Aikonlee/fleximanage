@@ -2,9 +2,15 @@ import axios from 'axios';
 
 // Smartly infer API base URL. Prevent Mixed Content errors when page is HTTPS but code still targets http://localhost:3000
 function inferBaseURL () {
-  // Use HTTPS and correct port
-  console.log('[api] Using HTTPS API URL');
-  return 'https://manage.miwide.com:3443/api';
+  // First, try to use the server-injected config
+  if (typeof window !== 'undefined' && window.__FLEXIWAN_SERVER_CONFIG__?.baseUrl) {
+    console.log('[api] Using server-injected API URL');
+    return window.__FLEXIWAN_SERVER_CONFIG__.baseUrl;
+  }
+  
+  // Fallback to HTTPS and correct port
+  console.log('[api] Using HTTPS API URL (fallback)');
+  return 'https://localhost:3443/api';
 }
 
 const api = axios.create({

@@ -273,19 +273,6 @@ class ExpressServer {
     this.app.use('/api/admin', adminRouter);
     this.app.use('/api/tickets', ticketsRouter);
     this.app.use('/api/tunnels', require('./routes/tunnels'));
-    this.app.use('/api/devices', require('./routes/devices'));
-    this.app.use('/api/devicestats', require('./routes/deviceStats'));
-    this.app.use('/api/jobs', require('./routes/deviceQueue'));
-    this.app.use('/api/tokens', require('./routes/tokens'));
-    this.app.use('/api/members', require('./routes/members'));
-    this.app.use('/api/accounts', require('./routes/accounts'));
-    this.app.use('/api/accesstokens', require('./routes/accesstokens'));
-    this.app.use('/api/notifications', require('./routes/notifications'));
-    this.app.use('/api/invoices', require('./routes/invoices'));
-    this.app.use('/api/coupons', require('./routes/coupons'));
-    this.app.use('/api/billingdetails', require('./routes/billingdetails'));
-    this.app.use('/api/resources', require('./routes/resources'));
-    this.app.use('/api/download', require('./routes/download'));
 
     // reserved for future use
     // this.app.get('/login-redirect', (req, res) => {

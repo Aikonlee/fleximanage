@@ -4,6 +4,7 @@
 
 .page-header {
   margin-bottom: 30px;
+  border-bottom: none;
 }
 
 .page-header h2 {
@@ -16,6 +17,7 @@
   margin-bottom: 0;
   border-collapse: separate;
   border-spacing: 0;
+  margin-top: -1rem;
 }
 
 .network-status-table th {
@@ -206,8 +208,8 @@
 }
 
 .card-header {
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
+  background-color: transparent;
+  border-bottom: none;
   border-radius: 8px 8px 0 0 !important;
 }
 

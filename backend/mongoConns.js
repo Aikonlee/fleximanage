@@ -25,39 +25,36 @@ class MongoConns {
     this.getAnalyticsDB = this.getAnalyticsDB.bind(this);
 
     this.mainDB = mongoose.createConnection(configs.get('mongoUrl'), {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      useCreateIndex: true,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000
     });
-    this.mainDB.then((db) => {
+
+    this.mainDB.on('connected', () => {
       logger.info('Connected to MongoDB mainDB');
-    }, (err) => { logger.error('Failed to connect to mainDB', { params: { err: err.message } }); });
+    });
+    this.mainDB.on('error', (err) => {
+      logger.error('Failed to connect to mainDB', { params: { err: err.message } });
+    });
 
     this.analyticsDB = mongoose.createConnection(configs.get('mongoAnalyticsUrl'), {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      useCreateIndex: true,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000
     });
-    this.analyticsDB.then((db) => {
+    this.analyticsDB.on('connected', () => {
       logger.info('Connected to MongoDB analyticsDB');
-    }, (err) => {
+    });
+    this.analyticsDB.on('error', (err) => {
       logger.error('Failed to connect to analyticsDB', { params: { err: err.message } });
     });
 
     this.vpnDB = mongoose.createConnection(configs.get('mongoVpnUrl'), {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      useCreateIndex: true,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000
     });
-    this.vpnDB.then((db) => {
+    this.vpnDB.on('connected', () => {
       logger.info('Connected to MongoDB vpnDB');
-    }, (err) => {
+    });
+    this.vpnDB.on('error', (err) => {
       logger.error('Failed to connect to vpnDB', { params: { err: err.message } });
     });
   }
@@ -80,20 +77,13 @@ class MongoConns {
    *                                  be provided to the caller to close the session
    */
   async mainDBwithTransaction (func, closeSession = true, times = 3) {
-    let execNum = 0;
     let session;
     try {
       session = await this.mainDB.startSession();
       await session.withTransaction(async () => {
-        // By default, "withTransaction" tries the function infinitely if the error is mongo error.
-        // It tries the function until it succeeds.
-        // Hance we have a protection to prevent infinite loop.
-        // If more than 'times' transient errors (writeConflict), exit with non-mongo error
-        execNum += 1;
-        if (execNum > times) {
-          throw new Error(`Error writing to database, too many attempts (${times})`);
-        }
-
+        // The "withTransaction" method has built-in retry logic for transient errors
+        // It automatically retries on WriteConflict and other retryable errors
+        // No need for manual execNum counter as it may interfere with the retry logic
         try {
           await func(session);
         } catch (err) {
@@ -101,7 +91,7 @@ class MongoConns {
           // As written above, the "withTransaction" will try the function again.
           logger.error('Transaction failed', { params: { err: err.message } });
           // throw the same error we get.
-          // If it is a mongo error, the "withTransaction" will try again up to "times".
+          // If it is a mongo error, the "withTransaction" will try again.
           // If it is not a mongo error, the "withTransaction" will abort the session and exit.
           throw err;
         }

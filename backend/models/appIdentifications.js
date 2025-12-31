@@ -397,7 +397,7 @@ const getExistingServiceClasses = async (orgList) => {
     }
   ]);
   const customRes = await appIdentifications.aggregate([
-    { $match: { 'meta.org': { $in: orgList.map(o => mongoose.Types.ObjectId(o)) } } },
+    { $match: { 'meta.org': { $in: orgList.map(o => new mongoose.Types.ObjectId(o)) } } },
     { $project: { 'appIdentifications.serviceClass': 1 } },
     { $unwind: '$appIdentifications' },
     {

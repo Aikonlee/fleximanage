@@ -51,7 +51,7 @@ class NotificationsService {
     const queryFilters = deviceFilters ? [...deviceFilters] : [];
     const devicesArray = await devices.find({
       $and: [...queryFilters, {
-        org: { $in: orgList.map(o => mongoose.Types.ObjectId(o)) }
+        org: { $in: orgList.map(o => new mongoose.Types.ObjectId(o)) }
       }]
     }, { name: 1, interfaces: 1 });
 
@@ -85,7 +85,7 @@ class NotificationsService {
 
     try {
       orgList = await getAccessTokenOrgList(user, org, false);
-      const query = { org: { $in: orgList.map(o => mongoose.Types.ObjectId(o)) } };
+      const query = { org: { $in: orgList.map(o => new mongoose.Types.ObjectId(o)) } };
 
       if (status) {
         query.status = status;
@@ -322,7 +322,7 @@ class NotificationsService {
   static async notificationsDELETE ({ org, ...notificationsDeleteRequest }, { user }) {
     try {
       const orgList = await getAccessTokenOrgList(user, org, true);
-      const query = { org: { $in: orgList.map(o => mongoose.Types.ObjectId(o)) } };
+      const query = { org: { $in: orgList.map(o => new mongoose.Types.ObjectId(o)) } };
       const { filters } = notificationsDeleteRequest;
       if (filters) {
         const matchFilters = getMatchFilters(filters);
@@ -845,10 +845,10 @@ class NotificationsService {
           ['signedToCritical', 'signedToWarning', 'signedToDaily'].forEach(field => {
             if (userEmailSigning[field] === false) {
               if (!orgUpdates[org].$pull[field]) orgUpdates[org].$pull[field] = [];
-              orgUpdates[org].$pull[field].push(mongoose.Types.ObjectId(userEmailSigning._id));
+              orgUpdates[org].$pull[field].push(new mongoose.Types.ObjectId(userEmailSigning._id));
             } else if (userEmailSigning[field]) {
               if (!orgUpdates[org].$addToSet[field]) orgUpdates[org].$addToSet[field] = [];
-              orgUpdates[org].$addToSet[field].push(mongoose.Types.ObjectId(userEmailSigning._id));
+              orgUpdates[org].$addToSet[field].push(new mongoose.Types.ObjectId(userEmailSigning._id));
             }
           });
         }

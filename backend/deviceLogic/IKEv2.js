@@ -232,7 +232,7 @@ const complete = async (jobId, res) => {
         { upsert: false }
       );
       // update public certificate on the devices having IKEv2 tunnel with this one
-      const localDevID = mongoose.Types.ObjectId(res.deviceId);
+      const localDevID = new mongoose.Types.ObjectId(res.deviceId);
       const remoteDevices = await tunnelsModel
         .aggregate([
           {

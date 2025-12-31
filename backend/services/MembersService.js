@@ -180,7 +180,7 @@ class MembersService {
         case 'organization': {
           // make sure that the organization exists and belongs to the account of the asking user
           const org = await Organizations.findOne({
-            _id: mongoose.Types.ObjectId(permissionEntity),
+            _id: new mongoose.Types.ObjectId(permissionEntity),
             account: askingUserAccountId
           });
           if (!org) return null;
@@ -665,7 +665,7 @@ class MembersService {
       const populatedMember = await registeredMember[0]
         .populate('account')
         .populate('organization')
-        .execPopulate();
+        ;
       populatedMember.user = existingUser || registerUser;
 
       // Send email

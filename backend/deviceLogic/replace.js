@@ -43,10 +43,11 @@ const apply = async (opDevices, user, data) => {
   if (!newDevice) {
     throw new Error('Wrong new device id specified');
   }
-  const oldAgentVersion = getMajorVersion(oldDevice.versions.agent);
-  const newAgentVersion = getMajorVersion(newDevice.versions.agent);
-  if (oldAgentVersion > newAgentVersion) {
-    throw new Error('Not supported version of the new device, please upgrade it first');
+  const oldAgentVersion = getMajorVersion(oldDevice.versions?.agent);
+  const newAgentVersion = getMajorVersion(newDevice.versions?.agent);
+
+  if (newAgentVersion < 4) {
+    throw new Error('New device must be at least version 4.0.0');
   }
   // check if hardware equal (compare interfaces devId and deviceType)
   const oldInterfaces = oldDevice.interfaces.map(i => `${i.devId}${i.deviceType}`).sort();

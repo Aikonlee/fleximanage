@@ -438,10 +438,13 @@ class OrganizationsService {
   static async organizationsSummaryGET ({ org }, { user }) {
     try {
       const orgList = await getAccessTokenOrgList(user, org, true);
+      if (!orgList || orgList.length === 0) {
+        return Service.rejectResponse('Organization not found or access denied', 404);
+      }
 
       const devicesPipeline = [
         // org match
-        { $match: { org: mongoose.Types.ObjectId(orgList[0]) } },
+        { $match: { org: new mongoose.Types.ObjectId(orgList[0]) } },
         {
           $group: {
             _id: null,
@@ -514,7 +517,7 @@ class OrganizationsService {
 
       const tunnelsPipeline = [
         // org match and active
-        { $match: { org: mongoose.Types.ObjectId(orgList[0]), isActive: true } },
+        { $match: { org: new mongoose.Types.ObjectId(orgList[0]), isActive: true } },
         // Populate device A and B
         {
           $lookup: {
@@ -989,7 +992,7 @@ const handleVxlanPortTunnelRangeChange = async (
   const desynchronizedDevices = new Set();
 
   try {
-    const pipeline = getTunnelsPipeline(mongoose.Types.ObjectId(orgId), origVxlanPort);
+    const pipeline = getTunnelsPipeline(new mongoose.Types.ObjectId(orgId), origVxlanPort);
     const tunnels = await Tunnels.aggregate(pipeline).allowDiskUse(true);
     // The expected output is array with one object with two keys:
     //  [{ _id: null, toPending: [], toReconstruct: [] }]

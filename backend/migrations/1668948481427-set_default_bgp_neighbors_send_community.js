@@ -39,7 +39,7 @@ async function up () {
     for (const device of devicesList) {
       const routingFilters = device.routingFilters.map(r => {
         const ret = {
-          _id: mongoose.Types.ObjectId(r._id),
+          _id: new mongoose.Types.ObjectId(r._id),
           name: r.name,
           description: r.description,
           rules: []
@@ -70,7 +70,7 @@ async function up () {
           }
 
           ret.rules.push({
-            _id: mongoose.Types.ObjectId(rule._id),
+            _id: new mongoose.Types.ObjectId(rule._id),
             route: rule.network,
             action: r.defaultAction === 'allow' ? 'deny' : 'allow',
             nextHop: '',
@@ -80,7 +80,7 @@ async function up () {
 
         if (!hasDefault) {
           ret.rules.push({
-            _id: mongoose.Types.ObjectId(),
+            _id: new mongoose.Types.ObjectId(),
             route: '0.0.0.0/0',
             action: r.defaultAction,
             nextHop: '',
@@ -136,7 +136,7 @@ async function down () {
     for (const device of devicesList) {
       const routingFilters = device.routingFilters.map(r => {
         const ret = {
-          _id: mongoose.Types.ObjectId(r._id),
+          _id: new mongoose.Types.ObjectId(r._id),
           name: r.name,
           description: r.description,
           defaultAction: 'allow', // put allow as default, it will be override later if needed
@@ -164,7 +164,7 @@ async function down () {
           }
 
           ret.rules.push({
-            _id: mongoose.Types.ObjectId(rule._id),
+            _id: new mongoose.Types.ObjectId(rule._id),
             network: rule.route
           });
         }

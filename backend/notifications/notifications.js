@@ -219,7 +219,7 @@ class NotificationsManager {
   async getOrgWithAccount (orgId) {
     const orgDetails = await organizations.aggregate([
       {
-        $match: { _id: mongoose.Types.ObjectId(orgId) }
+        $match: { _id: new mongoose.Types.ObjectId(orgId) }
       },
       {
         $lookup: {
@@ -330,7 +330,7 @@ class NotificationsManager {
     eventType, targets, resolved, severity, org, includeResolved = true) {
     const query = {
       eventType,
-      org: mongoose.Types.ObjectId(org),
+      org: new mongoose.Types.ObjectId(org),
       severity
     };
 
@@ -744,7 +744,7 @@ class NotificationsManager {
       // to add the proper account ID to each of the notifications.
       // Create an array of org ID and account ID pairs
       const orgIDs = Array.from(orgsMap.keys()).map(key => {
-        return mongoose.Types.ObjectId(key);
+        return new mongoose.Types.ObjectId(key);
       });
       const orgsWithAccounts = await organizations.aggregate([
         { $match: { _id: { $in: orgIDs } } },

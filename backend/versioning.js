@@ -22,6 +22,7 @@ const mgmtVersion = configs.get('agentApiVersion');
  * @param {String} versionString
  */
 const getMajorVersion = (versionString) => {
+  if (typeof versionString !== 'string') return 0;
   return parseInt(versionString.split('.')[0], 10);
 };
 
@@ -30,6 +31,7 @@ const getMajorVersion = (versionString) => {
  * @param {String} versionString
  */
 const getMinorVersion = (versionString) => {
+  if (typeof versionString !== 'string') return 0;
   return parseInt(versionString.split('.')[1], 10);
 };
 

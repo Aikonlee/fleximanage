@@ -136,7 +136,7 @@ class ExpressServer {
           scriptSrc: ["'self'", "'unsafe-inline'", 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net'],
           styleSrc: ["'self'", 'https:', "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
           imgSrc: ["'self'", 'data:', 'https:'],
-          connectSrc: ["'self'", 'https://manage.miwide.com:3443', 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+          connectSrc: ["'self'", 'https://manage.miwide.com:3443', 'https://localhost:3443', 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],

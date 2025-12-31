@@ -136,21 +136,21 @@ const complete = async (jobId, res) => {
   try {
     if (res.message === 'remove-dhcp-config') {
       await devices.findOneAndUpdate(
-        { _id: mongoose.Types.ObjectId(res.deviceId) },
+        { _id: new mongoose.Types.ObjectId(res.deviceId) },
         {
           $pull: {
             dhcp: {
-              _id: mongoose.Types.ObjectId(res.dhcpId)
+              _id: new mongoose.Types.ObjectId(res.dhcpId)
             }
           }
         }
       );
     } else {
       await devices.findOneAndUpdate(
-        { _id: mongoose.Types.ObjectId(res.deviceId) },
+        { _id: new mongoose.Types.ObjectId(res.deviceId) },
         { $set: { 'dhcp.$[elem].status': 'complete' } },
         {
-          arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(res.dhcpId) }]
+          arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(res.dhcpId) }]
         }
       );
     }
@@ -170,7 +170,7 @@ const rollbackDhcpChanges = async (deviceId, origDhcp) => {
   const result = await devices.update(
     { _id: deviceId },
     { $set: { 'dhcp.$[elem]': origDhcp } },
-    { arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(origDhcp._id) }] }
+    { arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(origDhcp._id) }] }
   );
 
   // console.log(JSON.stringify(result));
@@ -192,29 +192,29 @@ const error = async (jobId, res) => {
     switch (res.message) {
       case 'add-dhcp-config':
         await devices.findOneAndUpdate(
-          { _id: mongoose.Types.ObjectId(res.deviceId) },
+          { _id: new mongoose.Types.ObjectId(res.deviceId) },
           { $set: { 'dhcp.$[elem].status': 'add-failed' } },
           {
-            arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(res.dhcpId) }]
+            arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(res.dhcpId) }]
           }
         );
         break;
       case 'remove-dhcp-config':
         await devices.findOneAndUpdate(
-          { _id: mongoose.Types.ObjectId(res.deviceId) },
+          { _id: new mongoose.Types.ObjectId(res.deviceId) },
           { $set: { 'dhcp.$[elem].status': 'remove-failed' } },
           {
-            arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(res.dhcpId) }]
+            arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(res.dhcpId) }]
           }
         );
         break;
       case 'modify-device':
         await rollbackDhcpChanges(res.deviceId, res.origDhcp);
         await devices.findOneAndUpdate(
-          { _id: mongoose.Types.ObjectId(res.deviceId) },
+          { _id: new mongoose.Types.ObjectId(res.deviceId) },
           { $set: { 'dhcp.$[elem].status': 'modify-failed' } },
           {
-            arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(res.dhcpId) }]
+            arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(res.dhcpId) }]
           }
         );
         break;
@@ -248,10 +248,10 @@ const remove = async (job) => {
         await rollbackDhcpChanges(deviceId, job.data.response.data.origDhcp);
       }
       await devices.findOneAndUpdate(
-        { _id: mongoose.Types.ObjectId(deviceId) },
+        { _id: new mongoose.Types.ObjectId(deviceId) },
         { $set: { 'dhcp.$[elem].status': 'job-deleted' } },
         {
-          arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(dhcpId) }]
+          arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(dhcpId) }]
         }
       );
     } catch (error) {

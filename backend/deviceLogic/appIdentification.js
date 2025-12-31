@@ -50,7 +50,7 @@ const apply = async (devices, user, data) => {
   const jobPromises = [];
   opDevices.forEach(async device => {
     const machineId = device.machineId;
-    const majorAgentVersion = getMajorVersion(device.versions.agent);
+    const majorAgentVersion = getMajorVersion(device.versions?.agent);
     if (majorAgentVersion === 0) { // version 0.X.X
       // For now do nothing for version 0.X.X, just skip
     } else if (majorAgentVersion >= 1) { // version 1.X.X+
@@ -110,7 +110,7 @@ const apply = async (devices, user, data) => {
 const complete = async (jobId, res) => {
   try {
     await devices.findOneAndUpdate(
-      { _id: mongoose.Types.ObjectId(res.deviceId) },
+      { _id: new mongoose.Types.ObjectId(res.deviceId) },
       { $set: { 'appIdentification.lastUpdateTime': res.requestTime } },
       { upsert: false }
     );
@@ -146,7 +146,7 @@ const completeSync = async (jobId, jobsData) => {
 const resetDeviceLastRequestTime = async (jobId, res) => {
   try {
     await devices.findOneAndUpdate(
-      { _id: mongoose.Types.ObjectId(res.deviceId) },
+      { _id: new mongoose.Types.ObjectId(res.deviceId) },
       { $set: { 'appIdentification.lastRequestTime': new Date(0) } },
       { upsert: false }
     );
@@ -317,7 +317,7 @@ const getDevicesAppIdentificationJobInfo = async (org, client, deviceIdList, isI
   const idsAndVersion = opDevices.reduce((obj, d) => {
     obj.ids[d._id] = true;
     obj.minVer = (d.versions && d.versions.agent)
-      ? Math.min(obj.minVer, getMajorVersion(d.versions.agent)) : 0;
+      ? Math.min(obj.minVer, getMajorVersion(d.versions?.agent)) : 0;
     return obj;
   }, { ids: {}, minVer: Number.MAX_VALUE });
   ret.installIds = idsAndVersion.ids;

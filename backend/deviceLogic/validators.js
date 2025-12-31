@@ -104,8 +104,8 @@ const validateDevice = async (
   allowOverlapping = false,
   origDevice = null
 ) => {
-  const major = getMajorVersion(device.versions.agent);
-  const minor = getMinorVersion(device.versions.agent);
+  const major = getMajorVersion(device.versions?.agent);
+  const minor = getMinorVersion(device.versions?.agent);
 
   // Get all assigned interface. There should be at least
   // two such interfaces - one LAN and the other WAN
@@ -936,7 +936,7 @@ const validateStaticRoute = (device, tunnels, route) => {
  */
 const validateMultilinkPolicy = (policy, devices) => {
   // link-quality is supported from version 5 only
-  if (devices.some(device => getMajorVersion(device.versions.agent) < 5)) {
+  if (devices.some(device => getMajorVersion(device.versions?.agent) < 5)) {
     if (policy.rules.some(rule => {
       return (rule.action.links.some(link => {
         return link.order === 'link-quality';
@@ -959,7 +959,7 @@ const validateMultilinkPolicy = (policy, devices) => {
  */
 const validateQOSPolicy = (devices) => {
   // QoS is supported from version 6
-  if (devices.some(device => getMajorVersion(device.versions.agent) < 6)) {
+  if (devices.some(device => getMajorVersion(device.versions?.agent) < 6)) {
     return {
       valid: false,
       err: 'QoS is supported from version 6'

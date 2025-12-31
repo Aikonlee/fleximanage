@@ -104,7 +104,7 @@ const apply = async (orgDevices, user, data) => {
 const complete = async (jobId, res) => {
   try {
     await devices.findOneAndUpdate(
-      { _id: mongoose.Types.ObjectId(res.deviceId) },
+      { _id: new mongoose.Types.ObjectId(res.deviceId) },
       { $set: { 'qosTrafficMap.lastUpdateTime': res.requestTime } },
       { upsert: false }
     );
@@ -140,7 +140,7 @@ const completeSync = async (jobId, jobsData) => {
 const resetDeviceLastRequestTime = async (jobId, res) => {
   try {
     await devices.findOneAndUpdate(
-      { _id: mongoose.Types.ObjectId(res.deviceId) },
+      { _id: new mongoose.Types.ObjectId(res.deviceId) },
       { $set: { 'qosTrafficMap.lastRequestTime': null } },
       { upsert: false }
     );

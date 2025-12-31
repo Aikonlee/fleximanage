@@ -49,11 +49,11 @@ class TunnelsService {
   static selectTunnelParams (retTunnel) {
     const tunnelId = retTunnel.num;
     // Add tunnel status
-    retTunnel.tunnelStatusA =
-      deviceStatus.getTunnelStatus(retTunnel.deviceA.machineId, tunnelId) || {};
+    retTunnel.tunnelStatusA = (retTunnel.deviceA && retTunnel.deviceA.machineId)
+      ? deviceStatus.getTunnelStatus(retTunnel.deviceA.machineId, tunnelId) || {} : {};
 
     // Add tunnel status
-    retTunnel.tunnelStatusB = retTunnel.peer
+    retTunnel.tunnelStatusB = (retTunnel.peer || !retTunnel.deviceB || !retTunnel.deviceB.machineId)
       ? {}
       : deviceStatus.getTunnelStatus(retTunnel.deviceB.machineId, tunnelId) || {};
 
@@ -71,7 +71,9 @@ class TunnelsService {
       retTunnel.tunnelStatus = 'Not Connected';
     };
 
-    retTunnel._id = retTunnel._id.toString();
+    if (retTunnel._id) {
+      retTunnel._id = retTunnel._id.toString();
+    }
 
     return retTunnel;
   }

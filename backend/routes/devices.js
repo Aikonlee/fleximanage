@@ -63,28 +63,33 @@ const formatErr = (err, msg) => {
 
 const checkUpdReq = (qtype, req) => new Promise(function (resolve, reject) {
   if (qtype === 'DELETE') {
+    console.log('[checkUpdReq DELETE] Starting device deletion for:', req.params.deviceId);
     // Make sure no tunnels exist for a deleted device
     // TBD: Remove this limitation when we add queue support
+    const deviceObjectId = new mongoose.Types.ObjectId(req.params.deviceId);
     tunnelsModel.find({
-      $or: [{ deviceA: req.params.deviceId }, { deviceB: req.params.deviceId }],
+      $or: [{ deviceA: deviceObjectId }, { deviceB: deviceObjectId }],
       isActive: true,
       org: req.user.defaultOrg._id
     })
       .then(async (tunnelFound) => {
+        console.log('[checkUpdReq DELETE] Tunnels check completed, found:', tunnelFound.length);
         if (tunnelFound.length > 0) {
           logger.warn('Tunnels found when deleting device',
             { params: { deviceId: req.params.deviceId }, req: req });
           reject(new Error('All device tunnels must be deleted before deleting a device'));
         } else {
           // start session/transaction
+          console.log('[checkUpdReq DELETE] Starting session/transaction');
           const session = await mongoConns.getMainDB().startSession();
           await session.startTransaction();
           // Disconnect deleted device socket
           devices.find({
-            _id: mongoose.Types.ObjectId(req.params.deviceId),
+            _id: new mongoose.Types.ObjectId(req.params.deviceId),
             org: req.user.defaultOrg._id
           }).session(session)
             .then(async (mres) => {
+              console.log('[checkUpdReq DELETE] Device found:', mres.length > 0);
               if (!mres.length) throw new Error('Device for deletion not found');
               connections.deviceDisconnect(mres[0].machineId);
               const deviceCount = await devices.countDocuments({
@@ -94,16 +99,32 @@ const checkUpdReq = (qtype, req) => new Promise(function (resolve, reject) {
               const deviceOrgCount = await devices.countDocuments({
                 account: mres[0].account, org: req.user.defaultOrg._id
               }).session(session);
-              // Unregister a device (by adding -1)
-              await flexibilling.registerDevice({
-                account: mres[0].account,
-                org: req.user.defaultOrg._id,
-                count: deviceCount,
-                orgCount: deviceOrgCount,
-                increment: -1
-              }, session);
+              
+              try {
+                // Unregister a device (by adding -1)
+                console.log('[checkUpdReq DELETE] Calling flexibilling.registerDevice');
+                await flexibilling.registerDevice({
+                  account: mres[0].account,
+                  org: req.user.defaultOrg._id,
+                  count: deviceCount,
+                  orgCount: deviceOrgCount,
+                  increment: -1
+                }, session);
+                console.log('[checkUpdReq DELETE] flexibilling.registerDevice completed');
+              } catch (flexErr) {
+                // Log the flexibilling error but don't fail the device deletion
+                console.log('[checkUpdReq DELETE] Flexibilling error:', flexErr.message);
+                logger.warn('Flexibilling registration error during device deletion', {
+                  params: { deviceId: req.params.deviceId, err: flexErr.message },
+                  req: req
+                });
+                // Continue with device deletion anyway
+              }
+              
+              console.log('[checkUpdReq DELETE] Returning session');
               resolve({ ok: 1, session });
             }, async (err) => {
+              console.log('[checkUpdReq DELETE] Device find error:', err.message);
               if (session) { await session.abortTransaction(); };
               logger.warn('Error finding device', {
                 params: { method: qtype, err: err.message },
@@ -112,6 +133,7 @@ const checkUpdReq = (qtype, req) => new Promise(function (resolve, reject) {
               reject(err);
             })
             .catch(async (err) => {
+              console.log('[checkUpdReq DELETE] Device find catch error:', err.message);
               if (session) { await session.abortTransaction(); };
               logger.warn('Error finding device', {
                 params: { method: qtype, err: err.message },
@@ -121,14 +143,16 @@ const checkUpdReq = (qtype, req) => new Promise(function (resolve, reject) {
             });
         }
       }, (err) => {
+        console.log('[checkUpdReq DELETE] Tunnel find error:', err.message);
         reject(new Error('Delete device, tunnels find error, please try again'));
       })
       .catch((err) => {
+        console.log('[checkUpdReq DELETE] Tunnel find catch error:', err.message);
         reject(new Error('Delete device, tunnels find error, please try again'));
       });
   } else if (qtype === 'PUT') {
     devices.find({
-      _id: mongoose.Types.ObjectId(req.params.deviceId),
+      _id: new mongoose.Types.ObjectId(req.params.deviceId),
       org: req.user.defaultOrg._id
     })
       .then((mres) => {
@@ -139,6 +163,7 @@ const checkUpdReq = (qtype, req) => new Promise(function (resolve, reject) {
 
         // Validate device changes only for approved devices,
         // and only if the request contains interfaces.
+        // Skip validation if only updating approval status or basic info (name, description)
         if (mres[0].isApproved && req.body.interfaces) {
           const { valid, err } = validateDevice(req.body);
           if (!valid) {
@@ -229,7 +254,11 @@ const updResp = (qtype, req, res, next, resp, origDoc = null) => {
     } else if (qtype === 'PUT') {
       // If the change made to the device fields requires a change on the
       // device itself, add a 'modify' job to the device's queue.
-      if (origDoc) {
+      // Don't apply dispatcher if only updating basic info (name, description, isApproved)
+      const basicInfoFields = ['name', 'description', 'isApproved'];
+      const onlyBasicInfoChange = Object.keys(req.body).every(key => basicInfoFields.includes(key));
+      
+      if (origDoc && !onlyBasicInfoChange) {
         try {
           await dispatcher.apply([origDoc], 'modify', req.user, {
             newDevice: resp
@@ -363,7 +392,7 @@ devicesRouter.route('/:deviceId/apply')
   .post(cors.corsWithOptions, verifyPermission('devices', 'post'), (req, res, next) => {
     devices
       .find({
-        _id: mongoose.Types.ObjectId(req.params.deviceId),
+        _id: new mongoose.Types.ObjectId(req.params.deviceId),
         org: req.user.defaultOrg._id
       })
       .then(async device => {
@@ -390,7 +419,7 @@ devicesRouter.route('/:deviceId/configuration')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .get(cors.corsWithOptions, verifyPermission('devices', 'get'), async (req, res, next) => {
     try {
-      const device = await devices.find({ _id: mongoose.Types.ObjectId(req.params.deviceId) });
+      const device = await devices.find({ _id: new mongoose.Types.ObjectId(req.params.deviceId) });
       if (!device || device.length === 0) return next(createError(404, 'Device not found'));
 
       if (!connections.isConnected(device[0].machineId)) {
@@ -448,7 +477,7 @@ devicesRouter.route('/:deviceId/logs')
     verifyPermission('devices', 'get'),
     async (req, res, next) => {
       try {
-        const device = await devices.find({ _id: mongoose.Types.ObjectId(req.params.deviceId) });
+        const device = await devices.find({ _id: new mongoose.Types.ObjectId(req.params.deviceId) });
         if (!device || device.length === 0) return next(createError(404, 'Device not found'));
 
         if (!connections.isConnected(device[0].machineId)) {
@@ -497,7 +526,7 @@ devicesRouter.route('/:deviceId/routes')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .get(cors.corsWithOptions, verifyPermission('devices', 'get'), async (req, res, next) => {
     try {
-      const device = await devices.find({ _id: mongoose.Types.ObjectId(req.params.deviceId) });
+      const device = await devices.find({ _id: new mongoose.Types.ObjectId(req.params.deviceId) });
       if (!device || device.length === 0) return next(createError(404, 'Device not found'));
 
       if (!connections.isConnected(device[0].machineId)) {
@@ -546,7 +575,7 @@ devicesRouter.route('/:deviceId/cpu-optimization')
       const { calculateRecommendedVppCores, getCpuInfo } = require('../utils/deviceUtils');
       
       const deviceObject = await devices.findOne({
-        _id: mongoose.Types.ObjectId(req.params.deviceId)
+        _id: new mongoose.Types.ObjectId(req.params.deviceId)
       }).populate('policies.qos.policy', '_id name');
 
       if (!deviceObject) {
@@ -555,9 +584,11 @@ devicesRouter.route('/:deviceId/cpu-optimization')
 
       const cpuInfo = getCpuInfo(deviceObject.cpuInfo);
       const hasQos = !!(deviceObject.policies?.qos?.policy);
-      const wanInterfaces = deviceObject.interfaces.filter(
-        ifc => ifc.isAssigned && ifc.type === 'WAN'
-      ).length;
+      const wanInterfaces = (deviceObject.interfaces && Array.isArray(deviceObject.interfaces))
+        ? deviceObject.interfaces.filter(
+          ifc => ifc.isAssigned && ifc.type === 'WAN'
+        ).length
+        : 0;
 
       // Calculate recommended cores
       const recommendedCores = calculateRecommendedVppCores(deviceObject);
@@ -649,27 +680,29 @@ devicesRouter.route('/:deviceId/staticroutes')
   .get(cors.corsWithOptions, async (req, res, next) => {
     try {
       const deviceObject = await devices.find({
-        _id: mongoose.Types.ObjectId(req.params.deviceId)
+        _id: new mongoose.Types.ObjectId(req.params.deviceId)
       });
       if (!deviceObject || deviceObject.length === 0) {
         return next(createError(404, 'Device not found'));
       }
 
       const device = deviceObject[0];
-      const routes = device.staticroutes.map(value => {
-        return {
-          id: value.id,
-          destination_network: value.destination,
-          gateway_ip: value.gateway,
-          ifname: value.ifname,
-          metric: value.metric,
-          redistributeViaOSPF: value.redistributeViaOSPF,
-          redistributeViaBGP: value.redistributeViaBGP,
-          onLink: value.onLink,
-          conditions: value.conditions || [],
-          status: value.status
-        };
-      });
+      const routes = (device.staticroutes && Array.isArray(device.staticroutes))
+        ? device.staticroutes.map(value => {
+          return {
+            id: value.id,
+            destination_network: value.destination,
+            gateway_ip: value.gateway,
+            ifname: value.ifname,
+            metric: value.metric,
+            redistributeViaOSPF: value.redistributeViaOSPF,
+            redistributeViaBGP: value.redistributeViaBGP,
+            onLink: value.onLink,
+            conditions: value.conditions || [],
+            status: value.status
+          };
+        })
+        : [];
 
       return res.status(200).send(routes);
     } catch (err) {
@@ -677,7 +710,7 @@ devicesRouter.route('/:deviceId/staticroutes')
     }
   })
   .post(cors.corsWithOptions, verifyPermission('devices', 'post'), async (req, res, next) => {
-    const deviceObject = await devices.find({ _id: mongoose.Types.ObjectId(req.params.deviceId) });
+    const deviceObject = await devices.find({ _id: new mongoose.Types.ObjectId(req.params.deviceId) });
     if (!deviceObject || deviceObject.length === 0) {
       return next(createError(404, 'Device not found'));
     }
@@ -760,7 +793,7 @@ devicesRouter.route('/:deviceId/dhcp')
   .post(cors.corsWithOptions, verifyPermission('devices', 'post'), async (req, res, next) => {
     try {
       const deviceObject = await devices.findOne({
-        _id: mongoose.Types.ObjectId(req.params.deviceId),
+        _id: new mongoose.Types.ObjectId(req.params.deviceId),
         org: req.user.defaultOrg._id
       });
 
@@ -848,7 +881,7 @@ devicesRouter.route('/:deviceId/staticroutes/:routeId')
     verifyPermission('devices', 'get'),
     async (req, res) => { res.sendStatus(200); })
   .patch(cors.corsWithOptions, verifyPermission('devices', 'post'), async (req, res, next) => {
-    const deviceObject = await devices.find({ _id: mongoose.Types.ObjectId(req.params.deviceId) });
+    const deviceObject = await devices.find({ _id: new mongoose.Types.ObjectId(req.params.deviceId) });
     if (!deviceObject || deviceObject.length === 0) {
       return next(createError(404, 'Device not found'));
     }
@@ -864,7 +897,7 @@ devicesRouter.route('/:deviceId/staticroutes/:routeId')
   })
 // delete static route
   .delete(cors.corsWithOptions, verifyPermission('devices', 'del'), async (req, res, next) => {
-    const deviceObject = await devices.find({ _id: mongoose.Types.ObjectId(req.params.deviceId) });
+    const deviceObject = await devices.find({ _id: new mongoose.Types.ObjectId(req.params.deviceId) });
     if (!deviceObject || deviceObject.length === 0) {
       return next(createError(404, 'Device not found'));
     }
@@ -872,10 +905,10 @@ devicesRouter.route('/:deviceId/staticroutes/:routeId')
     const device = deviceObject[0];
 
     await devices.findOneAndUpdate(
-      { _id: mongoose.Types.ObjectId(req.params.deviceId) },
+      { _id: new mongoose.Types.ObjectId(req.params.deviceId) },
       { $set: { 'staticroutes.$[elem].status': 'waiting' } },
       {
-        arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(req.body.id) }]
+        arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(req.body.id) }]
       }
     );
 

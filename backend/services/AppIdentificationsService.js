@@ -218,7 +218,7 @@ class AppIdentificationsService {
       // id field per each app identification. Mongo will add an _id field as well.
       // So in order to align custom and imported schemas, there are two fields with
       // the same value in the per app identification entry.
-      const objectId = mongoose.Types.ObjectId();
+      const objectId = new mongoose.Types.ObjectId();
       const newAppIdent =
         { ...appIdentification, _id: objectId, id: objectId.toString() };
 
@@ -296,7 +296,7 @@ class AppIdentificationsService {
       const orgList = await getAccessTokenOrgList(user, org, true);
       const result =
         await appIdentifications.findOne({ 'meta.org': { $in: orgList } });
-      const objectId = mongoose.Types.ObjectId();
+      const objectId = new mongoose.Types.ObjectId();
       const newAppIdent = { ...appIdentImpCustReq, _id: objectId, id: id };
 
       // if organization document already exists
@@ -492,7 +492,7 @@ class AppIdentificationsService {
       const pipeline = [
         {
           $match: {
-            org: mongoose.Types.ObjectId(orgList[0]),
+            org: new mongoose.Types.ObjectId(orgList[0]),
             $or: [
               { 'appIdentification.clients': { $exists: true, $ne: [] } },
               { 'appIdentification.lastUpdateTime': { $ne: null } }

@@ -158,13 +158,12 @@ const handleTunnels = async (
       // only devices with version of agent >= 4
       // are supported for creating tunnels with none encryption method
       if (encryptionMethod === 'none') {
-        let noneEncryptionValidated = true;
-        for (const device of [deviceA, deviceB]) {
-          const majorAgentVersion = getMajorVersion(device.versions.agent);
-          if (majorAgentVersion < 4) {
-            const reason = 'None encryption method not supported';
-            logger.warn('Tunnel creation failed', {
-              params: { reason, machineId: device.machineId }
+              let noneEncryptionValidated = true;
+              for (const device of [deviceA, deviceB]) {
+                const majorAgentVersion = getMajorVersion(device.versions?.agent);
+                if (majorAgentVersion < 4) {
+                  const reason = 'None encryption method not supported';
+                  logger.warn('Tunnel creation failed', {              params: { reason, machineId: device.machineId }
             });
             reasons.add(`${reason} on some of devices.`);
             noneEncryptionValidated = false;
@@ -355,7 +354,7 @@ const handlePeers = async (
 
   for (const device of opDevices) {
     // peer is supported for major version 5
-    const majorAgentVersion = getMajorVersion(device.versions.agent);
+    const majorAgentVersion = getMajorVersion(device?.versions?.agent);
     if (majorAgentVersion < 5) {
       reasons.add('Selected devices do not run required flexiWAN version for peering. ' +
         'Please upgrade and try again');
@@ -505,7 +504,7 @@ const getPeersSrcDst = async (org) => {
   try {
     const pipeline = [
       // get active peers for the given organization
-      { $match: { org: mongoose.Types.ObjectId(org), peer: { $ne: null }, isActive: true } },
+      { $match: { org: new mongoose.Types.ObjectId(org), peer: { $ne: null }, isActive: true } },
       { $project: { deviceA: 1, interfaceA: 1, peer: 1, _id: 0 } },
       // get interface object used by the tunnel
       {
@@ -560,7 +559,7 @@ const applyTunnelAdd = async (devices, user, data) => {
   });
   devices = await Promise.all(devices.map(d => d
     .populate('interfaces.pathlabels', '_id name type')
-    .execPopulate()
+
   ));
 
   // Get details for devices to connect
@@ -1181,7 +1180,7 @@ const prepareTunnelAddJob = async (
       let ikeLifetime = 0; // phase 1
 
       // Only if both devices support, if can be true.
-      if (isSupportPfs(deviceA.versions.agent) && isSupportPfs(deviceB.versions.agent)) {
+      if (isSupportPfs(deviceA?.versions?.agent) && isSupportPfs(deviceB?.versions?.agent)) {
         lifetime = configs.get('ikev2Lifetime', 'number'); // phase 2
         ikeLifetime = configs.get('ikev2LifetimePhase1', 'number'); // phase 1
         pfs = configs.get('ikev2Pfs', 'boolean');
@@ -1263,7 +1262,7 @@ const prepareTunnelAddJob = async (
     paramsIpsecDeviceA['remote-sa'] = paramsSaBA;
     paramsDeviceA.ipsec = paramsIpsecDeviceA;
 
-    const majorAgentBVersion = getMajorVersion(deviceB.versions.agent);
+    const majorAgentBVersion = getMajorVersion(deviceB?.versions?.agent);
 
     if (majorAgentBVersion < 4) { // version 1-3.X.X
       // The following looks as a wrong config in vpp 19.01 ipsec-gre interface,
@@ -1995,9 +1994,9 @@ const prepareTunnelParams = (
   }
 
   // need to check versions for some parameters compatibility
-  const majorVersionA = getMajorVersion(deviceA.versions.agent);
-  const minorVersionA = getMinorVersion(deviceA.versions.agent);
-  const majorVersionB = peer ? null : getMajorVersion(deviceB?.versions.agent);
+  const majorVersionA = getMajorVersion(deviceA?.versions?.agent);
+  const minorVersionA = getMinorVersion(deviceA?.versions?.agent);
+  const majorVersionB = peer ? null : getMajorVersion(deviceB?.versions?.agent);
   const minorVersionB = peer ? null : getMinorVersion(deviceB?.versions.agent);
 
   // Generate from the tunnel num: IP A/B, MAC A/B, SA A/B
@@ -2331,10 +2330,10 @@ const addBgpNeighborsIfNeeded = async tunnel => {
   const deviceBTasks = [];
 
   if (routing === 'bgp') {
-    const majorA = getMajorVersion(deviceA.versions.agent);
-    const minorA = getMinorVersion(deviceA.versions.agent);
-    const majorB = peer ? null : getMajorVersion(deviceB.versions.agent);
-    const minorB = peer ? null : getMinorVersion(deviceB.versions.agent);
+    const majorA = getMajorVersion(deviceA.versions?.agent);
+    const minorA = getMinorVersion(deviceA.versions?.agent);
+    const majorB = peer ? null : getMajorVersion(deviceB?.versions?.agent);
+    const minorB = peer ? null : getMinorVersion(deviceB?.versions?.agent);
 
     const isNeedToSendNeighborsA = majorA === 5 && minorA === 3;
     const isNeedToSendNeighborsB = majorB === 5 && minorB === 3;
@@ -2406,7 +2405,7 @@ const getTunnelConfigDependencies = async (tunnel, isPending) => {
   const orgId = tunnel?.org?._id?.toString() ?? tunnel.org;
 
   const devicesStaticRoutes = await devicesModel.aggregate([
-    { $match: { org: mongoose.Types.ObjectId(orgId) } }, // org match is very important here
+    { $match: { org: new mongoose.Types.ObjectId(orgId) } }, // org match is very important here
     {
       $addFields: {
         staticroutes: {

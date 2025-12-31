@@ -122,7 +122,7 @@ const checkMemberLevel = async (
     // manager or group manager for that organizatio or account owner/manager
     if (permissionTo === 'organization') {
       const org = await Organization.findOne({
-        _id: mongoose.Types.ObjectId(permissionEntity)
+        _id: new mongoose.Types.ObjectId(permissionEntity)
       });
       if (!org) return null;
       verifyPromise = membership.findOne({

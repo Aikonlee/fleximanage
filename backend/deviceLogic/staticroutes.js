@@ -104,21 +104,21 @@ const complete = async (jobId, res) => {
   try {
     if (res.message === 'remove-route') {
       await devices.findOneAndUpdate(
-        { _id: mongoose.Types.ObjectId(res.deviceId) },
+        { _id: new mongoose.Types.ObjectId(res.deviceId) },
         {
           $pull: {
             staticroutes: {
-              _id: mongoose.Types.ObjectId(res.routeId)
+              _id: new mongoose.Types.ObjectId(res.routeId)
             }
           }
         }
       );
     } else {
       await devices.findOneAndUpdate(
-        { _id: mongoose.Types.ObjectId(res.deviceId) },
+        { _id: new mongoose.Types.ObjectId(res.deviceId) },
         { $set: { 'staticroutes.$[elem].status': 'complete' } },
         {
-          arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(res.routeId) }]
+          arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(res.routeId) }]
         }
       );
     }
@@ -141,18 +141,18 @@ const error = async (jobId, res) => {
   try {
     if (res.message === 'remove-route') {
       await devices.findOneAndUpdate(
-        { _id: mongoose.Types.ObjectId(res.deviceId) },
+        { _id: new mongoose.Types.ObjectId(res.deviceId) },
         { $set: { 'staticroutes.$[elem].status': 'remove-failed' } },
         {
-          arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(res.routeId) }]
+          arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(res.routeId) }]
         }
       );
     } else {
       await devices.findOneAndUpdate(
-        { _id: mongoose.Types.ObjectId(res.deviceId) },
+        { _id: new mongoose.Types.ObjectId(res.deviceId) },
         { $set: { 'staticroutes.$[elem].status': 'add-failed' } },
         {
-          arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(res.routeId) }]
+          arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(res.routeId) }]
         }
       );
     }
@@ -176,10 +176,10 @@ const remove = async (job) => {
 
     try {
       await devices.findOneAndUpdate(
-        { _id: mongoose.Types.ObjectId(deviceId) },
+        { _id: new mongoose.Types.ObjectId(deviceId) },
         { $set: { 'staticroutes.$[elem].status': 'job-deleted' } },
         {
-          arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(routeId) }]
+          arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(routeId) }]
         }
       );
     } catch (error) {

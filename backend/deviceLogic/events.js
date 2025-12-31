@@ -544,7 +544,7 @@ class Events {
     await this.addChangedDevice(device._id);
 
     await devices.findOneAndUpdate(
-      { _id: mongoose.Types.ObjectId(device._id) },
+      { _id: new mongoose.Types.ObjectId(device._id) },
       {
         $set: {
           'staticroutes.$[elem].isPending': isIncomplete,
@@ -554,7 +554,7 @@ class Events {
         }
       },
       {
-        arrayFilters: [{ 'elem._id': mongoose.Types.ObjectId(route._id) }]
+        arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(route._id) }]
       }
     );
 

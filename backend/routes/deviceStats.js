@@ -40,8 +40,8 @@ deviceStatsRouter.use(bodyParser.json());
  */
 const queryDeviceStats = (req, res, next, org, deviceID, startTime, endTime) => {
   // Defind match statement
-  const match = { org: mongoose.Types.ObjectId(org) };
-  if (deviceID) match.device = mongoose.Types.ObjectId(deviceID);
+  const match = { org: new mongoose.Types.ObjectId(org) };
+  if (deviceID) match.device = new mongoose.Types.ObjectId(deviceID);
   if (startTime && endTime) {
     match.$and = [{ time: { $gte: startTime } }, { time: { $lte: endTime } }];
   } else if (startTime) match.time = { $gte: startTime };

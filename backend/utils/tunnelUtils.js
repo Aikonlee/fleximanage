@@ -81,7 +81,7 @@ const generateRandomKeys = () => {
 const getTunnelsPipeline = (orgList, filters, detailed = true) => {
   const matchPipeline = [{
     $match: {
-      org: { $in: orgList.map(o => mongoose.Types.ObjectId(o)) },
+      org: { $in: orgList.map(o => new mongoose.Types.ObjectId(o)) },
       isActive: true
     }
   }];

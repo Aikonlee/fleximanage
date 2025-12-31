@@ -46,7 +46,7 @@ const apply = async (devices, user, data) => {
     .populate('policies.firewall.policy', '_id name rules')
     .populate('interfaces.pathlabels', '_id name description color type')
     .populate('org')
-    .execPopulate()
+
   ));
 
   const errors = [];
@@ -153,8 +153,8 @@ const complete = (jobId, res) => {
           isActive: true,
           $or: [{ deviceAconf: true }, { deviceBconf: true }],
           // eslint-disable-next-line no-dupe-keys
-          $or: [{ deviceA: mongoose.Types.ObjectId(res.device) },
-            { deviceB: mongoose.Types.ObjectId(res.device) }],
+          $or: [{ deviceA: new mongoose.Types.ObjectId(res.device) },
+            { deviceB: new mongoose.Types.ObjectId(res.device) }],
           org: res.org
         },
         // Update

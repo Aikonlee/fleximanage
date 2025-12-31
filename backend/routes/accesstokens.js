@@ -101,7 +101,7 @@ router.route('/:accesstokenId')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .delete(cors.corsWithOptions, verifyPermission('accesstokens', 'del'), (req, res, next) => {
     AccessToken.deleteOne({
-      _id: mongoose.Types.ObjectId(req.params.accesstokenId),
+      _id: new mongoose.Types.ObjectId(req.params.accesstokenId),
       account: req.user.defaultAccount._id
     })
       .then(

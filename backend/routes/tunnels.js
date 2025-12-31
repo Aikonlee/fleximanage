@@ -100,7 +100,7 @@ tunnelsRouter
     tunnels
       .findOneAndUpdate(
         // Query - match by ID and org
-        { _id: mongoose.Types.ObjectId(tunnelId), org: orgId, isActive: true },
+        { _id: new mongoose.Types.ObjectId(tunnelId), org: orgId, isActive: true },
         // Update
         { isActive: false },
         // Options

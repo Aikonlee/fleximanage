@@ -141,7 +141,7 @@ class StatusesInDb {
         for (const deviceId in connectionStatuses) {
           const status = connectionStatuses[deviceId].toString();
           if (!devicesByStatus[status]) devicesByStatus[status] = [];
-          devicesByStatus[status].push(mongoose.Types.ObjectId(deviceId));
+          devicesByStatus[status].push(new mongoose.Types.ObjectId(deviceId));
         }
         for (const status in devicesByStatus) {
           updateDiffs.push({
@@ -161,7 +161,7 @@ class StatusesInDb {
         for (const deviceId in devicesStatuses) {
           const status = devicesStatuses[deviceId];
           if (!devicesByState[status]) devicesByState[status] = [];
-          devicesByState[status].push(mongoose.Types.ObjectId(deviceId));
+          devicesByState[status].push(new mongoose.Types.ObjectId(deviceId));
         }
         for (const state in devicesByState) {
           updateDiffs.push({
@@ -190,7 +190,7 @@ class StatusesInDb {
     // Check if need db/memory sync
     const connectedDevices = connections.getAllDevices().reduce((res, machineId) => {
       const { ready, deviceObj } = connections.getDeviceInfo(machineId) || {};
-      if (ready) res.push(mongoose.Types.ObjectId(deviceObj));
+      if (ready) res.push(new mongoose.Types.ObjectId(deviceObj));
       return res;
     }, []);
     // Check if need db/memory sync
@@ -263,7 +263,7 @@ class StatusesInDb {
           updateOps.push({
             updateMany: {
               filter: {
-                org: mongoose.Types.ObjectId(org),
+                org: new mongoose.Types.ObjectId(org),
                 num: { $in: tunnelsByStatus[status] }
               },
               update: { $set: { status: status } }

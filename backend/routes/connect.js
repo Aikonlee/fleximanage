@@ -242,7 +242,7 @@ connectRouter.route('/register')
                   // set LAN as DHCP only if it's DHCP in Linux and has IP address.
                   // Otherwise set it to static on registration.
                   intf.dhcp = intf.dhcp === 'yes' && intf.IPv4 !== '' ? 'yes' : 'no';
-                  intf.routing = 'OSPF';
+                  intf.routing = 'NONE';
                   intf.gateway = '';
                   intf.metric = '';
                 }

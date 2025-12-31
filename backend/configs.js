@@ -26,20 +26,20 @@ const hostname = os.hostname();
 const configEnv = {
   // This is the default configuration, override by the following sections
   default: {
-    // URL of the rest server (must match agentBroker format with https:// prefix for production)
-    restServerUrl: ['https://manage.miwide.com:3443', 'https://localhost:3443', 'https://localhost:3000'],
+    // URL of the rest server (must match agentBroker format without https:// prefix)
+    restServerUrl: ['manage.miwide.com:3443'],
     // URL of the agent broker server
     agentBroker: ['manage.miwide.com:3443'],
     // URL of the UI server
-    uiServerUrl: ['https://manage.miwide.com:3443'],
+    uiServerUrl: ['http://manage.miwide.com:3000'],
     // Key used for users tokens, override default with environment variable USER_SECRET_KEY
-    userTokenSecretKey: '',
+    userTokenSecretKey: 'abcdefg1234567',
     // Whether to validate open API response. True for testing and dev, False for production,
     // to remove unneeded fields from the response, use validateOpenAPIResponse = { removeAdditional: 'failing' }
     validateOpenAPIResponse: true,
-    // Whether to validate open API request.
+    // Whether to validate open API request, now False for all.
     // Not described in schema fields will be removed if true,
-    validateOpenAPIRequest: true,
+    validateOpenAPIRequest: false,
     // Number of REST requests allowed in 5 min per IP address, more requests will be rate limited
     userIpReqRateLimit: 300,
     // Unread notification email period (in msec), a mail is sent once a period
@@ -47,7 +47,7 @@ const configEnv = {
     // Max.number of unread notifications included into periodic email
     unreadNotificationsMaxSent: 50,
     // The duration of the user JWT token in seconds
-    userTokenExpiration: 86400,
+    userTokenExpiration: 300,
     // The duration of the user refresh token in seconds
     userRefreshTokenExpiration: 604800,
     // The time to wait for job response before declaring the job as timeout
@@ -61,18 +61,18 @@ const configEnv = {
     // The time to retain jobs until deleted from the database, in msec
     jobRetainTimeout: 604800000,
     // Key used for device tokens, override default with environment variable DEVICE_SECRET_KEY
-    deviceTokenSecretKey: '',
+    deviceTokenSecretKey: 'abcdefg1234567',
     // Key used to validate google captcha token, generated at https://www.google.com/u/1/recaptcha/admin/create
     // Default value is not set, which only validate the client side captcha
     captchaKey: '',
     // Mongo main database
-    mongoUrl: 'mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/flexiwan?replicaSet=rs',
+    mongoUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwan?replicaSet=rs`,
     // Mongo analytics database
-    mongoAnalyticsUrl: 'mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/flexiwanAnalytics?replicaSet=rs',
+    mongoAnalyticsUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwanAnalytics?replicaSet=rs`,
     // Mongo Billing database
-    mongoBillingUrl: 'mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/flexibilling?replicaSet=rs',
+    mongoBillingUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexibilling?replicaSet=rs`,
     // Mongo VPN database
-    mongoVpnUrl: 'mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/flexivpn?replicaSet=rs',
+    mongoVpnUrl: `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexivpn?replicaSet=rs`,
     // Billing Redirect OK page url
     billingRedirectOkUrl: 'https://manage.miwide.com/ok.html',
     // Biling config site - this is used as the billing site name in ChargeBee
@@ -139,7 +139,9 @@ const configEnv = {
       'http://manage.miwide.com:3000',
       'https://manage.miwide.com:3443',
       'http://localhost:3000',
-      'https://localhost:3443'
+      'https://localhost:3443',
+      'http://0.0.0.0:3000',
+      'https://0.0.0.0:3443'
     ],
     // Client static root directory
     clientStaticDir: '../frontend/build',
@@ -170,11 +172,11 @@ const configEnv = {
     // Web hooks add user URL, used to send for new uses, '' to bypass hook
     webHookAddUserUrl: '',
     // Web hooks add user secret, send in addition to the message for filtering
-    webHookAddUserSecret: '',
+    webHookAddUserSecret: 'ABC',
     // Web hooks register device URL, used to send for new registered devices, '' to bypass hook
     webHookRegisterDeviceUrl: '',
     // Web hooks register device secret, send in addition to the message for filtering
-    webHookRegisterDeviceSecret: '',
+    webHookRegisterDeviceSecret: 'ABC',
     // Global app identification rules file location
     appRulesUrl: 'https://sandbox.flexiwan.com/Protocols/app-rules.json',
     // Global applications file locations
@@ -248,7 +250,7 @@ const configEnv = {
     // Repository setup URL
     agentRepositoryUrl: 'https://deb.flexiwan.com/setup',
     // Captcha client key for flexiwan domain
-    captchaSiteKey: '',
+    captchaSiteKey: '6LfkP8IUAAAAABt2dxrb9U2WzxonxJlhs0_2Hadi',
     // HTML content of the UI about page
     aboutContent: '',
     // UI URL for feedback
@@ -275,39 +277,34 @@ const configEnv = {
     SwRepositoryUrl: 'https://deb.flexiwan.com/info/flexiwan-router/latest-testing',
     userTokenExpiration: 604800,
     logLevel: 'debug',
-    mailerPort: 1025,
-    userTokenSecretKey: 'dev_user_key',
-    deviceTokenSecretKey: 'dev_device_key'
+    mailerPort: 1025
   },
   testing: {
     // Mgmt-Agent protocol version for testing purposes
     agentApiVersion: '6.0.0',
     // Kue prefix
     kuePrefix: 'testq',
-    logLevel: 'debug',
-    userTokenSecretKey: 'test_user_key',
-    deviceTokenSecretKey: 'test_device_key'
+    logLevel: 'debug'
   },
   // Override for production environment
   production: {
-    restServerUrl: ['https://manage.miwide.com:3443', 'https://localhost:3443', 'https://localhost:3000'],
-    uiServerUrl: ['https://manage.miwide.com:3443'],
+    restServerUrl: ['https://app.flexiwan.com:443'],
+    uiServerUrl: ['https://app.flexiwan.com:443'],
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
     agentBroker: ['manage.miwide.com:3443'],
     validateOpenAPIResponse: false,
-    clientStaticDir: './public',
+    clientStaticDir: '../frontend/build',
     // 'billingConfigSite': 'flexiwan-test',
     // 'billingDefaultPlan': 'enterprise',
     // 'useFlexiBilling': true,
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
-    billingRedirectOkUrl: 'https://manage.miwide.com:3443/ok.html',
+    billingRedirectOkUrl: 'https://app.flexiwan.com/ok.html',
     logLevel: 'info',
     logUserName: true,
-    corsWhiteList: ['https://manage.miwide.com:3443', 'http://manage.miwide.com:3000'],
-    vpnBaseUrl: ['https://vpn.flexiwan.com'],
-    mailerBypassCert: true
+    corsWhiteList: ['https://app.flexiwan.com:443', 'http://app.flexiwan.com:80'],
+    vpnBaseUrl: ['https://vpn.flexiwan.com']
   },
   hosted: {
     // modify next params for hosted server
@@ -319,7 +316,7 @@ const configEnv = {
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
     validateOpenAPIResponse: false,
-    clientStaticDir: './public',
+    clientStaticDir: '../frontend/build',
     billingConfigSite: 'flexiwan',
     billingDefaultPlan: 'enterprise',
     useFlexiBilling: true,
@@ -338,7 +335,7 @@ const configEnv = {
     kuePrefix: 'mngdeviceq',
     agentBroker: ['manage.miwide.com:3443'],
     validateOpenAPIResponse: false,
-    clientStaticDir: './public',
+    clientStaticDir: '../frontend/build',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan',
@@ -357,12 +354,12 @@ const configEnv = {
     uiServerUrl: ['https://appqa01.flexiwan.com:443'],
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
-    userTokenExpiration: 86400,
+    userTokenExpiration: 300,
     userIpReqRateLimit: 3000,
     unreadNotificationPeriod: 300000,
     userRefreshTokenExpiration: 86400,
     agentBroker: ['manage.miwide.com:3443'],
-    clientStaticDir: './public',
+    clientStaticDir: '../frontend/build',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan-test',
@@ -382,12 +379,12 @@ const configEnv = {
     uiServerUrl: ['https://appqa02.flexiwan.com:443'],
     shouldRedirectHttps: false,
     redirectHttpsPort: 443,
-    userTokenExpiration: 86400,
+    userTokenExpiration: 300,
     userIpReqRateLimit: 3000,
     unreadNotificationPeriod: 300000,
     userRefreshTokenExpiration: 86400,
     agentBroker: ['manage.miwide.com:3443'],
-    clientStaticDir: './public',
+    clientStaticDir: '../frontend/build',
     logFilePath: '/var/log/flexiwan/flexiwan.log',
     reqLogFilePath: '/var/log/flexiwan/flexiwanReq.log',
     billingConfigSite: 'flexiwan-test',
@@ -450,21 +447,6 @@ class Configs {
       combinedConfig.applicationsUrl = combinedConfig.applicationsUrl.replace('Templates/', templateDirName);
     }
 
-    // Validation for critical secrets
-    if (!combinedConfig.userTokenSecretKey) {
-      console.error('ERROR: USER_SECRET_KEY environment variable is missing. The application cannot start without this security key.');
-      process.exit(1);
-    }
-    if (!combinedConfig.deviceTokenSecretKey) {
-      console.error('ERROR: DEVICE_SECRET_KEY environment variable is missing. The application cannot start without this security key.');
-      process.exit(1);
-    }
-
-    // Validation for Mongo auth in production
-    if (environment === 'production' && combinedConfig.mongoUrl && !combinedConfig.mongoUrl.includes('@')) {
-      console.warn('WARNING: MongoDB connection string does not contain authentication credentials. This is insecure for production.');
-    }
-
     this.config_values = combinedConfig;
 
     this.config_values.nodeVersion = process.version;
@@ -474,7 +456,7 @@ class Configs {
 
   getEnv () {
     if (process.argv[1].indexOf('jest') !== -1) return 'testing';
-    return process.env.NODE_ENV || process.argv[2] || 'development';
+    return process.argv[2] || 'development';
   }
 
   // Get the config parameter and convert it from string to the desired type
@@ -520,13 +502,24 @@ class Configs {
     let vpnBaseUrl = vpnServers[0];
 
     if (req.hostname) {
-      const usedServer = servers.findIndex(s => s.includes(req.hostname));
-      if (usedServer > -1) {
-        baseUrl = servers[usedServer];
-        if (vpnServers[usedServer]) {
-          vpnBaseUrl = vpnServers[usedServer];
+      // If accessing from localhost, use localhost as the base URL
+      if (req.hostname.includes('localhost') || req.hostname.includes('127.0.0.1') || req.hostname === 'localhost') {
+        baseUrl = `localhost:${req.socket.localPort || 3443}`;
+      } else {
+        const usedServer = servers.findIndex(s => s.includes(req.hostname));
+        if (usedServer > -1) {
+          baseUrl = servers[usedServer];
+          if (vpnServers[usedServer]) {
+            vpnBaseUrl = vpnServers[usedServer];
+          }
         }
       }
+    }
+
+    // Add protocol prefix based on request protocol
+    const protocol = req.secure ? 'https://' : 'http://';
+    if (!baseUrl.startsWith('http')) {
+      baseUrl = protocol + baseUrl;
     }
 
     return {
@@ -536,7 +529,6 @@ class Configs {
       contactUsUrl: this.get('contactUsUrl'),
       agentRepositoryUrl: this.get('agentRepositoryUrl'),
       captchaSiteKey: this.get('captchaSiteKey'),
-      captchaEnforced: !!this.get('captchaKey'),
       aboutContent: this.get('aboutContent'),
       feedbackUrl: this.get('feedbackUrl'),
       showDeviceLimitAlert: this.get('showDeviceLimitAlert', 'boolean'),

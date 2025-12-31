@@ -63,6 +63,7 @@ const RateLimitStore = require('./rateLimitStore');
 
 // Internal routers definition
 const adminRouter = require('./routes/admin');
+const { organizationsRouter } = require('./routes/organizations');
 const ticketsRouter = require('./routes/tickets')(
   configs.get('ticketingSystemUsername', 'string'),
   configs.get('ticketingSystemToken', 'string'),
@@ -268,6 +269,7 @@ class ExpressServer {
     }
 
     // Intialize routes
+    this.app.use('/api/organizations', organizationsRouter);
     this.app.use('/api/admin', adminRouter);
     this.app.use('/api/tickets', ticketsRouter);
 

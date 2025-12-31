@@ -160,141 +160,7 @@ organizationsRouter.route('/select')
     }
   });
 
-// Retrieves the organization
-organizationsRouter.route('/:orgId')
-  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .get(cors.corsWithOptions, verifyPermission('organizations', 'get'), async (req, res, next) => {
-    try {
-      // Find org with the correct ID
-      const resultOrg = await getUserOrgByID(req.user, req.params.orgId);
-      return res.status(200).json(resultOrg);
-    } catch (err) {
-      logger.error('Error getting organization', { params: { reason: err.message } });
-      return next(createError(500, 'Error getting organization'));
-    }
-  })
-// deletes organization
-  .delete(cors.corsWithOptions, verifyPermission('organizations', 'del'), (req, res, next) => {
-    let session = null;
-    mongoConns.getMainDB().startSession()
-      .then((_session) => {
-        session = _session;
-        return session.startTransaction();
-      })
-    // Find and remove organization from account
-      .then(async () => {
-        // Only allow to delete current default org, this
-        // is required to make sure the API permissions
-        // are set properly for updating this organization
-        if (req.user.defaultOrg._id.toString() === req.params.orgId) {
-          return accounts.findOneAndUpdate(
-            { _id: req.user.defaultAccount },
-            { $pull: { organizations: req.params.orgId } },
-            { upsert: false, new: true, session: session }
-          );
-        } else {
-          throw new Error('Please select an organization to delete it');
-        }
-      })
-      .then(async (account) => {
-        if (!account) throw new Error('Cannot delete organization');
-        // Since the selected org is deleted, need to select another organization available
-        req.user.defaultOrg = null;
-        await orgUpdateFromNull(req, res);
-        return Promise.resolve(true);
-      })
-    // Remove organization
-      .then(() => {
-        return organizations.findOneAndRemove({
-          _id: req.params.orgId,
-          account: req.user.defaultAccount
-        }, {
-          session: session
-        });
-      })
-    // Remove all memberships that belong to the organization, but keep group even if empty
-      .then(() => {
-        return membership.deleteMany({ organization: req.params.orgId }, { session: session });
-      })
-    // Remove organization inventory (devices, tokens, tunnelIds, tunnels)
-      .then(() => {
-        return tunnels.deleteMany({ org: req.params.orgId }, { session: session });
-      })
-      .then(() => {
-        return tunnelIds.deleteMany({ org: req.params.orgId }, { session: session });
-      })
-      .then(() => {
-        return tokens.deleteMany({ org: req.params.orgId }, { session: session });
-      })
-      .then(() => {
-        return AccessToken.deleteMany({ organization: req.params.orgId }, { session: session });
-      })
-      .then(async () => {
-        // Find all devices for organization
-        const orgDevices = await devices.find(
-          { org: req.params.orgId },
-          { machineId: 1, _id: 0 },
-          { session: session }
-        );
-        // Get the account total device count
-        const deviceCount = await devices
-          .countDocuments({ account: req.user.defaultAccount._id })
-          .session(session);
-        const deviceOrgCount = await devices
-          .countDocuments({ account: req.user.defaultAccount._id, org: req.params.orgId })
-          .session(session);
-        // Delete all devices
-        await devices.deleteMany({ org: req.params.orgId }, { session: session });
-        // Unregister a device (by removing the removed org number)
-        await flexibilling.registerDevice({
-          account: req.user.defaultAccount._id,
-          org: req.params.orgId,
-          count: deviceCount,
-          orgCount: deviceOrgCount,
-          increment: -orgDevices.length
-        }, session);
-        // Disconnect all devices
-        orgDevices.forEach((device) => connections.deviceDisconnect(device.machineId));
-        return Promise.resolve(true);
-      })
-      .then(() => {
-        return session.commitTransaction();
-      })
-      .then(async () => {
-        // Session committed, set to null
-        session = null;
-        return res.status(200).json({ ok: 1 });
-      })
-      .catch((err) => {
-        if (session) session.abortTransaction();
-        logger.error('Error deleting organization', { params: { reason: err.message } });
-        return next(createError(500, err.message));
-      });
-  })
-  .put(cors.corsWithOptions, verifyPermission('organizations', 'put'), async (req, res, next) => {
-    try {
-      // Only allow to update current default org, this is required to make sure the API permissions
-      // are set properly for updating this organization
-      if (req.user.defaultOrg._id.toString() === req.params.orgId) {
-        const resultOrg = await organizations.findOneAndUpdate(
-          { _id: req.params.orgId },
-          { $set: req.body },
-          { upsert: false, multi: false, new: true, runValidators: true }
-        );
-        // Update token
-        const token = await getToken(req, { orgName: req.body.name });
-        res.setHeader('Refresh-JWT', token);
-        return res.status(200).json(resultOrg);
-      } else {
-        throw new Error('Please select an organization to update it');
-      }
-    } catch (err) {
-      logger.error('Error updating organization', { params: { reason: err.message } });
-      return next(createError(400, err.message));
-    }
-  });
-
-// Get organization summary (dashboard statistics)
+// Get organization summary (dashboard statistics) - MUST come before /:orgId to avoid route matching
 organizationsRouter.route('/summary')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .get(cors.corsWithOptions, verifyPermission('organizations', 'get'), async (req, res, next) => {
@@ -456,6 +322,140 @@ organizationsRouter.route('/summary')
         params: { reason: err.message, stack: err.stack }
       });
       return next(createError(500, 'Error getting organization summary'));
+    }
+  });
+
+// Retrieves the organization
+organizationsRouter.route('/:orgId')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .get(cors.corsWithOptions, verifyPermission('organizations', 'get'), async (req, res, next) => {
+    try {
+      // Find org with the correct ID
+      const resultOrg = await getUserOrgByID(req.user, req.params.orgId);
+      return res.status(200).json(resultOrg);
+    } catch (err) {
+      logger.error('Error getting organization', { params: { reason: err.message } });
+      return next(createError(500, 'Error getting organization'));
+    }
+  })
+// deletes organization
+  .delete(cors.corsWithOptions, verifyPermission('organizations', 'del'), (req, res, next) => {
+    let session = null;
+    mongoConns.getMainDB().startSession()
+      .then((_session) => {
+        session = _session;
+        return session.startTransaction();
+      })
+    // Find and remove organization from account
+      .then(async () => {
+        // Only allow to delete current default org, this
+        // is required to make sure the API permissions
+        // are set properly for updating this organization
+        if (req.user.defaultOrg._id.toString() === req.params.orgId) {
+          return accounts.findOneAndUpdate(
+            { _id: req.user.defaultAccount },
+            { $pull: { organizations: req.params.orgId } },
+            { upsert: false, new: true, session: session }
+          );
+        } else {
+          throw new Error('Please select an organization to delete it');
+        }
+      })
+      .then(async (account) => {
+        if (!account) throw new Error('Cannot delete organization');
+        // Since the selected org is deleted, need to select another organization available
+        req.user.defaultOrg = null;
+        await orgUpdateFromNull(req, res);
+        return Promise.resolve(true);
+      })
+    // Remove organization
+      .then(() => {
+        return organizations.findOneAndRemove({
+          _id: req.params.orgId,
+          account: req.user.defaultAccount
+        }, {
+          session: session
+        });
+      })
+    // Remove all memberships that belong to the organization, but keep group even if empty
+      .then(() => {
+        return membership.deleteMany({ organization: req.params.orgId }, { session: session });
+      })
+    // Remove organization inventory (devices, tokens, tunnelIds, tunnels)
+      .then(() => {
+        return tunnels.deleteMany({ org: req.params.orgId }, { session: session });
+      })
+      .then(() => {
+        return tunnelIds.deleteMany({ org: req.params.orgId }, { session: session });
+      })
+      .then(() => {
+        return tokens.deleteMany({ org: req.params.orgId }, { session: session });
+      })
+      .then(() => {
+        return AccessToken.deleteMany({ organization: req.params.orgId }, { session: session });
+      })
+      .then(async () => {
+        // Find all devices for organization
+        const orgDevices = await devices.find(
+          { org: req.params.orgId },
+          { machineId: 1, _id: 0 },
+          { session: session }
+        );
+        // Get the account total device count
+        const deviceCount = await devices
+          .countDocuments({ account: req.user.defaultAccount._id })
+          .session(session);
+        const deviceOrgCount = await devices
+          .countDocuments({ account: req.user.defaultAccount._id, org: req.params.orgId })
+          .session(session);
+        // Delete all devices
+        await devices.deleteMany({ org: req.params.orgId }, { session: session });
+        // Unregister a device (by removing the removed org number)
+        await flexibilling.registerDevice({
+          account: req.user.defaultAccount._id,
+          org: req.params.orgId,
+          count: deviceCount,
+          orgCount: deviceOrgCount,
+          increment: -orgDevices.length
+        }, session);
+        // Disconnect all devices
+        orgDevices.forEach((device) => connections.deviceDisconnect(device.machineId));
+        return Promise.resolve(true);
+      })
+      .then(() => {
+        return session.commitTransaction();
+      })
+      .then(async () => {
+        // Session committed, set to null
+        session = null;
+        return res.status(200).json({ ok: 1 });
+      })
+      .catch((err) => {
+        if (session) session.abortTransaction();
+        logger.error('Error deleting organization', { params: { reason: err.message } });
+        return next(createError(500, err.message));
+      });
+  })
+  .put(cors.corsWithOptions, verifyPermission('organizations', 'put'), async (req, res, next) => {
+    try {
+      // Only allow to update current default org, this is required to make sure the API permissions
+      // are set properly for updating this organization
+      if (req.user.defaultOrg._id.toString() === req.params.orgId) {
+        const resultOrg = await organizations.findOneAndUpdate(
+          { _id: req.params.orgId },
+          { $set: req.body },
+          { upsert: false, multi: false, new: true, runValidators: true }
+        );
+        // Update token
+        const token = await getToken(req, { orgName: req.body.name });
+        res.setHeader('Refresh-JWT', token);
+        return res.status(200).json(resultOrg);
+      } else {
+        throw new Error('Please select an organization to update it');
+      }
+    } catch (err) {
+      logger.error('Error updating organization', { params: { reason: err.message } });
+      return next(createError(400, err.message));
     }
   });
 

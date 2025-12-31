@@ -132,7 +132,8 @@ const sync = async (deviceId) => {
     if (supportNotifications) {
       const orgId = device.org;
       const getOrgNotificationsConfig = await notificationsConf.findOne({ org: orgId.toString() });
-      const orgNotificationsConfig = getOrgNotificationsConfig.rules;
+      // Handle case where notifications config doesn't exist for org
+      const orgNotificationsConfig = getOrgNotificationsConfig ? getOrgNotificationsConfig.rules : [];
       const filteredRules = transformNotificationsSettings(
         orgNotificationsConfig,
         deviceNotificationTypes

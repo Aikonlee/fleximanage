@@ -72,9 +72,12 @@ exports.assignRoutes = function (
       cors.corsWithOptions,
       verifyPermission(permissionResource, 'get'),
       (req, res, next) => {
+        if (!req.user.defaultOrg) {
+          return next(createError(400, 'User has no default organization selected'));
+        }
         var p = isById
           ? model.find({
-            _id: mongoose.Types.ObjectId(req.params[idName]),
+            _id: new mongoose.Types.ObjectId(req.params[idName]),
             org: req.user.defaultOrg._id
           })
           : model.find({ org: req.user.defaultOrg._id });
@@ -115,13 +118,14 @@ exports.assignRoutes = function (
             .then(
               checkreq => {
                 session = checkreq.session;
+                console.log('[DELETE] checkUpdReq success, session:', !!session);
                 let p;
                 if (isField) {
                   var set = { $set: {} };
                   set.$set[fieldName] = [];
                   p = model.update(
                     {
-                      _id: mongoose.Types.ObjectId(req.params[idName]),
+                      _id: new mongoose.Types.ObjectId(req.params[idName]),
                       org: req.user.defaultOrg._id
                     },
                     set,
@@ -129,10 +133,10 @@ exports.assignRoutes = function (
                   );
                 } else if (isById) {
                   p = model.findOneAndDelete({
-                    _id: mongoose.Types.ObjectId(req.params[idName]),
+                    _id: new mongoose.Types.ObjectId(req.params[idName]),
                     org: req.user.defaultOrg._id
                   });
-                } else p = model.remove({ org: req.user.defaultOrg._id });
+                } else p = model.deleteMany({ org: req.user.defaultOrg._id });
 
                 if (session) {
                   p = p.session(session);
@@ -140,12 +144,16 @@ exports.assignRoutes = function (
 
                 p.then(
                   async resp => {
+                    console.log('[DELETE] findOneAndDelete success, resp:', !!resp);
                     if (resp != null) {
                       if (checkUpdResp) {
+                        console.log('[DELETE] calling checkUpdResp');
                         checkUpdResp('DELETE', req, res, next, resp)
                           .then(
                             async checkresp => {
+                              console.log('[DELETE] checkUpdResp success');
                               if (session) {
+                                console.log('[DELETE] committing transaction');
                                 await session.commitTransaction();
                                 session = null;
                               }
@@ -155,6 +163,7 @@ exports.assignRoutes = function (
                               return res.json(resp);
                             },
                             async checkerr => {
+                              console.log('[DELETE] checkUpdResp error:', checkerr.message);
                               if (session) {
                                 await session.abortTransaction();
                               }
@@ -162,6 +171,7 @@ exports.assignRoutes = function (
                             }
                           )
                           .catch(async checkerr => {
+                            console.log('[DELETE] checkUpdResp catch:', checkerr.message);
                             if (session) {
                               await session.abortTransaction();
                             }
@@ -169,6 +179,7 @@ exports.assignRoutes = function (
                           });
                       }
                     } else {
+                      console.log('[DELETE] resp is null');
                       if (session) {
                         await session.abortTransaction();
                       }
@@ -176,9 +187,11 @@ exports.assignRoutes = function (
                     }
                   },
                   err => {
+                    console.log('[DELETE] findOneAndDelete error:', err.message);
                     throw err;
                   }
                 ).catch(async err => {
+                  console.log('[DELETE] findOneAndDelete catch:', err.message);
                   if (session) {
                     await session.abortTransaction();
                   }
@@ -212,14 +225,14 @@ exports.assignRoutes = function (
               checkreq => {
                 model
                   .findOne({
-                    _id: mongoose.Types.ObjectId(req.params[idName]),
+                    _id: new mongoose.Types.ObjectId(req.params[idName]),
                     org: req.user.defaultOrg._id
                   })
                   .then(origDoc => {
                     model
                       .findOneAndUpdate(
                         {
-                          _id: mongoose.Types.ObjectId(req.params[idName]),
+                          _id: new mongoose.Types.ObjectId(req.params[idName]),
                           org: req.user.defaultOrg._id
                         },
                         { $set: req.body },
@@ -301,7 +314,7 @@ exports.assignRoutes = function (
                   set.$addToSet[fieldName] = { $each: req.body };
                   p = model.update(
                     {
-                      _id: mongoose.Types.ObjectId(req.params[idName]),
+                      _id: new mongoose.Types.ObjectId(req.params[idName]),
                       org: req.user.defaultOrg._id
                     },
                     set,

@@ -253,7 +253,7 @@ class RemoteVpn extends IApplication {
     }
 
     const dhKey = dhKeyDoc.key;
-    await diffieHellmans.remove({ _id: dhKeyDoc._id });
+    await diffieHellmans.deleteOne({ _id: dhKeyDoc._id });
 
     const keysObj = {
       caKey: pems.caKey,

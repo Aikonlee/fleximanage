@@ -33,7 +33,7 @@ const modifyDeviceApply = require('./modifyDevice').apply;
 const appsLogic = require('../applicationLogic/applications')();
 
 const handleInstallOp = async (app, device, deviceConfiguration, idx) => {
-  await device.populate('policies.firewall.policy', '_id name rules').execPopulate();
+  await device.populate('policies.firewall.policy', '_id name rules');
 
   const identifier = app.appStoreApp.identifier;
   const { valid, err } = await appsLogic.validateInstallRequest(identifier, app, device);
@@ -156,7 +156,7 @@ const apply = async (deviceList, user, data) => {
   const app = await applications.findOne({
     org: org,
     _id: id
-  }).populate('appStoreApp').populate('org').lean();
+  }).populate(['appStoreApp', 'org']).lean();
 
   if (!app) {
     throw createError(500, 'The requested app was not purchased');

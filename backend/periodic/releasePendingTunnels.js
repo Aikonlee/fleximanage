@@ -64,7 +64,7 @@ class ReleasePendingTunnels {
         isPending: true,
         isActive: true,
         pendingType: { $in: [pendingTypes.publicPortHighRate, pendingTypes.waitForStun] }
-      }).populate('deviceA').populate('deviceB').lean();
+      }).populate(['deviceA', 'deviceB']).lean();
 
       const devicesToRelease = new Map();
       for (const tunnel of pendingTunnels) {

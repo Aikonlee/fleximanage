@@ -575,10 +575,7 @@ const queueModifyDeviceJob = async (
           { _id: { $in: [...sendAddTunnels, ...sendRemoveTunnels] } }
         ]
       })
-      .populate('deviceA')
-      .populate('deviceB')
-      .populate('org')
-      .populate('peer');
+      .populate(['deviceA', 'deviceB', 'org', 'peer']);
 
     for (const tunnel of tunnels) {
       let { deviceA, deviceB, peer, _id, advancedOptions, org: tunnelOrg } = tunnel;
@@ -942,8 +939,8 @@ const prepareModifyBGP = async (origDevice, newDevice) => {
  */
 const prepareModifyRoutingFilters = (origDevice, newDevice) => {
   const [origLists, newLists] = [
-    transformRoutingFilters(origDevice.routingFilters, origDevice.versions.agent),
-    transformRoutingFilters(newDevice.routingFilters, newDevice.versions.agent)
+    transformRoutingFilters(origDevice.routingFilters, origDevice?.versions?.agent),
+    transformRoutingFilters(newDevice.routingFilters, newDevice?.versions?.agent)
   ];
 
   const [addRoutingFilters, removeRoutingFilters] = [
@@ -1126,23 +1123,24 @@ const apply = async (device, user, data) => {
   const orgId = data.org;
   const modifyParams = {};
 
-  device[0] = await device[0]
-    .populate('interfaces.pathlabels', '_id name type')
-    .populate('interfaces.qosPolicy')
-    .populate('policies.qos.policy')
-    .populate({
+  device[0] = await device[0].populate([
+    { path: 'interfaces.pathlabels', select: '_id name type' },
+    { path: 'interfaces.qosPolicy' },
+    { path: 'policies.qos.policy' },
+    {
       path: 'applications.app',
       populate: {
         path: 'appStoreApp'
       }
-    }).execPopulate();
+    }
+  ]);
 
-  data.newDevice = await data.newDevice
-    .populate('interfaces.pathlabels', '_id name type')
-    .populate('policies.firewall.policy', '_id name rules')
-    .populate('interfaces.qosPolicy')
-    .populate('policies.qos.policy')
-    .execPopulate();
+  data.newDevice = await data.newDevice.populate([
+    { path: 'interfaces.pathlabels', select: '_id name type' },
+    { path: 'policies.firewall.policy', select: '_id name rules' },
+    { path: 'interfaces.qosPolicy' },
+    { path: 'policies.qos.policy' }
+  ]);
 
   data.sendAddTunnels ??= new Set();
   data.sendRemoveTunnels ??= new Set();
@@ -1226,7 +1224,7 @@ const apply = async (device, user, data) => {
   // Compare the array of interfaces, and return
   // an array of the interfaces that have changed
   // First, extract only the relevant interface fields
-  const origDeviceVersion = device[0].versions.agent;
+  const origDeviceVersion = device[0]?.versions?.agent;
   const origTransformedIfcs = transformInterfaces(
     device[0].interfaces, device[0].ospf, origDeviceVersion
   );
@@ -1242,7 +1240,7 @@ const apply = async (device, user, data) => {
     })
   ];
 
-  const newDeviceVersion = data.newDevice.versions.agent;
+  const newDeviceVersion = data.newDevice?.versions?.agent;
   const newTransformedIfcs = transformInterfaces(
     data.newDevice.interfaces, data.newDevice.ospf, newDeviceVersion
   );
@@ -1582,15 +1580,23 @@ const sync = async (deviceId, orgId) => {
   )
     .lean()
     // no need to populate pathLabel name here, since we need only the id's
-    .populate('interfaces.pathlabels', '_id type')
-    .populate('org');
+    .populate([
+      { path: 'interfaces.pathlabels', select: '_id type' },
+      { path: 'org' }
+    ]);
+
+  if (!device) {
+    logger.error('Sync failed, device not found', { params: { deviceId } });
+    throw new Error('Device not found');
+  }
 
   const {
     interfaces, staticroutes, dhcp, ospf, bgp, advancedRouting, routingFilters, versions, _id
   } = device;
 
-  const majorVersion = getMajorVersion(versions.agent);
-  const minorVersion = getMinorVersion(versions.agent);
+  const agentVersion = versions?.agent;
+  const majorVersion = getMajorVersion(agentVersion);
+  const minorVersion = getMinorVersion(agentVersion);
 
   // Prepare add-interface message
   const deviceConfRequests = [];
@@ -1619,7 +1625,7 @@ const sync = async (deviceId, orgId) => {
   });
 
   // build interfaces
-  buildInterfaces(interfaces, ospf, versions.agent).forEach(item => {
+  buildInterfaces(interfaces, ospf, versions?.agent).forEach(item => {
     deviceConfRequests.push({
       entity: 'agent',
       message: 'add-interface',
@@ -1665,7 +1671,7 @@ const sync = async (deviceId, orgId) => {
   }
 
   // Prepare add-routing-filter message
-  const routingFiltersData = transformRoutingFilters(routingFilters, versions.agent);
+  const routingFiltersData = transformRoutingFilters(routingFilters, versions?.agent);
   routingFiltersData.forEach(entry => {
     deviceConfRequests.push({
       entity: 'agent',
@@ -1778,7 +1784,7 @@ const remove = async (job) => {
 };
 
 const _isNeedToSkipModifyJob = (messageParams, modifiedIfcsMap, device) => {
-  const origIfcs = transformInterfaces(device.interfaces, device.ospf, device.versions.agent);
+  const origIfcs = transformInterfaces(device.interfaces, device.ospf, device.versions?.agent);
   return !has(messageParams, 'modify_router') &&
     !has(messageParams, 'modify_routes') &&
     !has(messageParams, 'modify_dhcp_config') &&

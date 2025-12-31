@@ -157,7 +157,7 @@ class ApplicationsService {
   static async appstorePurchasedGET (requestParams, { user }) {
     try {
       let orgList = await getAccessTokenOrgList(user, requestParams.org, true);
-      orgList = orgList.map(o => mongoose.Types.ObjectId(o));
+      orgList = orgList.map(o => new mongoose.Types.ObjectId(o));
 
       const pipeline = [
         { $match: { org: { $in: orgList } } },
@@ -589,7 +589,7 @@ class ApplicationsService {
       }
 
       const app = await applications.findOne({ _id: id })
-        .populate('appStoreApp').populate('org').lean();
+        .populate(['appStoreApp', 'org']).lean();
 
       if (!app) {
         return Service.rejectResponse('Invalid application id', 500);

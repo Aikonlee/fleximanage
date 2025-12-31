@@ -203,8 +203,12 @@ organizationsRouter.route('/summary')
 
       // Get traffic statistics from deviceStats collection
       // Query the latest stats for each device in the organization
-      const deviceList = await devices.find({ org: orgId }).select('_id machineId').lean();
+      const deviceList = await devices.find({ org: orgId }).select('_id machineId').lean().exec();
       const deviceIds = deviceList.map(d => d._id);
+      
+      logger.debug('Traffic calculation - devices found', {
+        params: { orgId, deviceCount: deviceIds.length, deviceIds: deviceIds.map(d => d.toString()) }
+      });
       
       let totalBytesPerSecond = 0;
       let totalBytes = 0;
@@ -212,6 +216,10 @@ organizationsRouter.route('/summary')
       
       if (deviceIds.length > 0) {
         try {
+          logger.debug('Traffic - attempting to query deviceStats', {
+            params: { orgId, deviceCount: deviceIds.length }
+          });
+          
           // Get the latest stats for each device
           const latestStats = await deviceStats.aggregate([
             {
@@ -231,10 +239,10 @@ organizationsRouter.route('/summary')
                 latestCreated: { $first: '$createdAt' }
               }
             }
-          ]);
+          ]).toArray();
 
-          logger.debug('Retrieved device stats', {
-            params: { orgId, deviceCount: deviceIds.length, statsCount: latestStats.length }
+          logger.debug('Traffic - Retrieved device stats', {
+            params: { orgId, deviceCount: deviceIds.length, statsCount: latestStats.length, stats: JSON.stringify(latestStats).substring(0, 500) }
           });
 
           // Aggregate rx_bps and tx_bps from all device interfaces
@@ -260,11 +268,11 @@ organizationsRouter.route('/summary')
           const statsPollPeriodSeconds = 300; // 5 minutes default
           totalBytes = Math.round(totalBytesPerSecond * statsPollPeriodSeconds);
 
-          logger.debug('Calculated total traffic', {
+          logger.debug('Traffic calculation - Calculated total traffic', {
             params: { orgId, totalBytesPerSecond, estimatedBytes: totalBytes, lastUpdate: lastUpdateTime }
           });
         } catch (err) {
-          logger.error('Error querying device stats', {
+          logger.error('Traffic calculation - Error querying device stats', {
             params: { orgId, error: err.message, stack: err.stack }
           });
         }

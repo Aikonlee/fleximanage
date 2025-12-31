@@ -4,7 +4,7 @@ set -euo pipefail
 # MongoDB Replica Set Systemd Service Setup Script
 # Creates systemd service units for MongoDB 3-node replica set with auto-start on boot
 
-MONGO_VERSION="8.0.15"
+MONGO_VERSION="7.0.25"
 MONGO_INSTALL_DIR="/opt/mongodb-${MONGO_VERSION}"
 MONGO_BIN="/opt/mongodb-current/bin/mongod"
 MONGOSH_BIN="/opt/mongodb-current/bin/mongosh"

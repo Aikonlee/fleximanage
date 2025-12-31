@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# MongoDB 8.0.15 Replica Set Helper (3-node) -- ARM64 version for Ubuntu 24.04
+# MongoDB 7.0.25 Replica Set Helper (3-node) -- ARM64 version for Ubuntu 24.04
 
-MONGO_VERSION="8.0.15"
+MONGO_VERSION="7.0.25"
 DIST_SUFFIX="ubuntu2404"
 ARCH="arm64"
 MONGO_DOWNLOAD_URL="https://fastdl.mongodb.org/linux/mongodb-linux-aarch64-${DIST_SUFFIX}-${MONGO_VERSION}.tgz"

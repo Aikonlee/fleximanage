@@ -13,7 +13,7 @@ This is a customized fork of flexiWAN's SD-WAN management platform, enhanced wit
 **System Environment Upgrades**
 - ✅ Upgraded to Node.js v20.18.1 (from v10+)
 - ✅ Upgraded to Mongoose v7+ with full compatibility refactoring
-- ✅ Updated MongoDB to v8.0.15 ARM64 with replica set support (3 nodes)
+- ✅ Updated MongoDB to v7.0.25 ARM64 with replica set support (3 nodes)
 - ✅ Redis 5.0.5 in production
 - ✅ Python aiosmtpd for email services
 
@@ -105,7 +105,7 @@ To experience the complete flexiWAN system, open a free account on our [hosted s
 FlexiManage requires the following to run:
 * **Node.js v20.18.1+** (updated from v10+)
 * npm v10.9.4+
-* **MongoDB v8.0.15 ARM64**, running as a replica-set with 3 nodes on ports 27017, 27018, 27019
+* **MongoDB v7.0.25 ARM64**, running as a replica-set with 3 nodes on ports 27017, 27018, 27019
 * Redis 5.0.5+, running on port 6379
 * A mailer application or trapper of your choice, running on port 1025 (Such as [python aiosmtpd](https://pypi.org/project/aiosmtpd/))
 
@@ -293,7 +293,7 @@ Refresh-JWT: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1ZTh...TlNo
 ### v6.4.32+ (Current)
 - Mongoose v7+ compatibility
 - Node.js v20.18.1 support
-- MongoDB 8.0.15 ARM64 support
+- MongoDB 7.0.25 ARM64 support
 - Enhanced device management
 - Improved CORS handling
 

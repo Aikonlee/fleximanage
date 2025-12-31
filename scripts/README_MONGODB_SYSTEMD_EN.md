@@ -14,8 +14,8 @@ This document explains how to configure systemd services for MongoDB replica set
 
 ### Prerequisites
 
-1. MongoDB 8.0.15 ARM64 already installed (via `install_mongodb_arm64.sh`)
-2. Installation path: `/opt/mongodb-8.0.15` or `/opt/mongodb-current`
+1. MongoDB 7.0.25 ARM64 already installed (via `install_mongodb_arm64.sh`)
+2. Installation path: `/opt/mongodb-7.0.25` or `/opt/mongodb-current`
 3. Root privileges (sudo)
 
 ### Install and Start Services

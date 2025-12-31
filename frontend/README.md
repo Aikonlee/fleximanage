@@ -32,7 +32,7 @@ This project provides a comprehensive, production-ready administration console t
 |-----------|--------|---------|------------|---------|
 | **Frontend** | ✅ Running | Build: latest | Via Backend | Served as static files |
 | **Backend** | ✅ Running | 6.3.37 | systemd + PM2 | Port 3443 (HTTPS) |
-| **MongoDB** | ✅ Running | 8.0.15 ARM64 | systemd (3 nodes) | Ports 27017-27019 |
+| **MongoDB** | ✅ Running | 7.0.25 ARM64 | systemd (3 nodes) | Ports 27017-27019 |
 | **Redis** | ✅ Running | 5.0.5+ | systemd | Port 6379 |
 | **Email** | ✅ Running | aiosmtpd | systemd | Port 1025 |
 
@@ -158,7 +158,7 @@ This project provides a comprehensive, production-ready administration console t
 
 - **Node.js 20+** with NVM
 - **npm 6+**
-- **MongoDB 8.0.15** replica set (3 nodes on ports 27017-27019)
+- **MongoDB 7.0.25** replica set (3 nodes on ports 27017-27019)
 - **Redis 5.0.5+** (port 6379)
 - **PM2 Process Manager** (`npm install -g pm2`)
 - **Email Server** (aiosmtpd on port 1025)

@@ -67,22 +67,25 @@ exports.jwtPassport = passport.use('jwt', new JwtStrategy(opts, async (jwtPayloa
     }
   }
 
-  User
-    .findOne({ _id: jwtPayload._id })
-    .populate('defaultOrg')
-    .populate('defaultAccount')
-    .exec(async (err, user) => {
-      if (err) {
-        return done(err, false);
-      } else if (user) {
-        const res = await setUserPerms(user, jwtPayload, token);
-        return res === true
-          ? done(null, user)
-          : done(null, false, { message: 'Invalid Token' });
-      } else {
-        done(null, false, { message: 'Invalid Token' });
-      }
-    });
+  try {
+    const user = await User
+      .findOne({ _id: jwtPayload._id })
+      .populate([
+        { path: 'defaultOrg' },
+        { path: 'defaultAccount' }
+      ]);
+    
+    if (user) {
+      const res = await setUserPerms(user, jwtPayload, token);
+      return res === true
+        ? done(null, user)
+        : done(null, false, { message: 'Invalid Token' });
+    } else {
+      done(null, false, { message: 'Invalid Token' });
+    }
+  } catch (err) {
+    return done(err, false);
+  }
 }));
 
 passport.use('jwt-login', new JwtStrategy(opts, async (jwtPayload, done) => {
@@ -91,19 +94,22 @@ passport.use('jwt-login', new JwtStrategy(opts, async (jwtPayload, done) => {
     return done(null, false, { message: 'The JWT token is unauthorized to access this resource' });
   }
 
-  User
-    .findOne({ _id: jwtPayload.userId })
-    .populate('defaultOrg')
-    .populate('defaultAccount')
-    .exec(async (err, user) => {
-      if (err) {
-        return done(err, false);
-      } else if (user) {
-        return done(null, user);
-      } else {
-        done(null, false, { message: 'Invalid Token' });
-      }
-    });
+  try {
+    const user = await User
+      .findOne({ _id: jwtPayload.userId })
+      .populate([
+        { path: 'defaultOrg' },
+        { path: 'defaultAccount' }
+      ]);
+    
+    if (user) {
+      return done(null, user);
+    } else {
+      done(null, false, { message: 'Invalid Token' });
+    }
+  } catch (err) {
+    return done(err, false);
+  }
 }));
 
 const setUserPerms = async (user, jwtPayload, token = null) => {
@@ -186,7 +192,10 @@ exports.verifyUserLocal = async function (req, res, next) {
         return next(createError(401, 'Account not verified, check your e-mail and verify'));
       } else {
         try {
-          await user.populate('defaultOrg').populate('defaultAccount').execPopulate();
+          await user.populate([
+            { path: 'defaultOrg' },
+            { path: 'defaultAccount' }
+          ]);
           // If user has no permission for organization set to null
           if (user.defaultOrg) {
             const org = await getUserOrgByID(user, user.defaultOrg._id);

@@ -166,9 +166,18 @@ const setUserPerms = async (user, jwtPayload, token = null) => {
 
 // Authentication verification for local and JWT strategy, and populate req.user
 exports.verifyUserLocal = async function (req, res, next) {
-  // Verify captcha
-  if (!await reCaptcha.verifyReCaptcha(req.body.captcha)) {
-    return next(createError(401, 'Wrong Captcha'));
+  // Verify captcha (skip in development if CAPTCHA_KEY is test key)
+  const configs = require('./configs')();
+  const isTestCaptcha = configs.get('captchaKey') === '0x4AAAAAAB43PO97iTQPqCGoeQsv0SPYXk4';
+  const isDevelopment = configs.get('environment') === 'development';
+  
+  if (!isTestCaptcha || !isDevelopment) {
+    // Only verify CAPTCHA in production or with non-test keys
+    if (!await reCaptcha.verifyReCaptcha(req.body.captcha)) {
+      return next(createError(401, 'Wrong Captcha'));
+    }
+  } else {
+    console.log('[DEV] Skipping CAPTCHA verification (test key in development)');
   }
 
   // Continue with verifying password

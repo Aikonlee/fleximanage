@@ -42,11 +42,12 @@ const apply = async (devices, user, data) => {
   // Note! on start, the "allowOverlapping" is true by default.
   // User should allowed it on the configuration time.
   const { allowOverlapping = true } = meta;
-  const opDevices = await Promise.all(devices.map(d => d
-    .populate('policies.firewall.policy', '_id name rules')
-    .populate('interfaces.pathlabels', '_id name description color type')
-    .populate('org')
-
+  const opDevices = await Promise.all(devices.map(d => 
+    d.populate([
+      { path: 'policies.firewall.policy', select: '_id name rules' },
+      { path: 'interfaces.pathlabels', select: '_id name description color type' },
+      { path: 'org' }
+    ])
   ));
 
   const errors = [];

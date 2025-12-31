@@ -45,6 +45,10 @@ const Home = () => {
       const response = await api.get('/organizations/summary');
       const data = response.data;
       
+      console.log('HOME: API response status:', response.status);
+      console.log('HOME: API response data:', data);
+      console.log('HOME: Full response object:', response);
+      
       // Update device statistics
       // Backend queries from /backend/routes/organizations.js (Lines 312-326):
       // - total: countDocuments({ org })
@@ -55,6 +59,8 @@ const Home = () => {
       const deviceRunning = data.devices?.running || 0;
       const deviceConnected = data.devices?.connected || 0;
       const deviceApproved = data.devices?.approved || 0;
+      
+      console.log('HOME: Parsed device stats - total:', deviceTotal, 'running:', deviceRunning, 'connected:', deviceConnected, 'approved:', deviceApproved);
       
       setDeviceStats({
         total: deviceTotal,
@@ -105,7 +111,10 @@ const Home = () => {
       }
 
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('HOME: Error fetching dashboard data:', error);
+      console.error('HOME: Error response:', error.response?.data);
+      console.error('HOME: Error status:', error.response?.status);
+      console.error('HOME: Full error:', error);
       setError(error.response?.data?.message || error.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);

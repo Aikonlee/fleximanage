@@ -825,7 +825,7 @@ const _addTunnelTasks = (tasks, tunnel, tasksDeviceA, tasksDeviceB) => {
  * @return {Promise}          a promise for updating the flab in the database
  */
 const setJobPendingInDB = (deviceID, org, flag) => {
-  return devices.update(
+  return devices.updateOne(
     { _id: deviceID, org: org },
     { $set: { pendingDevModification: flag } },
     { upsert: false }

@@ -167,14 +167,14 @@ const complete = async (jobId, res) => {
  * @param {Object} origDhcp - Original DHCP
  */
 const rollbackDhcpChanges = async (deviceId, origDhcp) => {
-  const result = await devices.update(
+  const result = await devices.updateOne(
     { _id: deviceId },
     { $set: { 'dhcp.$[elem]': origDhcp } },
     { arrayFilters: [{ 'elem._id': new mongoose.Types.ObjectId(origDhcp._id) }] }
   );
 
   // console.log(JSON.stringify(result));
-  if (result.nModified !== 1) throw new Error('Failed to restore DHCP');
+  if (result.modifiedCount !== 1) throw new Error('Failed to restore DHCP');
 };
 
 /**

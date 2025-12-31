@@ -33,8 +33,12 @@ console.log('[api] API configuration:', {
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    console.log('[api] Request interceptor - token status:', token ? 'exists' : 'missing', 'for URL:', config.url);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('[api] Authorization header added:', `Bearer ${token.substring(0, 20)}...`);
+    } else {
+      console.log('[api] WARNING: No token found in localStorage!');
     }
     return config;
   },
@@ -67,9 +71,23 @@ api.interceptors.response.use(
         httpsPage: typeof window !== 'undefined' ? window.location.protocol === 'https:' : undefined
       });
     } else if (error.response.status === 401) {
-      // Redirect only if not already on login page to avoid loop
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-        localStorage.removeItem('token');
+      // Log 401 errors with context
+      console.warn('[api] 401 Unauthorized error:', {
+        url: error.config?.url,
+        hasToken: !!localStorage.getItem('token'),
+        tokenPreview: localStorage.getItem('token')?.substring(0, 20) + '...',
+        responseData: error.response.data,
+        headers: error.response.headers
+      });
+      
+      // Only redirect if not already on login page to avoid loop
+      // Don't automatically remove token - let the component decide
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+        console.warn('[api] Redirecting to login due to 401');
+        // Clear token only if it exists (user was logged in)
+        if (localStorage.getItem('token')) {
+          localStorage.removeItem('token');
+        }
         window.location.href = '/login';
       }
     }

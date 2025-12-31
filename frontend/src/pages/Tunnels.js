@@ -18,14 +18,18 @@ const Tunnels = () => {
   const fetchTunnelsAndDevices = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
+      console.log('TUNNELS: Token check - exists:', !!token);
       if (!token) {
+        console.log('TUNNELS: No token found, redirecting to login');
         navigate('/login');
         return;
       }
 
       // Fetch devices first
+      console.log('TUNNELS: Fetching devices...');
       const devicesResponse = await api.get('/devices?response=detailed');
       const devicesData = devicesResponse.data;
+      console.log('TUNNELS: Devices fetched:', devicesData.length);
       
       // Create device map
       const deviceMap = {};
@@ -39,8 +43,10 @@ const Tunnels = () => {
       });
       
       // Fetch tunnels
+      console.log('TUNNELS: Fetching tunnels...');
       const tunnelsResponse = await api.get('/tunnels');
       const tunnelsData = tunnelsResponse.data;
+      console.log('TUNNELS: Tunnels fetched:', tunnelsData.length, tunnelsData);
       
       // Calculate stats
       const connected = tunnelsData.filter(t => t.isActive).length;
@@ -56,11 +62,14 @@ const Tunnels = () => {
       setError(null);
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching tunnels:', error);
+      console.error('TUNNELS: Error fetching data:', error);
+      console.error('TUNNELS: Error response:', error.response?.data);
+      console.error('TUNNELS: Error status:', error.response?.status);
       setError(error.message || 'Failed to fetch tunnels');
       setLoading(false);
       
       if (error.response?.status === 401) {
+        console.log('TUNNELS: 401 error - clearing token and redirecting');
         localStorage.removeItem('token');
         navigate('/login');
       }

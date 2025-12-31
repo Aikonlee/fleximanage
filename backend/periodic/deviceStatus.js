@@ -859,7 +859,7 @@ class DeviceStatus {
       if (!shouldUpdate) return;
       this.setDeviceStatsField(deviceID, 'lastUpdateTime', msgTime);
 
-      deviceStats.update(
+      deviceStats.updateOne(
         // Query
         { org: deviceInfo.org, device: deviceInfo.deviceObj, time: msgTime },
         // Update

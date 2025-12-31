@@ -215,11 +215,11 @@ const Tunnels = () => {
   // Handle Batch OSPF configuration
   const handleBatchOspf = async () => {
     if (selectedTunnels.size === 0) {
-      alert('请先选择要配置的隧道');
+      alert('Please select at least one tunnel to configure first');
       return;
     }
 
-    if (!window.confirm(`确认为选中的 ${selectedTunnels.size} 个隧道的设备LAN接口自动配置OSPF？`)) {
+    if (!window.confirm(`Confirm to automatically configure OSPF on LAN interfaces for ${selectedTunnels.size} selected tunnel(s)?`)) {
       return;
     }
 
@@ -247,7 +247,7 @@ const Tunnels = () => {
         }
       });
 
-      console.log('配置OSPF的设备:', Array.from(deviceIds));
+      console.log('Devices to configure OSPF:', Array.from(deviceIds));
 
       // Configure OSPF for each device's LAN interfaces
       for (const deviceId of deviceIds) {
@@ -261,7 +261,7 @@ const Tunnels = () => {
             device = device[0]; // Take first element if array
           }
           
-          console.log(`设备 ${device?.name || deviceId}:`, {
+          console.log(`Device ${device?.name || deviceId}:`, {
             responseType: Array.isArray(deviceResponse.data) ? 'array' : 'object',
             hasInterfaces: !!device?.interfaces,
             interfacesCount: device?.interfaces?.length || 0,
@@ -275,8 +275,8 @@ const Tunnels = () => {
           
           // Check if device data is valid
           if (!device || !device.interfaces || !Array.isArray(device.interfaces)) {
-            console.error(`设备 ${deviceId} 数据无效:`, device);
-            results.push(`${device?.name || deviceId}: 设备没有接口信息`);
+            console.error(`Device ${deviceId} has invalid data:`, device);
+            results.push(`${device?.name || deviceId}: Device has no interface information`);
             continue;
           }
           
@@ -285,14 +285,14 @@ const Tunnels = () => {
             const hasIP = iface.IPv4 && iface.IPv4 !== '';
             const isNotWAN = iface.type !== 'WAN';
             const isLan = iface.isAssigned && hasIP && isNotWAN;
-            console.log(`  接口 ${iface.name}: isAssigned=${iface.isAssigned}, type=${iface.type}, IPv4="${iface.IPv4}", 判定=${isLan}`);
+            console.log(`  Interface ${iface.name}: isAssigned=${iface.isAssigned}, type=${iface.type}, IPv4="${iface.IPv4}", isLAN=${isLan}`);
             return isLan;
           });
 
-          console.log(`找到 ${lanInterfaces.length} 个LAN接口:`, lanInterfaces.map(i => i.name));
+          console.log(`Found ${lanInterfaces.length} LAN interface(s):`, lanInterfaces.map(i => i.name));
 
           if (lanInterfaces.length === 0) {
-            results.push(`${device.name || deviceId}: 未找到可配置的LAN接口`);
+            results.push(`${device.name || deviceId}: No configurable LAN interfaces found`);
             continue;
           }
 
@@ -329,26 +329,26 @@ const Tunnels = () => {
             }
           });
 
-          results.push(`${device.name || deviceId}: 成功配置 ${lanInterfaces.length} 个LAN接口`);
+          results.push(`${device.name || deviceId}: Successfully configured ${lanInterfaces.length} LAN interface(s)`);
         } catch (err) {
-          console.error(`配置设备 ${deviceId} 失败:`, err);
-          console.error('错误详情:', {
+          console.error(`Failed to configure device ${deviceId}:`, err);
+          console.error('Error details:', {
             message: err.message,
             response: err.response?.data,
             status: err.response?.status
           });
-          const errorMsg = err.response?.data?.message || err.message || '未知错误';
+          const errorMsg = err.response?.data?.message || err.message || 'Unknown error';
           errors.push(`${deviceId}: ${errorMsg}`);
         }
       }
 
       // Show results
-      let message = '批量OSPF配置完成:\n\n';
+      let message = 'Batch OSPF configuration completed:\n\n';
       if (results.length > 0) {
-        message += '成功:\n' + results.join('\n') + '\n\n';
+        message += 'Successful:\n' + results.join('\n') + '\n\n';
       }
       if (errors.length > 0) {
-        message += '失败:\n' + errors.join('\n');
+        message += 'Failed:\n' + errors.join('\n');
       }
       alert(message);
 
@@ -358,8 +358,8 @@ const Tunnels = () => {
       // Refresh tunnels
       fetchTunnelsAndDevices();
     } catch (error) {
-      console.error('批量OSPF配置错误:', error);
-      alert('批量配置失败: ' + error.message);
+      console.error('Batch OSPF configuration error:', error);
+      alert('Batch configuration failed: ' + error.message);
     } finally {
       setBatchOspfLoading(false);
     }
@@ -382,7 +382,7 @@ const Tunnels = () => {
                 disabled={batchOspfLoading}
               >
                 <FaNetworkWired className="me-1" />
-                {batchOspfLoading ? '配置中...' : `Batch OSPF (${selectedTunnels.size})`}
+                {batchOspfLoading ? 'Configuring...' : `Batch OSPF (${selectedTunnels.size})`}
               </Button>
             )}
             <Button variant="primary" size="sm" onClick={handleRefresh} disabled={loading}>
@@ -453,7 +453,7 @@ const Tunnels = () => {
                       type="checkbox"
                       checked={tunnels.length > 0 && selectedTunnels.size === tunnels.length}
                       onChange={handleToggleAll}
-                      title="全选/取消全选"
+                      title="Select/Deselect All"
                     />
                   </th>
                   <th>ID</th>

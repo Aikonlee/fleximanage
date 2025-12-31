@@ -1,10 +1,10 @@
 // Frontend configuration
 const config = {
   // Backend API endpoint
-  apiUrl: process.env.REACT_APP_API_URL || 'https://manage.miwide.com:3443',
+  apiUrl: process.env.REACT_APP_API_URL || 'https://localhost:3443',
   
   // WebSocket endpoint for real-time updates
-  wsUrl: process.env.REACT_APP_WS_URL || 'wss://manage.miwide.com:3443',
+  wsUrl: process.env.REACT_APP_WS_URL || 'wss://localhost:3443',
   
   // Application name
   appName: 'FlexiManage',

@@ -24,7 +24,6 @@ const DeviceInfo = () => {
   const [description, setDescription] = useState('');
   const [isApproved, setIsApproved] = useState(false);
   const [originalIsApproved, setOriginalIsApproved] = useState(false);
-  const [saving, setSaving] = useState(false);
   
   // Hardware configuration modal state
   const [showHardwareModal, setShowHardwareModal] = useState(false);
@@ -344,62 +343,7 @@ const DeviceInfo = () => {
     fetchStaticRoutes();
   }, [fetchDeviceInfo, fetchStaticRoutes]);
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      
-      const updateData = {
-        name: deviceName,
-        description: description
-      };
-      
-      // Only include isApproved if it has actually changed
-      if (isApproved !== originalIsApproved) {
-        updateData.isApproved = Boolean(isApproved);
-      }
-      
-      console.log('Saving device data:', updateData);
-      console.log('isApproved value:', isApproved, 'type:', typeof isApproved);
-      console.log('originalIsApproved:', originalIsApproved, 'changed:', isApproved !== originalIsApproved);
 
-      const response = await apiCall(`/devices/${deviceId}`, {
-        method: 'PUT',
-        body: JSON.stringify(updateData)
-      });
-
-      if (!response) {
-        setSaving(false);
-        return;
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = `HTTP error! status: ${response.status}`;
-        
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.message || errorMessage;
-        } catch (e) {
-          // If not JSON, use the raw text or default message
-          errorMessage = errorText || errorMessage;
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      // Refresh device info
-      await fetchDeviceInfo();
-      setSaving(false);
-      
-      // Show success message (you can add a toast notification here)
-      console.log('Device updated successfully');
-      
-    } catch (error) {
-      console.error('Error updating device:', error);
-      setError(error.message || 'Failed to update device');
-      setSaving(false);
-    }
-  };
 
   const handleApplyHardwareConfig = async () => {
     try {
@@ -1861,7 +1805,8 @@ const DeviceInfo = () => {
 
       // Check what needs to be updated
       const hasBasicChanges = (deviceName !== (device?.name || '')) || 
-                              (description !== (device?.description || ''));
+                              (description !== (device?.description || '')) ||
+                              (isApproved !== originalIsApproved);
       const hasInterfaceChanges = Object.keys(interfaceChanges).length > 0;
       const hasTemplateChanges = Object.keys(templateInterfaceChanges).length > 0;
 
@@ -1872,6 +1817,8 @@ const DeviceInfo = () => {
         interfaceChanges,
         deviceName,
         description,
+        isApproved,
+        originalIsApproved,
         currentDeviceName: device?.name,
         currentDescription: device?.description
       });
@@ -1885,6 +1832,11 @@ const DeviceInfo = () => {
           name: deviceName,
           description: description
         };
+
+        // Only include isApproved if it has actually changed
+        if (isApproved !== originalIsApproved) {
+          deviceUpdateData.isApproved = Boolean(isApproved);
+        }
 
         // Add interface data if there are interface changes
         if (hasInterfaceChanges && device?.interfaces) {
@@ -2203,6 +2155,7 @@ const DeviceInfo = () => {
             disabled={loading || (
               deviceName === (device?.name || '') &&
               description === (device?.description || '') &&
+              isApproved === originalIsApproved &&
               Object.keys(interfaceChanges).length === 0 &&
               Object.keys(templateInterfaceChanges).length === 0
             )}
@@ -2215,11 +2168,13 @@ const DeviceInfo = () => {
           <Button 
             variant="success" 
             onClick={startDevice}
-            disabled={loading || !device?.isConnected || device?.state === 'running'}
+            disabled={loading || !device?.isConnected || !device?.isApproved || device?.state === 'running'}
             className="me-2"
             title={
               !device?.isConnected 
                 ? 'Device must be connected to start vRouter' 
+                : !device?.isApproved
+                ? 'Device must be approved to start vRouter'
                 : device?.state === 'running'
                 ? 'vRouter is already running'
                 : 'Start vRouter functionality'
@@ -2232,11 +2187,13 @@ const DeviceInfo = () => {
           <Button 
             variant="warning" 
             onClick={stopDevice}
-            disabled={loading || !device?.isConnected || device?.state !== 'running'}
+            disabled={loading || !device?.isConnected || !device?.isApproved || device?.state !== 'running'}
             className="me-2"
             title={
               !device?.isConnected 
                 ? 'Device must be connected to stop vRouter' 
+                : !device?.isApproved
+                ? 'Device must be approved to stop vRouter'
                 : device?.state !== 'running'
                 ? 'vRouter is not running'
                 : 'Stop vRouter functionality'
@@ -2250,7 +2207,8 @@ const DeviceInfo = () => {
             variant="outline-primary" 
             onClick={() => setShowHardwareModal(true)}
             className="me-2"
-            title="Configure hardware settings (CPU cores and power saving)"
+            disabled={!device?.isApproved}
+            title={!device?.isApproved ? "Device must be approved to configure hardware" : "Configure hardware settings (CPU cores and power saving)"}
           >
             <FaMicrochip className="me-2" />
             Hardware Configuration
@@ -2352,20 +2310,9 @@ const DeviceInfo = () => {
           <Row>
             <Col md={12}>
               <Card className="mb-4">
-                <Card.Header className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <FaServer className="me-2" />
-                    General Device Information
-                  </div>
-                  <Button 
-                    variant="primary" 
-                    size="sm" 
-                    onClick={handleSave}
-                    disabled={saving}
-                  >
-                    <FaSave className="me-1" />
-                    {saving ? 'Saving...' : 'Save'}
-                  </Button>
+                <Card.Header>
+                  <FaServer className="me-2" />
+                  General Device Information
                 </Card.Header>
                 <Card.Body>
                   <Form>

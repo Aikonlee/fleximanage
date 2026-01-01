@@ -203,3 +203,28 @@
   padding-top: 1rem;
   border-top: 1px solid #dee2e6;
 }
+
+/* Configuration Tab with Dropdown */
+.config-tab-toggle {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0;
+  color: inherit !important;
+  background: none !important;
+  border: none !important;
+  transition: all 0.2s ease;
+}
+
+.config-tab-toggle:hover {
+  opacity: 0.8;
+}
+
+.nav-tabs .nav-link .dropdown {
+  display: inline;
+}
+
+.nav-tabs .nav-link .dropdown-toggle::after {
+  display: none !important;
+}

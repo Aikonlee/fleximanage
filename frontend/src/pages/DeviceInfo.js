@@ -2440,49 +2440,48 @@ const DeviceInfo = () => {
 
         </Tab>
 
-        <Tab eventKey="configuration" title={<><FaCog className="me-1" />Configuration</>}>
-          <Card>
-            <Card.Header className="d-flex justify-content-between align-items-center">
-              <div>
+        <Tab eventKey="configuration" title={
+          <Dropdown className="d-inline-block">
+            <Dropdown.Toggle as="span" className="config-tab-toggle">
+              <FaCog className="me-1" />Configuration
+              <FaChevronDown className="ms-1" style={{ fontSize: '0.75rem' }} />
+            </Dropdown.Toggle>
+            <Dropdown.Menu>
+              <Dropdown.Item onClick={() => setConfigSubPage('interfaces')}>
+                <FaNetworkWired className="me-2" />
+                Interfaces
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setConfigSubPage('firewall')}>
                 <FaCog className="me-2" />
-                Device Configuration
-              </div>
-              <Dropdown>
-                <Dropdown.Toggle variant="outline-secondary" size="sm">
-                  {getConfigPageTitle(configSubPage)}
-                  <FaChevronDown className="ms-1" />
-                </Dropdown.Toggle>
-                <Dropdown.Menu>
-                  <Dropdown.Item onClick={() => setConfigSubPage('interfaces')}>
-                    <FaNetworkWired className="me-2" />
-                    Interfaces
-                  </Dropdown.Item>
-                  <Dropdown.Item onClick={() => setConfigSubPage('firewall')}>
-                    <FaCog className="me-2" />
-                    Firewall and NAT
-                  </Dropdown.Item>
-                  <Dropdown.Item onClick={() => setConfigSubPage('static-routes')}>
-                    <FaCog className="me-2" />
-                    Static Routes
-                  </Dropdown.Item>
-                  <Dropdown.Item onClick={() => setConfigSubPage('ospf')}>
-                    <FaCog className="me-2" />
-                    OSPF
-                  </Dropdown.Item>
-                  <Dropdown.Item onClick={() => setConfigSubPage('bgp')}>
-                    <FaCog className="me-2" />
-                    BGP
-                  </Dropdown.Item>
-                  <Dropdown.Item onClick={() => setConfigSubPage('routing-filters')}>
-                    <FaCog className="me-2" />
-                    Routing Filters
-                  </Dropdown.Item>
-                  <Dropdown.Item onClick={() => setConfigSubPage('advanced-routing')}>
-                    <FaCog className="me-2" />
-                    Advanced Routing
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown>
+                Firewall and NAT
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setConfigSubPage('static-routes')}>
+                <FaCog className="me-2" />
+                Static Routes
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setConfigSubPage('ospf')}>
+                <FaCog className="me-2" />
+                OSPF
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setConfigSubPage('bgp')}>
+                <FaCog className="me-2" />
+                BGP
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setConfigSubPage('routing-filters')}>
+                <FaCog className="me-2" />
+                Routing Filters
+              </Dropdown.Item>
+              <Dropdown.Item onClick={() => setConfigSubPage('advanced-routing')}>
+                <FaCog className="me-2" />
+                Advanced Routing
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown>
+        }>
+          <Card>
+            <Card.Header>
+              <FaCog className="me-2" />
+              {getConfigPageTitle(configSubPage)}
             </Card.Header>
             <Card.Body>
               {renderConfigurationContent()}

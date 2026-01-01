@@ -2288,6 +2288,7 @@ const DeviceInfo = () => {
             color: #495057 !important;
             background-color: transparent !important;
             overflow: visible !important;
+            position: relative !important;
           }
           .device-info-tabs.nav-tabs .nav-link.active {
             color: #ffffff !important;
@@ -2295,21 +2296,32 @@ const DeviceInfo = () => {
             border: 1px solid #343a40 !important;
             font-weight: 600 !important;
             overflow: visible !important;
+            position: relative !important;
           }
           .device-info-tabs.nav-tabs .nav-link:hover:not(.active) {
             color: #495057 !important;
             background-color: #f8f9fa !important;
           }
           /* Fix dropdown menu z-index */
-          .device-info-tabs .dropdown-menu {
-            position: fixed !important;
+          .config-tab-dropdown .dropdown-menu {
+            position: absolute !important;
             z-index: 99999 !important;
+            top: 100% !important;
+            right: 0 !important;
+            left: auto !important;
+            margin-top: 0.5rem !important;
           }
           .device-info-tabs .dropdown {
             position: relative !important;
           }
+          .config-tab-dropdown {
+            position: relative !important;
+          }
           .config-tab-dropdown .dropdown-toggle::after {
             display: none !important;
+          }
+          .config-tab-container {
+            position: relative !important;
           }
         `}
       </style>

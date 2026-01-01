@@ -256,14 +256,18 @@
 
 /* Fix dropdown menu z-index and positioning */
 .config-tab-dropdown .dropdown-menu {
-  position: fixed !important;
+  position: absolute !important;
   z-index: 99999 !important;
   min-width: 200px;
+  top: 100% !important;
+  right: 0 !important;
+  left: auto !important;
   margin-top: 0.5rem !important;
+  margin-right: 0 !important;
 }
 
 .config-tab-dropdown.show .dropdown-menu {
-  position: fixed !important;
+  position: absolute !important;
   z-index: 99999 !important;
   display: block !important;
 }
@@ -271,7 +275,7 @@
 /* Ensure dropdown menu appears above nav-tabs */
 .nav-tabs .dropdown-menu {
   z-index: 99999 !important;
-  position: fixed !important;
+  position: absolute !important;
 }
 
 /* Override Bootstrap dropdown defaults */
@@ -281,5 +285,5 @@
 
 .show > .dropdown-menu {
   z-index: 99999 !important;
-  position: fixed !important;
+  position: absolute !important;
 }

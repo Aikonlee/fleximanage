@@ -221,17 +221,14 @@
 }
 
 .config-tab-dropdown {
-  display: inline;
+  display: inline-flex;
   position: relative;
-}
-
-.config-tab-dropdown.dropdown {
-  position: relative !important;
+  align-items: center;
 }
 
 .config-tab-arrow {
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.5rem !important;
   border-radius: 0.25rem;
   transition: all 0.2s ease;
   display: inline-flex;
@@ -239,13 +236,21 @@
   margin-left: 0.5rem;
   position: relative;
   z-index: 1000;
+  color: inherit !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .config-tab-arrow:hover {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.1) !important;
 }
 
 .config-tab-arrow::after {
+  display: none !important;
+}
+
+.config-tab-arrow.dropdown-toggle::after {
   display: none !important;
 }
 
@@ -255,8 +260,6 @@
   z-index: 99999 !important;
   min-width: 200px;
   margin-top: 0.5rem !important;
-  top: auto !important;
-  left: auto !important;
 }
 
 .config-tab-dropdown.show .dropdown-menu {
@@ -267,11 +270,6 @@
 
 /* Ensure dropdown menu appears above nav-tabs */
 .nav-tabs .dropdown-menu {
-  z-index: 99999 !important;
-  position: fixed !important;
-}
-
-.nav-tabs .nav-link .dropdown-menu {
   z-index: 99999 !important;
   position: fixed !important;
 }

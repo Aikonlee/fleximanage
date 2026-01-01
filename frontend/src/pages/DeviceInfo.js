@@ -2457,7 +2457,7 @@ const DeviceInfo = () => {
           <div className="config-tab-container">
             <span className="config-tab-label"><FaCog className="me-1" />Configuration</span>
             <Dropdown className="config-tab-dropdown" drop="down">
-              <Dropdown.Toggle as="span" className="config-tab-arrow" id="config-dropdown">
+              <Dropdown.Toggle variant="link" size="sm" className="config-tab-arrow" id="config-dropdown" style={{ textDecoration: 'none', color: 'inherit', padding: '0.25rem 0.5rem' }}>
                 <FaChevronDown style={{ fontSize: '0.75rem' }} />
               </Dropdown.Toggle>
               <Dropdown.Menu align="end">

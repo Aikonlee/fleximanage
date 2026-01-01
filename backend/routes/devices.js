@@ -226,6 +226,10 @@ const updResp = (qtype, req, res, next, resp, origDoc = null) => {
       // Update connected property for all returned devices
       resp.forEach(d => {
         d.isConnected = connections.isConnected(d.machineId);
+        // Ensure status field is included (default to empty string if undefined)
+        if (d.status === undefined) {
+          d.status = '';
+        }
         // Add interface stats to mongoose response
         d.set(
           'deviceStatus',

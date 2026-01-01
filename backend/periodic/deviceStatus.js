@@ -1104,10 +1104,13 @@ class DeviceStatus {
     let devStatus = 'failed';
     if (rawStats.hasOwnProperty('state')) { // Agent v1.X.X
       devStatus = rawStats.state;
+      console.log('[DeviceStatus] Detected state field:', { machineId, deviceName: deviceInfo.name, devStatus });
     // v0.X.X TBD: remove when v0.X.X is not supported, e.g. mgmt=2.X.X
     } else if (rawStats.hasOwnProperty('running')) {
       devStatus = rawStats.running === true ? 'running' : 'stopped';
+      console.log('[DeviceStatus] Detected running field:', { machineId, deviceName: deviceInfo.name, running: rawStats.running, devStatus });
     }
+    console.log('[DeviceStatus] Setting device status:', { machineId, deviceName: deviceInfo.name, newStatus: devStatus, availableFields: Object.keys(rawStats).slice(0, 5) });
 
     await this.setDeviceState(machineId, devStatus, false);
     const { org, deviceObj: deviceId } = deviceInfo;

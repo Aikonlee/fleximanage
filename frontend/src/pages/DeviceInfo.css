@@ -205,26 +205,58 @@
 }
 
 /* Configuration Tab with Dropdown */
-.config-tab-toggle {
-  cursor: pointer;
+.config-tab-container {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  color: inherit;
+}
+
+.config-tab-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: default;
   padding: 0.5rem 0;
-  color: inherit !important;
-  background: none !important;
-  border: none !important;
-  transition: all 0.2s ease;
 }
 
-.config-tab-toggle:hover {
-  opacity: 0.8;
-}
-
-.nav-tabs .nav-link .dropdown {
+.config-tab-dropdown {
   display: inline;
+  position: relative;
 }
 
-.nav-tabs .nav-link .dropdown-toggle::after {
+.config-tab-arrow {
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.5rem;
+}
+
+.config-tab-arrow:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.config-tab-arrow::after {
   display: none !important;
+}
+
+/* Fix dropdown menu z-index and positioning */
+.config-tab-dropdown .dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 9999 !important;
+  min-width: 200px;
+  margin-top: 0.5rem;
+}
+
+/* Ensure dropdown menu appears above nav-tabs */
+.nav-tabs .dropdown-menu {
+  z-index: 9999 !important;
+}
+
+.nav-tabs .nav-link .dropdown-menu {
+  z-index: 9999 !important;
 }

@@ -439,20 +439,16 @@ const Devices = () => {
 
           <Card>
             <Card.Header>
-              <Row className="align-items-center">
-                <Col md={6}>
-                  <Form.Check
-                    type="checkbox"
-                    id="select-all"
-                    label="Select All Devices"
-                    checked={devices.length > 0 && selectedDevices.size === devices.length}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                  />
-                </Col>
-                <Col md={6} className="text-end">
-                  <small className="text-muted">{devices.length} device{devices.length !== 1 ? 's' : ''} total</small>
-                </Col>
-              </Row>
+              <div className="devices-header-flex">
+                <Form.Check
+                  type="checkbox"
+                  id="select-all"
+                  label="Select All Devices"
+                  checked={devices.length > 0 && selectedDevices.size === devices.length}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                />
+                <small className="text-muted devices-count">{devices.length} device{devices.length !== 1 ? 's' : ''} total</small>
+              </div>
             </Card.Header>
             <Card.Body>
               {devices.map((device) => (

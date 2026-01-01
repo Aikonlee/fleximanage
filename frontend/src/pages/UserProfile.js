@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import '../styles/unified-table.css';
+import './UserProfile.css';
 
 // User Profile page
 // Displays current user info and allows changing password.
@@ -80,36 +80,58 @@ export default function UserProfile() {
   };
 
   return (
-    <div className="page user-profile">
-      <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-        <h2 className="m-0">User Profile</h2>
-        <button className="btn btn-sm btn-primary" onClick={openChangePassword}>Change Password</button>
-      </div>
+    <div className="user-profile-page">
+      <div className="profile-container">
+        {/* 面包屑 */}
+        <div className="breadcrumb">User Profile</div>
+        
+        {/* 标题 */}
+        <h1>User Profile</h1>
 
-      {loading && <p>Loading...</p>}
-      
-      {user && !loading && (
-        <div className="unified-table-container">
-          <table className="table unified-table mb-0">
-            <thead>
-              <tr>
-                <th style={{ width: '40%' }}>Field</th>
-                <th style={{ width: '60%' }}>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: '600' }}>Name</td>
-                <td style={{ textAlign: 'left' }}>{user.name}</td>
-              </tr>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: '600' }}>Email</td>
-                <td style={{ textAlign: 'left' }}>{user.email}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
+        {/* 加载状态 */}
+        {loading && (
+          <div className="card">
+            <div className="card-body">
+              <p>Loading...</p>
+            </div>
+          </div>
+        )}
+        
+        {/* 用户信息卡片 */}
+        {user && !loading && (
+          <div className="card">
+            <div className="card-header">
+              <span>User Information</span>
+              <button className="btn btn-sm btn-primary btn-change-password" onClick={openChangePassword}>
+                Change Password
+              </button>
+            </div>
+            <div className="card-body card-body-table">
+              <table className="profile-table">
+                <tbody>
+                  <tr>
+                    <td className="field-label">Name</td>
+                    <td className="field-value">{user.name}</td>
+                  </tr>
+                  <tr>
+                    <td className="field-label">Email</td>
+                    <td className="field-value">{user.email}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 错误提示 */}
+        {!loading && !user && msg.text && (
+          <div className="card error-card">
+            <div className="card-body error-body">
+              <strong>Error:</strong> {msg.text}
+            </div>
+          </div>
+        )}
+      </div>
 
       {showModal && (
         <>

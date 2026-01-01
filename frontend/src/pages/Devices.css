@@ -78,6 +78,37 @@
   border-bottom: 2px solid #f1f3f4;
 }
 
+/* Devices header flex layout */
+.devices-header-flex {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  min-width: 350px;
+  white-space: nowrap;
+}
+
+.devices-header-flex .form-check {
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.devices-header-flex .form-check-label {
+  margin-bottom: 0;
+  font-weight: 500;
+  color: #23282c;
+  font-size: 14px;
+}
+
+.devices-count {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #73818f;
+}
+
 /* Link styling for device names */
 .device-card a {
   color: #007bff;

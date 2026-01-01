@@ -210,6 +210,7 @@
   align-items: center;
   gap: 0.25rem;
   color: inherit;
+  position: relative;
 }
 
 .config-tab-label {
@@ -224,6 +225,10 @@
   position: relative;
 }
 
+.config-tab-dropdown.dropdown {
+  position: relative !important;
+}
+
 .config-tab-arrow {
   cursor: pointer;
   padding: 0.25rem 0.5rem;
@@ -232,6 +237,8 @@
   display: inline-flex;
   align-items: center;
   margin-left: 0.5rem;
+  position: relative;
+  z-index: 1000;
 }
 
 .config-tab-arrow:hover {
@@ -244,19 +251,37 @@
 
 /* Fix dropdown menu z-index and positioning */
 .config-tab-dropdown .dropdown-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 9999 !important;
+  position: fixed !important;
+  z-index: 99999 !important;
   min-width: 200px;
-  margin-top: 0.5rem;
+  margin-top: 0.5rem !important;
+  top: auto !important;
+  left: auto !important;
+}
+
+.config-tab-dropdown.show .dropdown-menu {
+  position: fixed !important;
+  z-index: 99999 !important;
+  display: block !important;
 }
 
 /* Ensure dropdown menu appears above nav-tabs */
 .nav-tabs .dropdown-menu {
-  z-index: 9999 !important;
+  z-index: 99999 !important;
+  position: fixed !important;
 }
 
 .nav-tabs .nav-link .dropdown-menu {
-  z-index: 9999 !important;
+  z-index: 99999 !important;
+  position: fixed !important;
+}
+
+/* Override Bootstrap dropdown defaults */
+.dropdown-menu {
+  z-index: 99999 !important;
+}
+
+.show > .dropdown-menu {
+  z-index: 99999 !important;
+  position: fixed !important;
 }

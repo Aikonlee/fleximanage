@@ -2287,16 +2287,29 @@ const DeviceInfo = () => {
           .device-info-tabs.nav-tabs .nav-link {
             color: #495057 !important;
             background-color: transparent !important;
+            overflow: visible !important;
           }
           .device-info-tabs.nav-tabs .nav-link.active {
             color: #ffffff !important;
             background-color: #343a40 !important;
             border: 1px solid #343a40 !important;
             font-weight: 600 !important;
+            overflow: visible !important;
           }
           .device-info-tabs.nav-tabs .nav-link:hover:not(.active) {
             color: #495057 !important;
             background-color: #f8f9fa !important;
+          }
+          /* Fix dropdown menu z-index */
+          .device-info-tabs .dropdown-menu {
+            position: fixed !important;
+            z-index: 99999 !important;
+          }
+          .device-info-tabs .dropdown {
+            position: relative !important;
+          }
+          .config-tab-dropdown .dropdown-toggle::after {
+            display: none !important;
           }
         `}
       </style>

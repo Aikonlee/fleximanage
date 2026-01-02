@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Form, Button, Alert, Row, Col } from 'react-bootstrap';
 import { FaArrowLeft, FaSave } from 'react-icons/fa';
@@ -22,11 +22,7 @@ const EditOrganization = () => {
     tunnelRange: ''
   });
 
-  useEffect(() => {
-    fetchOrganization();
-  }, [id]);
-
-  const fetchOrganization = async () => {
+  const fetchOrganization = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get(`/organizations/${id}`);
@@ -47,7 +43,11 @@ const EditOrganization = () => {
       setError(error.message || 'Failed to fetch organization');
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchOrganization();
+  }, [fetchOrganization]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { FaKey, FaSync, FaPlus, FaCopy, FaTrash } from 'react-icons/fa';
 import api from '../services/api';
 import '../styles/unified-table.css';
 
@@ -160,31 +161,44 @@ const Tokens = () => {
   const end = Math.min(total, page * PAGE_SIZE + PAGE_SIZE);
 
   return (
-    <div className="page tokens-page">
-      <div className="d-flex flex-wrap align-items-center justify-content-between mb-3 gap-2">
-        <h2 className="mb-0">Tokens</h2>
+    <div className="tokens-page p-3 p-md-4">
+      {/* Unified Page Header */}
+      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <h1 className="h2 mb-0 text-primary fw-bold">Tokens</h1>
+          <p className="text-muted mb-0 mt-1 small">Manage API access tokens</p>
+        </div>
         <div className="d-flex gap-2">
           <button
             type="button"
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm btn-primary d-flex align-items-center"
             onClick={() => { setFormOpen(o => !o); resetForm(); }}
             disabled={creating}
-          >{formOpen ? 'Close' : 'New Token'}</button>
+          >
+            <FaPlus className="me-2" />
+            {formOpen ? 'Close Form' : 'New Token'}
+          </button>
           <button
             type="button"
-            className="btn btn-sm btn-outline-secondary"
+            className="btn btn-sm btn-outline-secondary d-flex align-items-center"
             onClick={() => loadTokens()}
             disabled={loading || creating}
-          >Refresh</button>
+          >
+            <FaSync className={`me-2 ${loading ? 'fa-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
       </div>
 
       {formOpen && (
-        <form className="border rounded p-3 mb-4 bg-light" onSubmit={handleCreate}>
-          <h6 className="fw-bold mb-3">Create Token</h6>
+        <form className="card border-0 shadow-sm p-4 mb-4 bg-white" onSubmit={handleCreate}>
+          <h6 className="fw-bold mb-3 d-flex align-items-center text-primary">
+            <FaKey className="me-2" />
+            Create Token
+          </h6>
           <div className="row g-3">
             <div className="col-12 col-lg-3">
-              <label className="form-label mb-1">Name</label>
+              <label className="form-label mb-1 fw-bold small">Name</label>
               <input 
                 className="form-control form-control-sm" 
                 value={name} 
@@ -195,7 +209,7 @@ const Tokens = () => {
               />
             </div>
             <div className="col-12 col-lg-6">
-              <label className="form-label mb-1">Server (optional)</label>
+              <label className="form-label mb-1 fw-bold small">Server (optional)</label>
               <div className="input-group input-group-sm">
                 <select 
                   className="form-select" 
@@ -215,7 +229,7 @@ const Tokens = () => {
                   disabled={creating}
                 />
               </div>
-              <div className="form-text">Leave blank to use default backend server.</div>
+              <div className="form-text small text-muted">Leave blank to use default backend server.</div>
             </div>
             <div className="col-12 col-lg-3">
               <label className="form-label mb-1">&nbsp;</label>
@@ -233,20 +247,20 @@ const Tokens = () => {
               <p className="small text-muted mb-0">Token will be shown only once after creation. Store it securely.</p>
             </div>
           </div>
-          {error && <div className="alert alert-danger py-2 px-2 mt-3 mb-0">{error}</div>}
+          {error && <div className="alert alert-danger py-2 px-2 mt-3 mb-0 shadow-sm">{error}</div>}
           {newTokenValue && (
-            <div className="alert alert-warning py-2 px-2 mt-3 mb-0">
+            <div className="alert alert-warning py-3 px-3 mt-3 mb-0 shadow-sm border-warning">
               <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div>
                   <strong>Copy your token now:</strong> 
-                  <code className="ms-1" data-token-id="new-token">{newTokenValue}</code>
+                  <code className="ms-2 user-select-all bg-white px-2 py-1 rounded border" data-token-id="new-token">{newTokenValue}</code>
                 </div>
                 <button
                   type="button"
-                  className={`btn btn-sm ${copiedToken === 'new-token' ? 'btn-success' : 'btn-outline-primary'}`}
+                  className={`btn btn-sm ${copiedToken === 'new-token' ? 'btn-success' : 'btn-outline-dark'}`}
                   onClick={() => copyToClipboard(newTokenValue, 'new-token')}
                 >
-                  {copiedToken === 'new-token' ? 'Copied!' : 'Copy Token'}
+                  {copiedToken === 'new-token' ? 'Copied!' : <><FaCopy className="me-1"/> Copy Token</>}
                 </button>
               </div>
             </div>
@@ -254,53 +268,55 @@ const Tokens = () => {
         </form>
       )}
 
-      {loading ? <p>Loading…</p> : (
-        tokens.length === 0 ? <p className="text-muted">No tokens yet.</p> : (
-          <div className="unified-table-container">
-            <div className="unified-table-header">
-              <h5>Access Tokens</h5>
+      {loading ? <div className="text-center py-5 text-muted"><div className="spinner-border spinner-border-sm me-2"></div>Loading…</div> : (
+        tokens.length === 0 ? <div className="text-center py-5 text-muted bg-light rounded border border-dashed">No tokens yet. Create one to get started.</div> : (
+          <div className="unified-table-container shadow-sm">
+            <div className="unified-table-header bg-white border-bottom">
+              <h5 className="mb-0 text-primary">Access Tokens</h5>
             </div>
             <div className="unified-table-responsive">
-              <table className="unified-table table table-striped align-middle mb-0">
-                <thead>
+              <table className="unified-table table table-hover align-middle mb-0">
+                <thead className="table-light">
                   <tr>
                     <th style={{ minWidth: 100, textAlign: 'center' }}>Name</th>
                     <th style={{ minWidth: 320 }}>Token</th>
                     <th style={{ minWidth: 180 }}>Server</th>
                     <th style={{ minWidth: 180 }}>Created At</th>
-                    <th style={{ width: 140 }}>Actions</th>
+                    <th style={{ width: 140, textAlign: 'center' }}>Actions</th>
                   </tr>
                 </thead>
               <tbody>
                 {paginated.map(t => (
                   <tr key={t.id}>
-                    <td className="text-break" style={{ maxWidth: 130, textAlign: 'center' }}>{t.name || '-'}</td>
-                    <td className="font-monospace" style={{ wordBreak: 'break-all', maxWidth: 400 }}>
+                    <td className="text-break fw-bold text-primary" style={{ maxWidth: 130, textAlign: 'center' }}>{t.name || '-'}</td>
+                    <td className="font-monospace text-muted" style={{ wordBreak: 'break-all', maxWidth: 400, fontSize: '0.85rem' }}>
                       {t.token ? (
                         <span data-token-id={t.id}>{t.token}</span>
                       ) : (
-                        <span className="text-muted">(hidden)</span>
+                        <span className="text-muted fst-italic">(hidden)</span>
                       )}
                     </td>
-                    <td>{t.server || '-'}</td>
+                    <td>{t.server || <span className="text-muted">-</span>}</td>
                     <td>{t.createdAt ? new Date(t.createdAt).toLocaleString(undefined, { hour12: false }) : '-'}</td>
                     <td>
-                      <div className="d-flex flex-column justify-content-center align-items-center gap-1" style={{ height: '100%' }}>
+                      <div className="d-flex justify-content-center gap-2">
                         <button
                           type="button"
                           className={`btn btn-sm ${copiedToken === t.id ? 'btn-success' : 'btn-outline-secondary'}`}
                           disabled={!t.token}
                           onClick={() => copyToClipboard(t.token, t.id)}
-                          style={{ minWidth: '60px' }}
+                          title="Copy Token"
                         >
-                          {copiedToken === t.id ? 'Copied!' : 'Copy'}
+                          {copiedToken === t.id ? 'Copied' : <FaCopy />}
                         </button>
                         <button
                           type="button"
                           className="btn btn-sm btn-outline-danger"
                           onClick={() => handleDelete(t.id)}
-                          style={{ minWidth: '60px' }}
-                        >Delete</button>
+                          title="Delete Token"
+                        >
+                          <FaTrash />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -308,12 +324,12 @@ const Tokens = () => {
               </tbody>
             </table>
             </div>
-            <div className="unified-table-footer">
-              <div className="pagination-info">Showing {start} to {end} of {total} Results</div>
+            <div className="unified-table-footer bg-white border-top">
+              <div className="pagination-info text-muted small">Showing {start} to {end} of {total} Results</div>
               <div className="pagination-controls">
                 <button className="btn btn-sm btn-outline-secondary" disabled={page === 0} onClick={() => setPage(0)}>First</button>
                 <button className="btn btn-sm btn-outline-secondary" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Back</button>
-                <span className="px-2 fw-bold">{page}</span>
+                <span className="px-2 fw-bold text-primary">{page + 1}</span>
                 <button className="btn btn-sm btn-outline-secondary" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => ((p + 1) * PAGE_SIZE < total ? p + 1 : p))}>Next</button>
                 <button className="btn btn-sm btn-outline-secondary" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(Math.max(0, Math.ceil(total / PAGE_SIZE) - 1))}>Last</button>
               </div>

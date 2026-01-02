@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Card, Button, Form, Alert, Row, Col } from 'react-bootstrap';
+import { FaKey, FaCopy, FaTrash, FaPlus, FaTimes } from 'react-icons/fa';
 import api from '../../services/api';
 import '../../styles/unified-table.css';
 
@@ -25,6 +27,7 @@ const AccountAccessKeys = () => {
   const [page, setPage] = useState(0);
   const [pageSize] = useState(10);
   const [copiedKey, setCopiedKey] = useState(null); // track which key was copied for feedback
+  const [showForm, setShowForm] = useState(false);
 
   // Decode token to get accountName (payload.accountName)
   useEffect(() => {
@@ -185,6 +188,7 @@ const AccountAccessKeys = () => {
           isValid: true
         }, ...prev]);
         setPage(0);
+        // Don't close form immediately so user can copy token
       }
     } catch (ePost) {
       setError(ePost.response?.data?.error || ePost.message);
@@ -193,170 +197,229 @@ const AccountAccessKeys = () => {
     }
   };
 
-  return (
-    <div className="page account-access-keys">
-      <h2 className="mb-3">Access Keys</h2>
-      <form className="border rounded p-3 mb-4 bg-light" onSubmit={handleAdd}>
-        <h6 className="fw-bold mb-3">Add Access Key</h6>
-        <div className="row g-3 align-items-end">
-          <div className="col-12 col-md-3">
-            <label className="form-label mb-1">Name</label>
-            <input className="form-control form-control-sm" value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g. CI Pipeline" required disabled={creating} />
-          </div>
-          <div className="col-6 col-md-2">
-            <label className="form-label mb-1">Permission To</label>
-            <select className="form-select form-select-sm" value={permissionTo} onChange={e => setPermissionTo(e.target.value)} disabled={creating}>
-              <option value="account">Account</option>
-              <option value="group">Group</option>
-              <option value="organization">Organization</option>
-            </select>
-          </div>
-          <div className="col-6 col-md-2">
-            <label className="form-label mb-1">Entity</label>
-            {permissionTo === 'account' && (
-              <input className="form-control form-control-sm" value={entityLabel} disabled readOnly />
-            )}
-            {permissionTo === 'group' && (
-              <select className="form-select form-select-sm" value={entity} onChange={e => setEntity(e.target.value)} disabled={creating || groups.length === 0}>
-                {groups.length === 0 && <option value="">No Groups</option>}
-                {groups.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            )}
-            {permissionTo === 'organization' && (
-              <select className="form-select form-select-sm" value={entity} onChange={e => setEntity(e.target.value)} disabled={creating || orgs.length === 0}>
-                {orgs.length === 0 && <option value="">No Orgs</option>}
-                {orgs.map(o => <option key={o._id || o.id} value={o._id || o.id}>{o.name}</option>)}
-              </select>
-            )}
-          </div>
-          <div className="col-6 col-md-2">
-            <label className="form-label mb-1">Role</label>
-            <select className="form-select form-select-sm" value={role} onChange={e => setRole(e.target.value)} disabled={creating}>
-              {availableRoles.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-            </select>
-          </div>
-          <div className="col-6 col-md-1">
-            <label className="form-label mb-1">Validity</label>
-            <select className="form-select form-select-sm" value={validity} onChange={e => setValidity(e.target.value)} disabled>
-              <option value="Default">Default</option>
-            </select>
-          </div>
-          <div className="col-12 col-md-2 d-grid">
-            <button className="btn btn-primary btn-sm" type="submit" disabled={creating}>{creating ? 'Adding...' : 'Add'}</button>
-          </div>
-        </div>
-        <p className="small text-muted mt-2 mb-0">Token will be shown only once after creation. Store it securely.</p>
-        {error && <div className="alert alert-danger py-2 px-2 mt-3 mb-0">{error}</div>}
-        {newToken && (
-          <div className="alert alert-warning py-2 px-2 mt-3 mb-0">
-            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
-              <div>
-                <strong>Copy your token now:</strong> 
-                <code className="ms-1" data-key-id="new-token">{newToken}</code>
-              </div>
-              <button
-                type="button"
-                className={`btn btn-sm ${copiedKey === 'new-token' ? 'btn-success' : 'btn-outline-primary'}`}
-                onClick={() => copyToClipboard(newToken, 'new-token')}
-              >
-                {copiedKey === 'new-token' ? 'Copied!' : 'Copy Token'}
-              </button>
-            </div>
-          </div>
-        )}
-      </form>
+  const closeForm = () => {
+    setShowForm(false);
+    setNewToken(null);
+    setFormName('');
+    setError(null);
+  };
 
-      <p className="text-muted mb-2">Existing keys</p>
-      {loading ? <p>Loading...</p> : (
-        keys.length === 0 ? <p className="text-muted">No access keys yet.</p> : (
-          <div className="unified-table-container">
-            <div className="unified-table-header">
-              <h5>Access Keys</h5>
+  return (
+    <div className="account-access-keys-page p-3 p-md-4">
+      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <h1 className="h2 mb-0 text-primary fw-bold">Access Keys</h1>
+          <p className="text-muted mb-0 mt-1 small">Manage API access keys</p>
+        </div>
+        <Button 
+          variant={showForm ? "secondary" : "primary"} 
+          onClick={showForm ? closeForm : () => setShowForm(true)}
+          className="shadow-sm d-flex align-items-center"
+        >
+          {showForm ? <><FaTimes className="me-2" /> Close Form</> : <><FaPlus className="me-2" /> Add Access Key</>}
+        </Button>
+      </div>
+
+      {showForm && (
+        <Card className="border-0 shadow-sm mb-4">
+          <Card.Header className="bg-white border-bottom py-3">
+            <h5 className="mb-0 text-primary fw-bold d-flex align-items-center">
+              <FaKey className="me-2" />
+              Create New Access Key
+            </h5>
+          </Card.Header>
+          <Card.Body>
+            <Form onSubmit={handleAdd}>
+              <Row className="g-3 align-items-end">
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label className="small fw-bold">Name</Form.Label>
+                    <Form.Control size="sm" value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g. CI Pipeline" required disabled={creating} />
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="small fw-bold">Permission To</Form.Label>
+                    <Form.Select size="sm" value={permissionTo} onChange={e => setPermissionTo(e.target.value)} disabled={creating}>
+                      <option value="account">Account</option>
+                      <option value="group">Group</option>
+                      <option value="organization">Organization</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="small fw-bold">Entity</Form.Label>
+                    {permissionTo === 'account' && (
+                      <Form.Control size="sm" value={entityLabel} disabled readOnly />
+                    )}
+                    {permissionTo === 'group' && (
+                      <Form.Select size="sm" value={entity} onChange={e => setEntity(e.target.value)} disabled={creating || groups.length === 0}>
+                        {groups.length === 0 && <option value="">No Groups</option>}
+                        {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                      </Form.Select>
+                    )}
+                    {permissionTo === 'organization' && (
+                      <Form.Select size="sm" value={entity} onChange={e => setEntity(e.target.value)} disabled={creating || orgs.length === 0}>
+                        {orgs.length === 0 && <option value="">No Orgs</option>}
+                        {orgs.map(o => <option key={o._id || o.id} value={o._id || o.id}>{o.name}</option>)}
+                      </Form.Select>
+                    )}
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="small fw-bold">Role</Form.Label>
+                    <Form.Select size="sm" value={role} onChange={e => setRole(e.target.value)} disabled={creating}>
+                      {availableRoles.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={1}>
+                  <Form.Group>
+                    <Form.Label className="small fw-bold">Validity</Form.Label>
+                    <Form.Select size="sm" value={validity} onChange={e => setValidity(e.target.value)} disabled>
+                      <option value="Default">Default</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Button type="submit" variant="primary" size="sm" className="w-100" disabled={creating}>
+                    {creating ? 'Adding...' : 'Create Key'}
+                  </Button>
+                </Col>
+              </Row>
+            </Form>
+
+            <div className="mt-3">
+              <p className="small text-muted mb-0">Token will be shown only once after creation. Store it securely.</p>
             </div>
-            <div className="unified-table-responsive">
-              <table className="unified-table table table-striped align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th style={{ minWidth: 120, textAlign: 'center' }}>Name</th>
-                    <th style={{ minWidth: 260 }}>Key</th>
-                    <th>To</th>
-                    <th>Entity</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th style={{ width: 140 }}>Actions</th>
-                  </tr>
-                </thead>
-              <tbody>
-                {keys.slice(page * pageSize, page * pageSize + pageSize).map(k => {
-                  const entityDisplay = k.to === 'account'
-                    ? accountName
-                    : (k.to === 'group' ? k.group : (k.organization || '-'));
-                  return (
-                    <tr key={k.id}>
-                      <td className="text-break" style={{ maxWidth: 180, textAlign: 'center' }}>{k.name || '-'}</td>
-                      <td className="font-monospace" style={{ wordBreak: 'break-all', maxWidth: 360 }}>
-                        {k.token ? (
-                          <span data-key-id={k.id}>{k.token}</span>
-                        ) : (
-                          <span className="text-muted">(hidden)</span>
-                        )}
-                      </td>
-                      <td>{k.to}</td>
-                      <td>{entityDisplay || '-'}</td>
-                      <td>{k.role || '-'}</td>
-                      <td>{k.isValid ? 'Active' : 'Inactive'}</td>
-                      <td>
-                        <div className="d-flex flex-column justify-content-center align-items-center gap-1" style={{ height: '100%' }}>
-                          <button
-                            type="button"
-                            className={`btn btn-sm ${copiedKey === k.id ? 'btn-success' : 'btn-outline-secondary'}`}
-                            disabled={!k.token}
-                            onClick={() => copyToClipboard(k.token, k.id)}
-                          >
-                            {copiedKey === k.id ? 'Copied!' : 'Copy'}
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={async () => {
-                              if (!window.confirm('Delete this access key?')) return;
-                              try {
-                                await api.delete(`/accesstokens/${k.id}`);
-                                setKeys(prev => prev.filter(x => x.id !== k.id));
-                              } catch (eDel) {
-                                // eslint-disable-next-line no-alert
-                                alert('Delete failed: ' + (eDel.response?.data?.error || eDel.message));
-                              }
-                            }}
-                            disabled={creating}
-                          >Delete</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
-            {/* Pagination Footer */}
-            <div className="unified-table-footer">
-              <div className="pagination-info">
-                {(() => {
-                  const total = keys.length;
-                  const start = total === 0 ? 0 : page * pageSize + 1;
-                  const end = Math.min(total, page * pageSize + pageSize);
-                  return `Showing ${start} to ${end} of ${total} Results`;
-                })()}
-              </div>
-              <div className="pagination-controls">
-                <button className="btn btn-sm btn-outline-secondary" disabled={page === 0} onClick={() => setPage(0)}>First</button>
-                <button className="btn btn-sm btn-outline-secondary" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Back</button>
-                <span className="px-2 fw-bold">{page}</span>
-                <button className="btn btn-sm btn-outline-secondary" disabled={(page + 1) * pageSize >= keys.length} onClick={() => setPage(p => ((p + 1) * pageSize < keys.length ? p + 1 : p))}>Next</button>
-                <button className="btn btn-sm btn-outline-secondary" disabled={(page + 1) * pageSize >= keys.length} onClick={() => setPage(Math.max(0, Math.ceil(keys.length / pageSize) - 1))}>Last</button>
-              </div>
-            </div>
-          </div>
-        )
+
+            {error && <Alert variant="danger" className="mt-3 py-2">{error}</Alert>}
+            
+            {newToken && (
+              <Alert variant="warning" className="mt-3 py-3 shadow-sm border-warning">
+                <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <div>
+                    <strong>Copy your token now:</strong> 
+                    <code className="ms-2 user-select-all bg-white px-2 py-1 rounded border" data-key-id="new-token">{newToken}</code>
+                  </div>
+                  <Button
+                    variant={copiedKey === 'new-token' ? "success" : "outline-dark"}
+                    size="sm"
+                    onClick={() => copyToClipboard(newToken, 'new-token')}
+                  >
+                    {copiedKey === 'new-token' ? 'Copied!' : <><FaCopy className="me-1"/> Copy Token</>}
+                  </Button>
+                </div>
+              </Alert>
+            )}
+          </Card.Body>
+        </Card>
+      )}
+
+      {loading ? (
+        <div className="text-center py-5 text-muted"><div className="spinner-border spinner-border-sm me-2"></div>Loading...</div>
+      ) : (
+        <Card className="shadow-sm border-0">
+          <Card.Body className="p-0">
+            {keys.length === 0 ? (
+              <div className="text-center p-5 text-muted">No access keys found. Click "Add Access Key" to create one.</div>
+            ) : (
+              <>
+                <div className="unified-table-container shadow-none border-0">
+                  <table className="table unified-table table-hover align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th style={{ minWidth: 120 }}>Name</th>
+                        <th style={{ minWidth: 260 }}>Key</th>
+                        <th>To</th>
+                        <th>Entity</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th style={{ width: 140, textAlign: 'center' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {keys.slice(page * pageSize, page * pageSize + pageSize).map(k => {
+                        const entityDisplay = k.to === 'account'
+                          ? accountName
+                          : (k.to === 'group' ? k.group : (k.organization || '-'));
+                        return (
+                          <tr key={k.id}>
+                            <td className="fw-bold text-primary text-break" style={{ maxWidth: 180 }}>{k.name || '-'}</td>
+                            <td className="font-monospace text-muted small" style={{ wordBreak: 'break-all', maxWidth: 360 }}>
+                              {k.token ? (
+                                <span data-key-id={k.id}>{k.token}</span>
+                              ) : (
+                                <span className="text-muted fst-italic">(hidden)</span>
+                              )}
+                            </td>
+                            <td><span className="badge bg-secondary">{k.to}</span></td>
+                            <td>{entityDisplay || '-'}</td>
+                            <td>{k.role || '-'}</td>
+                            <td>
+                              <span className={`badge ${k.isValid ? 'bg-success' : 'bg-danger'}`}>
+                                {k.isValid ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="d-flex justify-content-center gap-2">
+                                <Button
+                                  variant={copiedKey === k.id ? "success" : "outline-secondary"}
+                                  size="sm"
+                                  disabled={!k.token}
+                                  onClick={() => copyToClipboard(k.token, k.id)}
+                                  title="Copy"
+                                >
+                                  {copiedKey === k.id ? 'Copied' : <FaCopy />}
+                                </Button>
+                                <Button
+                                  variant="outline-danger"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!window.confirm('Delete this access key?')) return;
+                                    try {
+                                      await api.delete(`/accesstokens/${k.id}`);
+                                      setKeys(prev => prev.filter(x => x.id !== k.id));
+                                    } catch (eDel) {
+                                      alert('Delete failed: ' + (eDel.response?.data?.error || eDel.message));
+                                    }
+                                  }}
+                                  title="Delete"
+                                >
+                                  <FaTrash />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Pagination Footer */}
+                <div className="card-footer bg-white border-top d-flex justify-content-between align-items-center">
+                  <div className="small text-muted">
+                    {(() => {
+                      const total = keys.length;
+                      const start = total === 0 ? 0 : page * pageSize + 1;
+                      const end = Math.min(total, page * pageSize + pageSize);
+                      return `Showing ${start} to ${end} of ${total} Results`;
+                    })()}
+                  </div>
+                  <div className="btn-group">
+                    <Button variant="outline-secondary" size="sm" disabled={page === 0} onClick={() => setPage(0)}>First</Button>
+                    <Button variant="outline-secondary" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Back</Button>
+                    <div className="btn btn-sm btn-outline-secondary disabled text-dark fw-bold" style={{ opacity: 1 }}>{page + 1}</div>
+                    <Button variant="outline-secondary" size="sm" disabled={(page + 1) * pageSize >= keys.length} onClick={() => setPage(p => ((p + 1) * pageSize < keys.length ? p + 1 : p))}>Next</Button>
+                    <Button variant="outline-secondary" size="sm" disabled={(page + 1) * pageSize >= keys.length} onClick={() => setPage(Math.max(0, Math.ceil(keys.length / pageSize) - 1))}>Last</Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </Card.Body>
+        </Card>
       )}
     </div>
   );

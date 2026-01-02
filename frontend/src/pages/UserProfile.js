@@ -5,17 +5,6 @@ import './UserProfile.css';
 // User Profile page
 // Displays current user info and allows changing password.
 
-function decodeToken() {
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
-    const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(decodeURIComponent(escape(json)));
-  } catch (e) { return null; }
-}
-
 export default function UserProfile() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);

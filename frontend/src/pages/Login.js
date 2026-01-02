@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BRAND_NAME, BRAND_TAGLINE } from '../constants/branding';
+import { BRAND_NAME } from '../constants/branding';
 import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FaUser, FaLock } from 'react-icons/fa';

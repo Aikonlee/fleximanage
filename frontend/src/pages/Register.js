@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BRAND_NAME } from '../constants/branding';
 import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';

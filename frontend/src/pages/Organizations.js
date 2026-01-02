@@ -189,17 +189,19 @@ const Organizations = () => {
   };
 
   if (loading) {
-    return <div className="text-center">Loading organizations...</div>;
+    return <div className="text-center p-5"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div><p className="mt-2 text-muted">Loading organizations...</p></div>;
   }
 
   if (error) {
     return (
-      <div className="organizations-page">
-        <div className="page-header">
-          <h2>Organizations</h2>
-          <p className="text-muted">Manage your organizations</p>
+      <div className="organizations-page p-3 p-md-4">
+        <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+          <div>
+            <h1 className="h2 mb-0 text-primary fw-bold">Organizations</h1>
+            <p className="text-muted mb-0 mt-1 small">Manage your organizations</p>
+          </div>
         </div>
-        <Alert variant="danger">
+        <Alert variant="danger" className="shadow-sm">
           <Alert.Heading>Error Loading Organizations</Alert.Heading>
           <p>{error}</p>
           <Button variant="outline-danger" onClick={fetchOrganizations}>
@@ -211,33 +213,31 @@ const Organizations = () => {
   }
 
   return (
-    <div className="organizations-page">
-      <div className="page-header">
-        <div className="d-flex justify-content-between align-items-center" style={{ gap: '20px' }}>
-          <div>
-            <h2>Organizations</h2>
-            <p className="text-muted">Manage your organizations</p>
-          </div>
-          <Button variant="primary" onClick={handleNewOrganization}>
-            <FaPlus className="me-2" />
-            New Organization
-          </Button>
+    <div className="organizations-page p-3 p-md-4">
+      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <h1 className="h2 mb-0 text-primary fw-bold">Organizations</h1>
+          <p className="text-muted mb-0 mt-1 small">Manage your organizations</p>
         </div>
+        <Button variant="primary" onClick={handleNewOrganization} className="shadow-sm d-flex align-items-center">
+          <FaPlus className="me-2" />
+          New Organization
+        </Button>
       </div>
 
-      <Card>
-        <Card.Body>
+      <Card className="shadow-sm border-0">
+        <Card.Body className="p-0">
           {organizations.length > 0 ? (
-            <Table responsive hover className="unified-table">
-              <thead>
+            <Table responsive hover className="unified-table mb-0 align-middle">
+              <thead className="table-light">
                 <tr>
                   <th>Name</th>
                   <th>Description</th>
                   <th>Group</th>
-                  <th>Tunnels Key Exchange Method</th>
+                  <th>Tunnels Key</th>
                   <th>VXLAN Port</th>
                   <th>Tunnel Range</th>
-                  <th>Actions</th>
+                  <th className="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -245,7 +245,7 @@ const Organizations = () => {
                   const orgId = org._id || org.id;
                   const isCurrent = currentOrgId === orgId;
                   return (
-                    <tr key={orgId} style={{ backgroundColor: isCurrent ? '#e8f5e9' : 'transparent' }}>
+                    <tr key={orgId} className={isCurrent ? "table-success bg-opacity-10" : ""}>
                       <td>
                         <strong>{org.name}</strong>
                         {isCurrent && <span className="badge bg-success ms-2">Current</span>}
@@ -272,7 +272,7 @@ const Organizations = () => {
                           disabled={isCurrent || settingOrg === orgId}
                           style={{ minWidth: '35px' }}
                         >
-                          {settingOrg === orgId ? '...' : <FaCheck />}
+                          {settingOrg === orgId ? <span className="spinner-border spinner-border-sm" /> : <FaCheck />}
                         </Button>
                         <Button
                           variant="outline-info"
@@ -309,9 +309,11 @@ const Organizations = () => {
               </tbody>
             </Table>
           ) : (
-            <Alert variant="info" className="text-center">
-              No organizations found. Click "New Organization" to create one.
-            </Alert>
+            <div className="text-center p-5">
+              <Alert variant="info" className="d-inline-block shadow-sm">
+                No organizations found. Click "New Organization" to create one.
+              </Alert>
+            </div>
           )}
         </Card.Body>
       </Card>
@@ -319,38 +321,38 @@ const Organizations = () => {
       {/* View Organization Modal */}
       <Modal show={showViewModal} onHide={() => setShowViewModal(false)} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Organization Details</Modal.Title>
+          <Modal.Title className="fw-bold text-primary">Organization Details</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {selectedOrg && (
             <Row>
               <Col md={6}>
                 <div className="mb-3">
-                  <strong>Name:</strong>
-                  <div>{selectedOrg.name}</div>
+                  <strong className="text-muted small text-uppercase">Name</strong>
+                  <div className="fw-bold">{selectedOrg.name}</div>
                 </div>
                 <div className="mb-3">
-                  <strong>Group:</strong>
+                  <strong className="text-muted small text-uppercase">Group</strong>
                   <div>{selectedOrg.group || '-'}</div>
                 </div>
                 <div className="mb-3">
-                  <strong>VXLAN Port:</strong>
+                  <strong className="text-muted small text-uppercase">VXLAN Port</strong>
                   <div>{selectedOrg.vxlanPort || '4789'}</div>
                 </div>
               </Col>
               <Col md={6}>
                 <div className="mb-3">
-                  <strong>Tunnels Key Exchange Method:</strong>
+                  <strong className="text-muted small text-uppercase">Tunnels Key Exchange Method</strong>
                   <div>{selectedOrg.encryptionMethod || 'PSK'}</div>
                 </div>
                 <div className="mb-3">
-                  <strong>Tunnel Range:</strong>
+                  <strong className="text-muted small text-uppercase">Tunnel Range</strong>
                   <div>{selectedOrg.tunnelRange ? `${selectedOrg.tunnelRange}/16` : '-'}</div>
                 </div>
               </Col>
               <Col md={12}>
-                <div className="mb-3">
-                  <strong>Description:</strong>
+                <div className="mb-3 p-3 bg-light rounded border">
+                  <strong className="text-muted small text-uppercase d-block mb-1">Description</strong>
                   <div>{selectedOrg.description || '-'}</div>
                 </div>
               </Col>
@@ -367,13 +369,13 @@ const Organizations = () => {
       {/* Delete Confirmation Modal */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)}>
         <Modal.Header closeButton>
-          <Modal.Title>Confirm Delete</Modal.Title>
+          <Modal.Title className="text-danger fw-bold">Confirm Delete</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {selectedOrg && (
             <>
               <p>Are you sure you want to delete the organization <strong>"{selectedOrg.name}"</strong>?</p>
-              <Alert variant="warning">
+              <Alert variant="warning" className="shadow-sm border-warning">
                 <strong>Warning:</strong> This action cannot be undone. All data associated with this organization will be permanently deleted.
               </Alert>
             </>
@@ -384,7 +386,7 @@ const Organizations = () => {
             Cancel
           </Button>
           <Button variant="danger" onClick={confirmDelete} disabled={deleting}>
-            {deleting ? 'Deleting...' : 'Delete'}
+            {deleting ? 'Deleting...' : 'Delete Organization'}
           </Button>
         </Modal.Footer>
       </Modal>

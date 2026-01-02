@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Badge, Button, Alert, Form } from 'react-bootstrap';
-import { FaRoute, FaTrash, FaSync, FaNetworkWired } from 'react-icons/fa';
+import { FaRoute, FaTrash, FaSync, FaNetworkWired, FaExclamationTriangle } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import './Tunnels.css';
+import '../styles/unified-table.css';
 
 const Tunnels = () => {
   const [tunnels, setTunnels] = useState([]);
@@ -18,18 +19,14 @@ const Tunnels = () => {
   const fetchTunnelsAndDevices = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      console.log('TUNNELS: Token check - exists:', !!token);
       if (!token) {
-        console.log('TUNNELS: No token found, redirecting to login');
         navigate('/login');
         return;
       }
 
       // Fetch devices first
-      console.log('TUNNELS: Fetching devices...');
       const devicesResponse = await api.get('/devices?response=detailed');
       const devicesData = devicesResponse.data;
-      console.log('TUNNELS: Devices fetched:', devicesData.length);
       
       // Create device map
       const deviceMap = {};
@@ -43,10 +40,8 @@ const Tunnels = () => {
       });
       
       // Fetch tunnels
-      console.log('TUNNELS: Fetching tunnels...');
       const tunnelsResponse = await api.get('/tunnels');
       const tunnelsData = tunnelsResponse.data;
-      console.log('TUNNELS: Tunnels fetched:', tunnelsData.length, tunnelsData);
       
       // Calculate stats
       const connected = tunnelsData.filter(t => t.isActive).length;
@@ -63,13 +58,10 @@ const Tunnels = () => {
       setLoading(false);
     } catch (error) {
       console.error('TUNNELS: Error fetching data:', error);
-      console.error('TUNNELS: Error response:', error.response?.data);
-      console.error('TUNNELS: Error status:', error.response?.status);
       setError(error.message || 'Failed to fetch tunnels');
       setLoading(false);
       
       if (error.response?.status === 401) {
-        console.log('TUNNELS: 401 error - clearing token and redirecting');
         localStorage.removeItem('token');
         navigate('/login');
       }
@@ -84,16 +76,13 @@ const Tunnels = () => {
 
   const getDeviceName = (deviceObj) => {
     if (!deviceObj) return 'N/A';
-    // If deviceObj is an object (populated from API), use its properties directly
     if (typeof deviceObj === 'object') {
-      // Try to get name, hostname, or _id
       if (deviceObj.name) return deviceObj.name;
       if (deviceObj.hostname) return deviceObj.hostname;
       if (deviceObj._id) return deviceObj._id.toString().substring(0, 8);
       if (deviceObj.id) return deviceObj.id.toString().substring(0, 8);
       return 'Unknown';
     }
-    // Otherwise treat it as an ID and look it up
     const deviceId = deviceObj;
     const device = devices[deviceId?.toString()];
     return device ? (device.name || device.hostname || deviceId.toString().substring(0, 8)) : (deviceId?.toString().substring(0, 8) || 'N/A');
@@ -101,12 +90,10 @@ const Tunnels = () => {
 
   const getInterfaceName = (deviceObj, interfaceId) => {
     if (!deviceObj || !interfaceId) return 'N/A';
-    // If deviceObj is populated, use its interfaces directly
     let deviceInterfaces = [];
     if (typeof deviceObj === 'object' && Array.isArray(deviceObj.interfaces)) {
       deviceInterfaces = deviceObj.interfaces;
     } else {
-      // Otherwise look up device by ID
       const deviceId = typeof deviceObj === 'object' ? (deviceObj._id || deviceObj.id) : deviceObj;
       const device = devices[deviceId?.toString()];
       if (device && Array.isArray(device.interfaces)) {
@@ -143,21 +130,12 @@ const Tunnels = () => {
     }
     
     try {
-      // Ensure tunnelId is a string
       const id = typeof tunnelId === 'object' ? (tunnelId.toString() || tunnelId._id?.toString()) : tunnelId?.toString();
+      if (!id) throw new Error('Invalid tunnel ID');
       
-      if (!id) {
-        throw new Error('Invalid tunnel ID');
-      }
-      
-      console.log('Deleting tunnel with ID:', id);
-      
-      // Use the correct FlexiWAN API: POST /devices/apply with method='deltunnels'
       const response = await api.post('/devices/apply', {
         method: 'deltunnels',
-        tunnels: {
-          [id]: true
-        }
+        tunnels: { [id]: true }
       });
       
       if (response.data) {
@@ -179,18 +157,17 @@ const Tunnels = () => {
 
   if (loading && tunnels.length === 0) {
     return (
-      <div className="tunnels-page">
+      <div className="tunnels-page p-4">
         <div className="text-center p-5">
           <div className="spinner-border text-primary" role="status">
             <span className="visually-hidden">Loading...</span>
           </div>
-          <p className="mt-3">Loading tunnels...</p>
+          <p className="mt-3 text-muted">Loading tunnels...</p>
         </div>
       </div>
     );
   }
 
-  // Handle checkbox toggle for individual tunnel
   const handleToggleTunnel = (tunnelId) => {
     setSelectedTunnels(prev => {
       const newSet = new Set(prev);
@@ -203,7 +180,6 @@ const Tunnels = () => {
     });
   };
 
-  // Handle select all / deselect all
   const handleToggleAll = (e) => {
     if (e.target.checked) {
       setSelectedTunnels(new Set(tunnels.map(t => t._id || t.id)));
@@ -212,7 +188,6 @@ const Tunnels = () => {
     }
   };
 
-  // Handle Batch OSPF configuration
   const handleBatchOspf = async () => {
     if (selectedTunnels.size === 0) {
       alert('Please select at least one tunnel to configure first');
@@ -228,17 +203,14 @@ const Tunnels = () => {
     const errors = [];
 
     try {
-      // Get unique devices from selected tunnels
       const deviceIds = new Set();
       tunnels.forEach(tunnel => {
         const tunnelId = tunnel._id || tunnel.id;
         if (selectedTunnels.has(tunnelId)) {
-          // Add deviceA
           const deviceAId = typeof tunnel.deviceA === 'object' ? 
             (tunnel.deviceA._id || tunnel.deviceA.id) : tunnel.deviceA;
           if (deviceAId) deviceIds.add(deviceAId.toString());
           
-          // Add deviceB (if not peer)
           if (!tunnel.peer && tunnel.deviceB) {
             const deviceBId = typeof tunnel.deviceB === 'object' ? 
               (tunnel.deviceB._id || tunnel.deviceB.id) : tunnel.deviceB;
@@ -247,56 +219,30 @@ const Tunnels = () => {
         }
       });
 
-      console.log('Devices to configure OSPF:', Array.from(deviceIds));
-
-      // Configure OSPF for each device's LAN interfaces
       for (const deviceId of deviceIds) {
         try {
-          // Fetch device details
           const deviceResponse = await api.get(`/devices/${deviceId}`);
-          
-          // Handle API response - may return array or object
           let device = deviceResponse.data;
           if (Array.isArray(device) && device.length > 0) {
-            device = device[0]; // Take first element if array
+            device = device[0];
           }
           
-          console.log(`Device ${device?.name || deviceId}:`, {
-            responseType: Array.isArray(deviceResponse.data) ? 'array' : 'object',
-            hasInterfaces: !!device?.interfaces,
-            interfacesCount: device?.interfaces?.length || 0,
-            interfaces: device?.interfaces?.map(i => ({
-              name: i.name,
-              type: i.type,
-              isAssigned: i.isAssigned,
-              IPv4: i.IPv4
-            }))
-          });
-          
-          // Check if device data is valid
           if (!device || !device.interfaces || !Array.isArray(device.interfaces)) {
-            console.error(`Device ${deviceId} has invalid data:`, device);
             results.push(`${device?.name || deviceId}: Device has no interface information`);
             continue;
           }
           
-          // Find LAN interfaces: assigned, with IP, not WAN type
           const lanInterfaces = device.interfaces.filter(iface => {
             const hasIP = iface.IPv4 && iface.IPv4 !== '';
             const isNotWAN = iface.type !== 'WAN';
-            const isLan = iface.isAssigned && hasIP && isNotWAN;
-            console.log(`  Interface ${iface.name}: isAssigned=${iface.isAssigned}, type=${iface.type}, IPv4="${iface.IPv4}", isLAN=${isLan}`);
-            return isLan;
+            return iface.isAssigned && hasIP && isNotWAN;
           });
-
-          console.log(`Found ${lanInterfaces.length} LAN interface(s):`, lanInterfaces.map(i => i.name));
 
           if (lanInterfaces.length === 0) {
             results.push(`${device.name || deviceId}: No configurable LAN interfaces found`);
             continue;
           }
 
-          // Update interfaces to enable OSPF
           const updatedInterfaces = device.interfaces.map(iface => {
             const isLan = lanInterfaces.find(lan => 
               (lan._id && lan._id.toString() === iface._id?.toString()) ||
@@ -318,7 +264,6 @@ const Tunnels = () => {
             return iface;
           });
 
-          // Update device with OSPF configuration
           await api.put(`/devices/${deviceId}`, {
             interfaces: updatedInterfaces,
             ospf: {
@@ -331,31 +276,17 @@ const Tunnels = () => {
 
           results.push(`${device.name || deviceId}: Successfully configured ${lanInterfaces.length} LAN interface(s)`);
         } catch (err) {
-          console.error(`Failed to configure device ${deviceId}:`, err);
-          console.error('Error details:', {
-            message: err.message,
-            response: err.response?.data,
-            status: err.response?.status
-          });
           const errorMsg = err.response?.data?.message || err.message || 'Unknown error';
           errors.push(`${deviceId}: ${errorMsg}`);
         }
       }
 
-      // Show results
       let message = 'Batch OSPF configuration completed:\n\n';
-      if (results.length > 0) {
-        message += 'Successful:\n' + results.join('\n') + '\n\n';
-      }
-      if (errors.length > 0) {
-        message += 'Failed:\n' + errors.join('\n');
-      }
+      if (results.length > 0) message += 'Successful:\n' + results.join('\n') + '\n\n';
+      if (errors.length > 0) message += 'Failed:\n' + errors.join('\n');
       alert(message);
 
-      // Clear selection
       setSelectedTunnels(new Set());
-      
-      // Refresh tunnels
       fetchTunnelsAndDevices();
     } catch (error) {
       console.error('Batch OSPF configuration error:', error);
@@ -366,75 +297,82 @@ const Tunnels = () => {
   };
 
   return (
-    <div className="tunnels-page">
-      <div className="page-header mb-4">
-        <div className="d-flex justify-content-between align-items-start">
-          <div>
-            <h2><FaRoute className="me-2" />Tunnels</h2>
-            <p className="text-muted mb-0">Manage and monitor network tunnels</p>
-          </div>
-          <div className="d-flex gap-2">
-            {selectedTunnels.size > 0 && (
-              <Button 
-                variant="success" 
-                size="sm" 
-                onClick={handleBatchOspf}
-                disabled={batchOspfLoading}
-              >
-                <FaNetworkWired className="me-1" />
-                {batchOspfLoading ? 'Configuring...' : `Batch OSPF (${selectedTunnels.size})`}
-              </Button>
-            )}
-            <Button variant="primary" size="sm" onClick={handleRefresh} disabled={loading}>
-              <FaSync className={loading ? 'fa-spin' : ''} /> Refresh
+    <div className="tunnels-page p-3 p-md-4">
+      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <h1 className="h2 mb-0 text-primary fw-bold">Tunnels</h1>
+          <p className="text-muted mb-0 mt-1 small">Manage and monitor network tunnels</p>
+        </div>
+        <div className="d-flex gap-2">
+          {selectedTunnels.size > 0 && (
+            <Button 
+              variant="success" 
+              onClick={handleBatchOspf}
+              disabled={batchOspfLoading}
+              className="d-flex align-items-center shadow-sm"
+            >
+              <FaNetworkWired className="me-2" />
+              {batchOspfLoading ? 'Configuring...' : `Batch OSPF (${selectedTunnels.size})`}
             </Button>
-          </div>
+          )}
+          <Button 
+            variant="primary" 
+            onClick={handleRefresh} 
+            disabled={loading}
+            className="d-flex align-items-center shadow-sm"
+          >
+            <FaSync className={`me-2 ${loading ? 'fa-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 
       {error && (
-        <Alert variant="danger" dismissible onClose={() => setError(null)}>
+        <Alert variant="danger" dismissible onClose={() => setError(null)} className="shadow-sm">
+          <Alert.Heading className="h5 d-flex align-items-center">
+            <FaExclamationTriangle className="me-2" /> Error
+          </Alert.Heading>
           {error}
         </Alert>
       )}
 
       {/* Statistics Cards */}
-      <div className="row mb-4">
+      <div className="row g-3 mb-4">
         <div className="col-md-4">
-          <Card className="border-0 shadow-sm">
-            <Card.Body>
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <h6 className="text-muted mb-1">Total Tunnels</h6>
-                  <h3 className="mb-0">{stats.total}</h3>
-                </div>
-                <FaRoute size={32} className="text-primary" />
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body className="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 className="text-muted text-uppercase small fw-bold mb-1">Total Tunnels</h6>
+                <h3 className="mb-0 display-6 fw-bold">{stats.total}</h3>
+              </div>
+              <div className="bg-light rounded-circle p-3">
+                <FaRoute size={24} className="text-primary" />
               </div>
             </Card.Body>
           </Card>
         </div>
         <div className="col-md-4">
-          <Card className="border-0 shadow-sm">
-            <Card.Body>
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <h6 className="text-muted mb-1">Connected</h6>
-                  <h3 className="mb-0 text-success">{stats.connected}</h3>
-                </div>
-                <FaRoute size={32} className="text-success" />
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body className="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 className="text-muted text-uppercase small fw-bold mb-1">Connected</h6>
+                <h3 className="mb-0 display-6 fw-bold text-success">{stats.connected}</h3>
+              </div>
+              <div className="bg-success bg-opacity-10 rounded-circle p-3">
+                <FaRoute size={24} className="text-success" />
               </div>
             </Card.Body>
           </Card>
         </div>
         <div className="col-md-4">
-          <Card className="border-0 shadow-sm">
-            <Card.Body>
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <h6 className="text-muted mb-1">Inactive</h6>
-                  <h3 className="mb-0 text-secondary">{stats.disconnected}</h3>
-                </div>
-                <FaRoute size={32} className="text-secondary" />
+          <Card className="border-0 shadow-sm h-100">
+            <Card.Body className="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 className="text-muted text-uppercase small fw-bold mb-1">Inactive</h6>
+                <h3 className="mb-0 display-6 fw-bold text-secondary">{stats.disconnected}</h3>
+              </div>
+              <div className="bg-secondary bg-opacity-10 rounded-circle p-3">
+                <FaRoute size={24} className="text-secondary" />
               </div>
             </Card.Body>
           </Card>
@@ -445,10 +383,10 @@ const Tunnels = () => {
       <Card className="border-0 shadow-sm">
         <Card.Body className="p-0">
           <div className="table-responsive">
-            <Table hover className="mb-0 align-middle">
-              <thead className="bg-light">
+            <Table hover className="unified-table mb-0 align-middle" striped>
+              <thead className="table-light">
                 <tr>
-                  <th style={{ width: '40px' }}>
+                  <th style={{ width: '40px' }} className="text-center">
                     <Form.Check
                       type="checkbox"
                       checked={tunnels.length > 0 && selectedTunnels.size === tunnels.length}
@@ -462,7 +400,7 @@ const Tunnels = () => {
                   <th>Device B / Peer</th>
                   <th>Interface B</th>
                   <th>Path Label</th>
-                  <th>AVG Latency</th>
+                  <th>Latency</th>
                   <th>Drop Rate</th>
                   <th>Encrypt</th>
                   <th>Status</th>
@@ -483,7 +421,7 @@ const Tunnels = () => {
                     const tunnelId = tunnel._id || tunnel.id;
                     return (
                       <tr key={tunnelId}>
-                        <td>
+                        <td className="text-center">
                           <Form.Check
                             type="checkbox"
                             checked={selectedTunnels.has(tunnelId)}
@@ -491,13 +429,13 @@ const Tunnels = () => {
                           />
                         </td>
                         <td>
-                          <code className="text-primary">#{tunnel.num || 'N/A'}</code>
+                          <code className="text-primary bg-light px-2 py-1 rounded">#{tunnel.num || 'N/A'}</code>
                         </td>
                       <td>
                         <strong>{getDeviceName(tunnel.deviceA)}</strong>
                       </td>
                       <td>
-                        <span className="text-muted">
+                        <span className="text-muted small">
                           {getInterfaceName(tunnel.deviceA, tunnel.interfaceA)}
                         </span>
                       </td>
@@ -509,7 +447,7 @@ const Tunnels = () => {
                         )}
                       </td>
                       <td>
-                        <span className="text-muted">
+                        <span className="text-muted small">
                           {tunnel.peer ? 'N/A' : getInterfaceName(tunnel.deviceB, tunnel.interfaceB)}
                         </span>
                       </td>
@@ -522,18 +460,18 @@ const Tunnels = () => {
                       </td>
                       <td>
                         {tunnel.stats?.latency ? (
-                          <span className="text-success">{tunnel.stats.latency.toFixed(2)} ms</span>
+                          <span className="text-success fw-bold">{tunnel.stats.latency.toFixed(2)} ms</span>
                         ) : (
-                          <span className="text-muted">N/A</span>
+                          <span className="text-muted">-</span>
                         )}
                       </td>
                       <td>
                         {tunnel.stats?.dropRate !== undefined ? (
-                          <span className={tunnel.stats.dropRate > 0 ? 'text-warning' : 'text-success'}>
+                          <span className={tunnel.stats.dropRate > 0 ? 'text-warning fw-bold' : 'text-success'}>
                             {tunnel.stats.dropRate.toFixed(2)}%
                           </span>
                         ) : (
-                          <span className="text-muted">N/A</span>
+                          <span className="text-muted">-</span>
                         )}
                       </td>
                       <td>
@@ -548,6 +486,7 @@ const Tunnels = () => {
                           size="sm"
                           onClick={() => handleDeleteTunnel(tunnel._id || tunnel.id)}
                           title="Delete tunnel"
+                          className="btn-icon"
                         >
                           <FaTrash />
                         </Button>
@@ -564,11 +503,9 @@ const Tunnels = () => {
 
       {/* Footer Info */}
       {tunnels.length > 0 && (
-        <div className="mt-3 text-muted small">
-          <p className="mb-0">
-            Showing {tunnels.length} tunnel{tunnels.length !== 1 ? 's' : ''} • 
-            Last updated: {new Date().toLocaleTimeString()}
-          </p>
+        <div className="mt-3 text-muted small d-flex justify-content-between">
+          <span>Showing {tunnels.length} tunnel{tunnels.length !== 1 ? 's' : ''}</span>
+          <span>Last updated: {new Date().toLocaleTimeString()}</span>
         </div>
       )}
     </div>

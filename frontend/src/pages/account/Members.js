@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Card, Button, Form, Alert, Badge } from 'react-bootstrap';
+import { FaUser, FaSearch, FaCheck, FaTrash, FaUserShield, FaUserMinus } from 'react-icons/fa';
 import api from '../../services/api';
 import '../../styles/unified-table.css';
 
@@ -98,250 +100,290 @@ export default function AccountMembers () {
     } catch (_) {}
   }, []);
 
-  if (loading) return <div className="page account-members"><h3>Users</h3><p>Loading...</p></div>;
-  if (error) return <div className="page account-members"><h3>Users</h3><p className="text-danger">{error}</p></div>;
+  if (loading && !rows.length) return <div className="text-center p-5"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div><p className="mt-2 text-muted">Loading users...</p></div>;
+  if (error && !rows.length) return <div className="account-members-page p-3 p-md-4"><Alert variant="danger">{error}</Alert></div>;
 
   return (
-    <div className="page account-members">
-      <h3>Users</h3>
-      <div className="d-flex gap-2 flex-wrap align-items-center mb-3">
-        <input
-          type="text"
-          className="form-control form-control-sm"
-          placeholder="Search name / email / username / org / account"
-          style={{ maxWidth: '340px' }}
-          value={search}
-          onChange={e => { setPage(0); setSearch(e.target.value); }}
-        />
-        {debouncedSearch && (
-          <button className="btn btn-sm btn-outline-secondary" onClick={() => { setSearch(''); setPage(0); }}>Clear</button>
-        )}
-        <div className="small text-muted">Total: {serverMeta.total}</div>
-      </div>
-      <div className="d-flex gap-3 flex-wrap align-items-center mb-2">
-        <div className="d-flex align-items-center gap-2">
-          <span className="small text-muted">State:</span>
-          {['unverified', 'verified'].map(s => (
-            <label key={s} className="form-check-label d-flex align-items-center gap-1" style={{ fontWeight: 'normal' }}>
-              <input
-                type="checkbox"
-                className="form-check-input"
-                checked={stateFilters.includes(s)}
-                onChange={e => {
-                  setPage(0);
-                  setStateFilters(prev => e.target.checked ? [...prev, s] : prev.filter(x => x !== s));
-                }}
-              /> {s}
-            </label>
-          ))}
-          <div className="btn-group">
-            <button
-              type="button"
-              className={`btn btn-sm ${stateFilters.length === 1 && stateFilters[0] === 'unverified' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => { setPage(0); setStateFilters(['unverified']); }}
-            >Only Unverified</button>
-            <button
-              type="button"
-              className={`btn btn-sm ${stateFilters.length === 1 && stateFilters[0] === 'verified' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => { setPage(0); setStateFilters(['verified']); }}
-            >Only Verified</button>
-            <button
-              type="button"
-              className={`btn btn-sm ${(stateFilters.includes('unverified') && stateFilters.includes('verified')) ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => { setPage(0); setStateFilters(['unverified', 'verified']); }}
-            >All States</button>
-          </div>
-          {stateFilters.length > 0 && (
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              onClick={() => { setStateFilters([]); setPage(0); }}
-            >Clear State</button>
-          )}
+    <div className="account-members-page p-3 p-md-4">
+      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <h1 className="h2 mb-0 text-primary fw-bold">Users</h1>
+          <p className="text-muted mb-0 mt-1 small">Manage organization members and permissions</p>
         </div>
-        {stateFilters.length > 0 && (
-          <div className="small text-muted">Filtered: {stateFilters.join(', ')}</div>
-        )}
+        <div className="small text-muted">Total Users: {serverMeta.total}</div>
       </div>
-      {rows.length === 0 && !loading && <p>No users found.</p>}
-      {rows.length > 0 && (
-        <div className="unified-table-container">
-          <div className="unified-table-header">
-            <h5>Organization Members</h5>
+
+      <div className="filters-bar mb-4 p-3 bg-white border rounded shadow-sm">
+        <div className="d-flex flex-wrap gap-3 align-items-end">
+          <div className="flex-grow-1">
+            <Form.Label className="small fw-bold mb-1">Search</Form.Label>
+            <div className="input-group input-group-sm">
+              <span className="input-group-text bg-light border-end-0"><FaSearch className="text-muted" /></span>
+              <Form.Control
+                type="text"
+                placeholder="Name / Email / Username / Org"
+                value={search}
+                onChange={e => { setPage(0); setSearch(e.target.value); }}
+                className="border-start-0 ps-0"
+              />
+              {debouncedSearch && (
+                <Button variant="outline-secondary" onClick={() => { setSearch(''); setPage(0); }}>Clear</Button>
+              )}
+            </div>
+          </div>
+          
+          <div>
+            <Form.Label className="small fw-bold mb-1">Filter by State</Form.Label>
+            <div className="d-flex gap-2">
+              <div className="btn-group">
+                <Button
+                  variant={stateFilters.length === 1 && stateFilters[0] === 'unverified' ? 'primary' : 'outline-secondary'}
+                  size="sm"
+                  onClick={() => { setPage(0); setStateFilters(['unverified']); }}
+                >Unverified</Button>
+                <Button
+                  variant={stateFilters.length === 1 && stateFilters[0] === 'verified' ? 'primary' : 'outline-secondary'}
+                  size="sm"
+                  onClick={() => { setPage(0); setStateFilters(['verified']); }}
+                >Verified</Button>
+                <Button
+                  variant={(stateFilters.includes('unverified') && stateFilters.includes('verified')) ? 'primary' : 'outline-secondary'}
+                  size="sm"
+                  onClick={() => { setPage(0); setStateFilters(['unverified', 'verified']); }}
+                >All</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {rows.length === 0 && !loading ? (
+        <Alert variant="info" className="text-center shadow-sm">No users found matching criteria.</Alert>
+      ) : (
+        <Card className="shadow-sm border-0">
+          <Card.Header className="bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+            <h5 className="mb-0 text-primary fw-bold d-flex align-items-center">
+              <FaUser className="me-2" />
+              Members List
+            </h5>
             {selectedIds.length > 0 && (
-              <div className="header-actions">
-                <span className="text-muted me-2">{selectedIds.length} selected</span>
-                <button className="btn btn-sm btn-outline-danger">Bulk Actions</button>
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-secondary">{selectedIds.length} selected</span>
+                {isSuperAdmin && (
+                  <Button variant="outline-danger" size="sm">Bulk Actions</Button>
+                )}
               </div>
             )}
-          </div>
-          <div className="unified-table-responsive">
-            <table className="unified-table table table-striped align-middle mb-0">
-              <thead>
-                <tr>
-                  {isSuperAdmin && (
-                    <th>
-                      <input
-                        type="checkbox"
-                        className="row-checkbox"
-                        checked={allSelected}
-                        onChange={e => {
-                          if (e.target.checked) {
-                            setSelectedIds(rows.map(r => r.user__id));
-                          } else setSelectedIds([]);
-                        }}
-                      />
-                    </th>
-                )}
-                <th role="button" onClick={() => toggleSort('name')}>First Name{sortIndicator('name')}</th>
-                <th role="button" onClick={() => toggleSort('lastName')}>Last Name{sortIndicator('lastName')}</th>
-                <th role="button" onClick={() => toggleSort('email')}>Email{sortIndicator('email')}</th>
-                <th role="button" onClick={() => toggleSort('username')}>Username{sortIndicator('username')}</th>
-                <th role="button" onClick={() => toggleSort('state')}>State{sortIndicator('state')}</th>
-                <th role="button" onClick={() => toggleSort('jobTitle')}>Job Title{sortIndicator('jobTitle')}</th>
-                <th role="button" onClick={() => toggleSort('phoneNumber')}>Phone{sortIndicator('phoneNumber')}</th>
-                <th role="button" onClick={() => toggleSort('role')}>Role{sortIndicator('role')}</th>
-                <th role="button" onClick={() => toggleSort('scope')}>Scope{sortIndicator('scope')}</th>
-                <th role="button" onClick={() => toggleSort('entity')}>Entity{sortIndicator('entity')}</th>
-                <th role="button" onClick={() => toggleSort('organization')}>Organization{sortIndicator('organization')}</th>
-                <th role="button" onClick={() => toggleSort('mfa')}>MFA</th>
-                {isSuperAdmin && <th>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => {
-                const scope = r.to === 'account' ? 'Account' : (r.to === 'organization' ? 'Organization' : (r.to === 'group' ? 'Group' : r.to));
-                return (
-                  <tr key={r._id} className={r.user_state === 'unverified' ? 'table-warning' : ''}>
+          </Card.Header>
+          <Card.Body className="p-0">
+            <div className="unified-table-responsive">
+              <table className="unified-table table table-hover align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
                     {isSuperAdmin && (
-                      <td>
-                        <input
+                      <th style={{ width: '40px' }} className="text-center">
+                        <Form.Check
                           type="checkbox"
-                          checked={selectedIds.includes(r.user__id)}
+                          checked={allSelected}
                           onChange={e => {
-                            setSelectedIds(prev => e.target.checked
-                              ? [...prev, r.user__id]
-                              : prev.filter(id => id !== r.user__id));
+                            if (e.target.checked) {
+                              setSelectedIds(rows.map(r => r.user__id));
+                            } else setSelectedIds([]);
                           }}
                         />
-                      </td>
+                      </th>
                     )}
-                    <td>{r.user_name || '-'}</td>
-                    <td>{r.user_lastName || '-'}</td>
-                    <td>
-                      {r.user_email || '-'}
-                      {r.user_admin === true && (
-                        <span className="badge bg-danger ms-1">ADMIN</span>
-                      )}
-                    </td>
-                    <td>{r.user_username || '-'}</td>
-                    <td>{r.user_state || '-'}</td>
-                    <td>{r.user_jobTitle || '-'}</td>
-                    <td>{r.user_phoneNumber || '-'}</td>
-                    <td>{r.role || '-'}</td>
-                    <td>{scope}</td>
-                    <td>{r.to === 'account' ? (r.account_name || '-') : (r.to === 'organization' ? (r.organization_name || '-') : (r.group || '-'))}</td>
-                    <td>{r.organization_name || (r.to === 'account' ? '-' : '')}</td>
-                    <td>{r['user.mfa.enabled'] ? 'Yes' : 'No'}</td>
-                    {isSuperAdmin && (
-                      <td>
-                        <div className="d-flex flex-column gap-1">
-                          {r.user_state === 'unverified' && (
-                            <button
-                              className="btn btn-sm btn-success"
-                              onClick={async () => {
-                                try {
-                                  await api.post(`/users/${r.user__id}/verify`);
-                                  window.location.reload();
-                                } catch (e) {
-                                  // eslint-disable-next-line no-alert
-                                  alert('Verify failed: ' + (e.message || 'error'));
-                                }
-                              }}
-                            >Approve</button>
-                          )}
-                          {r.user_admin === true ? (
-                            <button
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={async () => {
-                                if (!window.confirm('Demote this admin user?')) return;
-                                try {
-                                  await api.delete(`/users/${r.user__id}/admin`);
-                                  window.location.reload();
-                                } catch (e) {
-                                  // eslint-disable-next-line no-alert
-                                  alert('Demote failed: ' + (e.message || 'error'));
-                                }
-                              }}
-                            >Demote</button>
-                          ) : (
-                            <button
-                              className="btn btn-sm btn-outline-warning"
-                              onClick={async () => {
-                                try {
-                                  await api.put(`/users/${r.user__id}/admin`);
-                                  window.location.reload();
-                                } catch (e) {
-                                  // eslint-disable-next-line no-alert
-                                  alert('Promote failed: ' + (e.message || 'error'));
-                                }
-                              }}
-                            >Promote Admin</button>
-                          )}
-                          <button
-                            className="btn btn-sm btn-danger"
-                            onClick={async () => {
-                              if (!window.confirm(`Delete user ${r.user_name} (${r.user_email})?`)) return;
-                              try {
-                                await api.delete(`/members/${r._id}`);
-                                load({ page, pageSize, q: debouncedSearch, states: stateFilters, sort });
-                              } catch (e) {
-                                // eslint-disable-next-line no-alert
-                                alert('Delete failed: ' + (e.response?.data?.error || e.message || 'error'));
-                              }
-                            }}
-                          >Delete User</button>
-                        </div>
-                      </td>
-                    )}
+                    <th role="button" onClick={() => toggleSort('name')}>First Name{sortIndicator('name')}</th>
+                    <th role="button" onClick={() => toggleSort('lastName')}>Last Name{sortIndicator('lastName')}</th>
+                    <th role="button" onClick={() => toggleSort('email')}>Email{sortIndicator('email')}</th>
+                    <th role="button" onClick={() => toggleSort('username')}>Username{sortIndicator('username')}</th>
+                    <th role="button" onClick={() => toggleSort('state')}>State{sortIndicator('state')}</th>
+                    <th role="button" onClick={() => toggleSort('role')}>Role{sortIndicator('role')}</th>
+                    <th role="button" onClick={() => toggleSort('scope')}>Scope{sortIndicator('scope')}</th>
+                    <th role="button" onClick={() => toggleSort('organization')}>Organization{sortIndicator('organization')}</th>
+                    <th role="button" onClick={() => toggleSort('mfa')}>MFA</th>
+                    {isSuperAdmin && <th>Actions</th>}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-        </div>
+                </thead>
+                <tbody>
+                  {rows.map(r => {
+                    const scope = r.to === 'account' ? 'Account' : (r.to === 'organization' ? 'Organization' : (r.to === 'group' ? 'Group' : r.to));
+                    return (
+                      <tr key={r._id} className={r.user_state === 'unverified' ? 'table-warning' : ''}>
+                        {isSuperAdmin && (
+                          <td className="text-center">
+                            <Form.Check
+                              type="checkbox"
+                              checked={selectedIds.includes(r.user__id)}
+                              onChange={e => {
+                                setSelectedIds(prev => e.target.checked
+                                  ? [...prev, r.user__id]
+                                  : prev.filter(id => id !== r.user__id));
+                              }}
+                            />
+                          </td>
+                        )}
+                        <td>{r.user_name || '-'}</td>
+                        <td>{r.user_lastName || '-'}</td>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            {r.user_email || '-'}
+                            {r.user_admin === true && (
+                              <Badge bg="danger" className="ms-2">ADMIN</Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td><code>{r.user_username || '-'}</code></td>
+                        <td>
+                          <Badge bg={r.user_state === 'verified' ? 'success' : 'warning'}>
+                            {r.user_state || '-'}
+                          </Badge>
+                        </td>
+                        <td>{r.role || '-'}</td>
+                        <td><Badge bg="info">{scope}</Badge></td>
+                        <td>{r.organization_name || (r.to === 'account' ? '-' : '')}</td>
+                        <td>{r['user.mfa.enabled'] ? <FaCheck className="text-success" /> : <span className="text-muted">-</span>}</td>
+                        {isSuperAdmin && (
+                          <td>
+                            <div className="d-flex gap-1">
+                              {r.user_state === 'unverified' && (
+                                <Button
+                                  variant="success"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await api.post(`/users/${r.user__id}/verify`);
+                                      window.location.reload();
+                                    } catch (e) {
+                                      alert('Verify failed: ' + (e.message || 'error'));
+                                    }
+                                  }}
+                                  title="Approve User"
+                                >
+                                  <FaCheck />
+                                </Button>
+                              )}
+                              {r.user_admin === true ? (
+                                <Button
+                                  variant="outline-danger"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!window.confirm('Demote this admin user?')) return;
+                                    try {
+                                      await api.delete(`/users/${r.user__id}/admin`);
+                                      window.location.reload();
+                                    } catch (e) {
+                                      alert('Demote failed: ' + (e.message || 'error'));
+                                    }
+                                  }}
+                                  title="Demote Admin"
+                                >
+                                  <FaUserMinus />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline-warning"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await api.put(`/users/${r.user__id}/admin`);
+                                      window.location.reload();
+                                    } catch (e) {
+                                      alert('Promote failed: ' + (e.message || 'error'));
+                                    }
+                                  }}
+                                  title="Promote to Admin"
+                                >
+                                  <FaUserShield />
+                                </Button>
+                              )}
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={async () => {
+                                  if (!window.confirm(`Delete user ${r.user_name} (${r.user_email})?`)) return;
+                                  try {
+                                    await api.delete(`/members/${r._id}`);
+                                    load({ page, pageSize, q: debouncedSearch, states: stateFilters, sort });
+                                  } catch (e) {
+                                    alert('Delete failed: ' + (e.response?.data?.error || e.message || 'error'));
+                                  }
+                                }}
+                                title="Delete User"
+                              >
+                                <FaTrash />
+                              </Button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card.Body>
+          <Card.Footer className="bg-white border-top">
+            <div className="d-flex align-items-center gap-3 flex-wrap justify-content-between">
+              <div className="d-flex align-items-center gap-2">
+                <Form.Select
+                  size="sm"
+                  style={{ width: 'auto' }}
+                  value={pageSize}
+                  onChange={e => { setPage(0); setPageSize(parseInt(e.target.value, 10)); }}
+                >
+                  {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s} per page</option>)}
+                </Form.Select>
+                <div className="small text-muted">
+                  Showing {serverMeta.offset + 1}-{Math.min(serverMeta.offset + rows.length, serverMeta.total)} of {serverMeta.total}
+                </div>
+              </div>
+              <div className="btn-group">
+                <Button variant="outline-secondary" size="sm" disabled={page === 0 || loading} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</Button>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  disabled={loading || (serverMeta.offset + rows.length) >= serverMeta.total}
+                  onClick={() => setPage(p => p + 1)}
+                >Next</Button>
+              </div>
+            </div>
+          </Card.Footer>
+        </Card>
       )}
+      
       {isSuperAdmin && selectedIds.length > 0 && (
-        <div className="alert alert-secondary py-2 d-flex flex-wrap align-items-center gap-2 mt-2">
-          <span className="small">Selected {selectedIds.length} user(s)</span>
-          <button
-            className="btn btn-sm btn-outline-success"
+        <Alert variant="secondary" className="mt-3 d-flex flex-wrap align-items-center gap-2 shadow-sm">
+          <span className="small fw-bold">Bulk Actions ({selectedIds.length}):</span>
+          <Button
+            variant="outline-success"
+            size="sm"
             onClick={async () => {
               try {
                 await api.post('/users/verify/batch', { ids: selectedIds });
                 setSelectedIds([]);
                 load({ page, pageSize, q: debouncedSearch, states: stateFilters, sort });
               } catch (e) {
-                // eslint-disable-next-line no-alert
                 alert('Batch verify failed: ' + (e.message || 'error'));
               }
             }}
-          >Batch Verify</button>
-          <button
-            className="btn btn-sm btn-outline-warning"
+          >Batch Verify</Button>
+          <Button
+            variant="outline-warning"
+            size="sm"
             onClick={async () => {
               try {
                 await api.post('/users/admin/batch', { promote: selectedIds });
                 setSelectedIds([]);
                 load({ page, pageSize, q: debouncedSearch, states: stateFilters, sort });
               } catch (e) {
-                // eslint-disable-next-line no-alert
                 alert('Batch promote failed: ' + (e.message || 'error'));
               }
             }}
-          >Batch Promote Admin</button>
-          <button
-            className="btn btn-sm btn-outline-danger"
+          >Batch Promote Admin</Button>
+          <Button
+            variant="outline-danger"
+            size="sm"
             onClick={async () => {
               if (!window.confirm('Demote selected admins (non-admins ignored)?')) return;
               try {
@@ -349,53 +391,17 @@ export default function AccountMembers () {
                 setSelectedIds([]);
                 load({ page, pageSize, q: debouncedSearch, states: stateFilters, sort });
               } catch (e) {
-                // eslint-disable-next-line no-alert
                 alert('Batch demote failed: ' + (e.message || 'error'));
               }
             }}
-          >Batch Demote Admin</button>
-          <button
-            className="btn btn-sm btn-outline-secondary"
+          >Batch Demote Admin</Button>
+          <Button
+            variant="outline-secondary"
+            size="sm"
             onClick={() => setSelectedIds([])}
-          >Clear Selection</button>
-        </div>
+          >Clear Selection</Button>
+        </Alert>
       )}
-  <div className="d-flex align-items-center gap-3 mt-3 flex-wrap">
-        <div className="d-flex align-items-center gap-2">
-          <label className="form-label m-0">Page Size</label>
-          <select
-            className="form-select form-select-sm"
-            style={{ width: '90px' }}
-            value={pageSize}
-            onChange={e => { setPage(0); setPageSize(parseInt(e.target.value, 10)); }}
-          >
-            {[10, 25, 50, 100].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-secondary"
-          onClick={() => { setPage(0); setPageSize(100); }}
-          disabled={pageSize === 100}
-        >Show 100</button>
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-secondary"
-          onClick={() => { setPage(0); setPageSize(25); }}
-          disabled={pageSize === 25}
-        >Default 25</button>
-        <div className="btn-group">
-          <button className="btn btn-sm btn-outline-secondary" disabled={page === 0 || loading} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</button>
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            disabled={loading || (serverMeta.offset + rows.length) >= serverMeta.total}
-            onClick={() => setPage(p => p + 1)}
-          >Next</button>
-        </div>
-        <div className="small text-muted">
-          Offset: {serverMeta.offset} • Limit: {serverMeta.limit} • Showing {rows.length} • Page {page + 1}{serverMeta.total ? ` / ${Math.ceil(serverMeta.total / serverMeta.limit)}` : ''}
-        </div>
-      </div>
     </div>
   );
 }

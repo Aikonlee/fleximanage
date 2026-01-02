@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, Button, Row, Col, Alert } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
+import { FaSync, FaServer, FaNetworkWired, FaChartArea, FaGlobeAmericas, FaExclamationTriangle } from 'react-icons/fa';
 import api from '../services/api';
 import './Home.css';
 
@@ -26,14 +29,8 @@ const Home = () => {
     lastUpdate: null
   });
 
-  const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    // Fetch data only on component mount
-    fetchDashboardData();
-  }, []);
 
   const initializeMap = (devicesList = []) => {
     // 延迟初始化，确保 DOM 已准备好
@@ -83,7 +80,7 @@ const Home = () => {
             if (coords.length === 2) {
               const [longitude, latitude] = coords;
               const status = device.status === 'running' ? 'running' : 'stopped';
-              const color = device.status === 'running' ? '#4dbd74' : '#f86c6b';
+              const color = device.status === 'running' ? '#27ae60' : '#e74c3c'; // Use theme colors
               
               // 创建自定义图标
               const icon = window.L.divIcon({
@@ -110,7 +107,7 @@ const Home = () => {
     }, 200);
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -141,43 +138,12 @@ const Home = () => {
         data: devicesList
       });
       
-      // 详细日志：显示每个设备的status字段值
-      if (devicesList.length > 0) {
-        console.log('[Home] Sample device objects:');
-        devicesList.slice(0, 3).forEach((d, i) => {
-          console.log(`  Device ${i}:`, {
-            name: d.name,
-            status: d.status,
-            statusType: typeof d.status,
-            isConnected: d.isConnected,
-            isApproved: d.isApproved,
-            fullObj: d
-          });
-        });
-      }
-      
-      setDevices(devicesList);
-      
-      // 根据实际设备列表计算统计数据，而不是依赖summary API
-      // Note: Device schema:
-      //   - status: 'running' | 'stopped' | 'failed' | '' (是否启动了vRouter)
-      //   - isConnected: true | false (与后台通讯是否正常)
-      //   - isApproved: true | false (设备是否已批准)
+      // 根据实际设备列表计算统计数据
       const deviceTotal = devicesList.length;
       const deviceRunning = devicesList.filter(d => d.status === 'running').length;
       const deviceConnected = devicesList.filter(d => d.isConnected === true).length;
       const deviceApproved = devicesList.filter(d => d.isApproved === true).length;
       const deviceNotRunning = deviceTotal - deviceRunning;
-      
-      console.log('[Home] Calculated device stats:', {
-        total: deviceTotal,
-        running: deviceRunning,
-        notRunning: deviceTotal - deviceRunning,
-        connected: deviceConnected,
-        notConnected: deviceTotal - deviceConnected,
-        approved: deviceApproved,
-        notApproved: deviceTotal - deviceApproved
-      });
       
       setDeviceStats({
         running: deviceRunning,
@@ -192,11 +158,6 @@ const Home = () => {
       // 更新隧道统计
       const tunnelTotal = data.tunnels?.total || 0;
       const tunnelActive = data.tunnels?.active || 0;
-      
-      console.log('[Home] Tunnel stats from summary:', {
-        total: tunnelTotal,
-        active: tunnelActive
-      });
       
       setTunnelStats({
         connected: tunnelActive,
@@ -229,176 +190,145 @@ const Home = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Format last update time
-  const formatLastUpdate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleString();
-    } catch (e) {
-      return 'N/A';
-    }
-  };
+  useEffect(() => {
+    // Fetch data only on component mount
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const renderStatusItem = (title, count, colorClass, icon = null) => (
+    <div className="text-center p-3 border rounded h-100 bg-white shadow-sm status-card-item">
+      <div className={`status-value text-${colorClass} mb-1 display-6 fw-bold`}>
+        {loading ? '-' : count}
+      </div>
+      <div className="text-muted small fw-bold text-uppercase d-flex align-items-center justify-content-center">
+        {icon && <span className="me-1">{icon}</span>}
+        {title}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="home-page">
-      <div className="container">
-        {/* 面包屑 */}
-        <div className="breadcrumb">Home</div>
-        
-        {/* 大标题和刷新按钮 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <h1>Home</h1>
-          <button 
-            className="btn btn-primary" 
+    <div className="home-page p-3 p-md-4">
+      <div className="container-fluid">
+        {/* Page Header */}
+        <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+          <div>
+            <h1 className="h2 mb-0 text-primary fw-bold">Dashboard</h1>
+            <p className="text-muted mb-0 mt-1 small">Overview of your network status</p>
+          </div>
+          <Button 
+            variant="primary" 
             onClick={fetchDashboardData}
             disabled={loading}
-            style={{ height: '40px', minWidth: '100px' }}
+            className="d-flex align-items-center shadow-sm"
           >
+            <FaSync className={`me-2 ${loading ? 'fa-spin' : ''}`} />
             {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
+          </Button>
         </div>
 
-        {/* 错误提示 */}
+        {/* Error Alert */}
         {error && (
-          <div className="card error-card">
-            <div className="card-body error-body">
-              <strong>Error:</strong> {error}
-              <button 
-                className="btn-retry" 
-                onClick={fetchDashboardData}
-              >
-                Retry
-              </button>
+          <Alert variant="danger" onClose={() => setError(null)} dismissible className="shadow-sm">
+            <Alert.Heading className="h5 d-flex align-items-center">
+              <FaExclamationTriangle className="me-2" /> Error Loading Dashboard
+            </Alert.Heading>
+            <p className="mb-0">{error}</p>
+            <div className="mt-2">
+              <Button variant="outline-danger" size="sm" onClick={fetchDashboardData}>Try Again</Button>
             </div>
-          </div>
+          </Alert>
         )}
 
-        {/* 第一部分：Network Status */}
-        <div className="card">
-          <div className="card-header">Network Status</div>
-          <div className="card-body">
-            <div className="status-table">
-              
-              {/* Devices 行 */}
-              <div className="status-row">
-                <div className="status-label">Devices</div>
-                <div className="status-content">
-                  <div className="status-group-container">
-                    {/* Running */}
-                    <div className="status-item green">
-                      <div className="status-title">Running</div>
-                      <div className="circle">{loading ? '-' : deviceStats.running}</div>
-                    </div>
-                    <div className="dots">....</div>
-                    
-                    {/* Not Running */}
-                    <div className="status-item red">
-                      <div className="status-title">Not Running/NA</div>
-                      <div className="circle">{loading ? '-' : deviceStats.notRunning}</div>
-                    </div>
-                    <div className="dots">....</div>
-                    
-                    {/* Connected */}
-                    <div className="status-item green" style={{marginLeft: '30px'}}>
-                      <div className="status-title">Connected</div>
-                      <div className="circle">{loading ? '-' : deviceStats.connected}</div>
-                    </div>
-                    <div className="dots">....</div>
+        <Row className="mb-4">
+          <Col lg={8} className="mb-4 mb-lg-0">
+            {/* Network Status Card */}
+            <Card className="h-100 shadow-sm border-0">
+              <Card.Header className="bg-white border-bottom py-3">
+                <h5 className="mb-0 text-primary d-flex align-items-center">
+                  <FaServer className="me-2" />
+                  Network Status
+                </h5>
+              </Card.Header>
+              <Card.Body>
+                <h6 className="text-muted text-uppercase small fw-bold mb-3">Devices</h6>
+                <Row className="g-3 mb-4">
+                  <Col xs={6} md={4} lg={2}>
+                    {renderStatusItem('Running', deviceStats.running, 'success')}
+                  </Col>
+                  <Col xs={6} md={4} lg={2}>
+                    {renderStatusItem('Stopped', deviceStats.notRunning, 'danger')}
+                  </Col>
+                  <Col xs={6} md={4} lg={2}>
+                    {renderStatusItem('Connected', deviceStats.connected, 'info')}
+                  </Col>
+                  <Col xs={6} md={4} lg={2}>
+                    {renderStatusItem('Offline', deviceStats.notConnected, 'secondary')}
+                  </Col>
+                  <Col xs={6} md={4} lg={2}>
+                    {renderStatusItem('Approved', deviceStats.approved, 'success')}
+                  </Col>
+                  <Col xs={6} md={4} lg={2}>
+                    {renderStatusItem('Pending', deviceStats.notApproved, 'warning')}
+                  </Col>
+                </Row>
 
-                    {/* Not Connected */}
-                    <div className="status-item red">
-                      <div className="status-title">Not Connected</div>
-                      <div className="circle">{loading ? '-' : deviceStats.notConnected}</div>
-                    </div>
-                    <div className="dots">....</div>
+                <h6 className="text-muted text-uppercase small fw-bold mb-3">Tunnels</h6>
+                <Row className="g-3">
+                  <Col xs={6} md={3}>
+                    {renderStatusItem('Connected', tunnelStats.connected, 'success', <FaNetworkWired />)}
+                  </Col>
+                  <Col xs={6} md={3}>
+                    {renderStatusItem('Down', tunnelStats.notConnected, 'danger', <FaExclamationTriangle />)}
+                  </Col>
+                  <Col xs={6} md={3}>
+                    {renderStatusItem('Pending', tunnelStats.pending, 'warning')}
+                  </Col>
+                  <Col xs={6} md={3}>
+                    {renderStatusItem('Unknown', tunnelStats.unknown, 'secondary')}
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+          </Col>
 
-                    {/* Approved */}
-                    <div className="status-item green" style={{marginLeft: '30px'}}>
-                      <div className="status-title">Approved</div>
-                      <div className="circle">{loading ? '-' : deviceStats.approved}</div>
-                    </div>
-                    <div className="dots">....</div>
+          <Col lg={4}>
+            {/* Traffic Card */}
+            <Card className="shadow-sm border-0 mb-4">
+              <Card.Header className="bg-white border-bottom py-3">
+                <h5 className="mb-0 text-primary d-flex align-items-center">
+                  <FaChartArea className="me-2" />
+                  Traffic (This Month)
+                </h5>
+              </Card.Header>
+              <Card.Body className="text-center py-4">
+                <div className="display-4 fw-bold text-dark mb-2">{loading ? '...' : trafficStats.total}</div>
+                <div className="text-muted small mb-3">Total Data Transferred</div>
+                <Link to="/traffic-dashboard" className="btn btn-outline-primary btn-sm rounded-pill px-4">
+                  View Details
+                </Link>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
 
-                    {/* Not Approved */}
-                    <div className="status-item grey">
-                      <div className="status-title">Not Approved</div>
-                      <div className="circle">{loading ? '-' : deviceStats.notApproved}</div>
-                    </div>
-                    <div className="dots">....</div>
-
-                    {/* Warning */}
-                    <div className="status-item orange" style={{marginLeft: '30px'}}>
-                      <div className="status-title">Warning</div>
-                      <div className="circle">{loading ? '-' : deviceStats.warning}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tunnels 行 */}
-              <div className="status-row">
-                <div className="status-label">Tunnels</div>
-                <div className="status-content">
-                  <div className="status-group-container">
-                    {/* Connected */}
-                    <div className="status-item green">
-                      <div className="status-title">Connected</div>
-                      <div className="circle">{loading ? '-' : tunnelStats.connected}</div>
-                    </div>
-                    <div className="dots">....</div>
-
-                    {/* Not Connected */}
-                    <div className="status-item red">
-                      <div className="status-title">Not Connected</div>
-                      <div className="circle">{loading ? '-' : tunnelStats.notConnected}</div>
-                    </div>
-                    <div className="dots">....</div>
-
-                    {/* Pending */}
-                    <div className="status-item orange">
-                      <div className="status-title">Pending</div>
-                      <div className="circle">{loading ? '-' : tunnelStats.pending}</div>
-                    </div>
-                    <div className="dots">....</div>
-
-                    {/* Unknown */}
-                    <div className="status-item grey">
-                      <div className="status-title">Unknown</div>
-                      <div className="circle">{loading ? '-' : tunnelStats.unknown}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        {/* 第二部分：Traffic this month */}
-        <div className="card">
-          <div className="card-header">Traffic this month</div>
-          <div className="card-body traffic-body">
-            <div className="traffic-info">
-              <div className="traffic-label">Total</div>
-              <div className="traffic-value">{loading ? 'Loading...' : trafficStats.total}</div>
-              <a href="/traffic-dashboard" className="traffic-link">Check traffic dashboard for more</a>
-            </div>
-          </div>
-        </div>
-
-        {/* 第三部分：World Map */}
-        <div className="card">
-          <div className="card-header">
-            World Map 
-            <a href="/world-map-dashboard">Larger map in World Map dashboard</a>
-          </div>
-          <div className="card-body no-padding">
-            <div id="map"></div>
-          </div>
-        </div>
+        {/* Map Card */}
+        <Card className="shadow-sm border-0">
+          <Card.Header className="bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+            <h5 className="mb-0 text-primary d-flex align-items-center">
+              <FaGlobeAmericas className="me-2" />
+              World Map
+            </h5>
+            <Link to="/world-map-dashboard" className="btn btn-link btn-sm text-decoration-none">
+              View Larger Map &rarr;
+            </Link>
+          </Card.Header>
+          <Card.Body className="p-0">
+            <div id="map" style={{ height: '400px', width: '100%', borderRadius: '0 0 0.375rem 0.375rem' }}></div>
+          </Card.Body>
+        </Card>
       </div>
     </div>
   );

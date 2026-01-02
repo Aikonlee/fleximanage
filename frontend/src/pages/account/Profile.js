@@ -107,86 +107,96 @@ export default function AccountProfile () {
   };
 
   return (
-    <div className="page account-profile">
-      <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-        <h2 className="m-0">Account Profile</h2>
+    <div className="account-profile-page p-3 p-md-4">
+      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+          <h1 className="h2 mb-0 text-primary fw-bold">Account Profile</h1>
+          <p className="text-muted mb-0 mt-1 small">Manage your account settings</p>
+        </div>
         {acct && (
-          <button className="btn btn-sm btn-primary" onClick={openEdit}>Update</button>
+          <button className="btn btn-sm btn-primary shadow-sm" onClick={openEdit}>Update Profile</button>
         )}
       </div>
-      {error && <div className="alert alert-danger py-2 mb-3">{error}</div>}
-      {loading && <p>Loading...</p>}
-      {!loading && !acct && !error && <p>No account data available.</p>}
+
+      {error && <div className="alert alert-danger py-2 mb-3 shadow-sm">{error}</div>}
+      {loading && <div className="text-center py-5 text-muted"><div className="spinner-border spinner-border-sm me-2"></div>Loading...</div>}
+      {!loading && !acct && !error && <div className="alert alert-info shadow-sm">No account data available.</div>}
+      
       {acct && !loading && (
-        <div className="unified-table-container">
-          <table className="table unified-table mb-0">
-            <thead>
-              <tr>
-                <th style={{ width: '40%' }}>Field</th>
-                <th style={{ width: '60%' }}>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: '600' }}>Company Name</td>
-                <td style={{ textAlign: 'left' }}>{acct.name || '-'}</td>
-              </tr>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: '600' }}>Country</td>
-                <td style={{ textAlign: 'left' }}>{acct.country || '-'}</td>
-              </tr>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: '600' }}>Force Two-Factor-authenticator</td>
-                <td style={{ textAlign: 'left' }}>
-                  <span className={`badge ${acct.forceMfa ? 'badge-success' : 'badge-secondary'}`}>
-                    {acct.forceMfa ? 'Yes' : 'No'}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div className="card border-0 shadow-sm">
+          <div className="card-body p-0">
+            <div className="unified-table-container shadow-none border-0">
+              <table className="table unified-table mb-0">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40%' }}>Field</th>
+                    <th style={{ width: '60%' }}>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="fw-bold text-muted">Company Name</td>
+                    <td>{acct.name || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td className="fw-bold text-muted">Country</td>
+                    <td>{acct.country || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td className="fw-bold text-muted">Force Two-Factor-authenticator</td>
+                    <td>
+                      <span className={`badge ${acct.forceMfa ? 'bg-success' : 'bg-secondary'}`}>
+                        {acct.forceMfa ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="card-footer bg-white border-top small text-muted">
+            Updates to name or force MFA will refresh your token automatically.
+          </div>
         </div>
       )}
 
-      <p className="text-muted small mb-0">Updates to name or force MFA will refresh your token automatically.</p>
-
       {showModal && (
         <>
-          <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1040 }} onClick={() => setShowModal(false)} />
+          <div className="modal-backdrop show" style={{ zIndex: 1040 }} onClick={() => setShowModal(false)} />
           <div className="modal d-block" tabIndex="-1" style={{ zIndex: 1050 }}>
             <div className="modal-dialog modal-lg">
-              <div className="modal-content">
+              <div className="modal-content shadow-lg border-0">
                 <form onSubmit={handleSubmit}>
-                  <div className="modal-header py-2">
-                    <h6 className="modal-title">Update Account Profile</h6>
+                  <div className="modal-header border-bottom">
+                    <h5 className="modal-title text-primary fw-bold">Update Account Profile</h5>
                     <button type="button" className="btn-close" onClick={() => setShowModal(false)} />
                   </div>
-                  <div className="modal-body">
+                  <div className="modal-body p-4">
                     <div className="row g-3">
                       <div className="col-md-6">
-                        <label className="form-label">Company Name</label>
+                        <label className="form-label fw-bold small">Company Name</label>
                         <input className="form-control" maxLength={64} name="name" value={form.name} onChange={handleChange} required />
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label">Country</label>
+                        <label className="form-label fw-bold small">Country</label>
                         <select className={`form-select ${fieldErrors.country ? 'is-invalid' : ''}`} name="country" value={form.country} onChange={handleChange} required>
                           <option value="">-- Select Country --</option>
                           {countries.map(c => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
                         </select>
                         {fieldErrors.country && <div className="invalid-feedback">{fieldErrors.country}</div>}
                       </div>
-                      <div className="col-md-6">
-                        <div className="form-check mt-3">
+                      <div className="col-md-12">
+                        <div className="form-check p-3 border rounded bg-light">
                           <input className="form-check-input" type="checkbox" id="forceMfa" name="forceMfa" checked={form.forceMfa} onChange={handleChange} />
-                          <label className="form-check-label" htmlFor="forceMfa">Force Two-Factor-authenticator</label>
+                          <label className="form-check-label fw-bold" htmlFor="forceMfa">Force Two-Factor-authenticator</label>
+                          <div className="small text-muted mt-1">Enabling Force Two-Factor-authenticator requires all users to configure MFA before accessing this account.</div>
                         </div>
                       </div>
                     </div>
-                    <p className="small text-muted mt-3 mb-0">Enabling Force Two-Factor-authenticator requires all users to configure MFA before accessing this account.</p>
                   </div>
-                  <div className="modal-footer py-2">
-                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setShowModal(false)} disabled={saving}>Cancel</button>
-                    <button type="submit" className="btn btn-sm btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
+                  <div className="modal-footer border-top bg-light">
+                    <button type="button" className="btn btn-outline-secondary" onClick={() => setShowModal(false)} disabled={saving}>Cancel</button>
+                    <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
                   </div>
                 </form>
               </div>

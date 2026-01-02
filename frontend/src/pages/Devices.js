@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Button, Badge, Card, Row, Col, Alert, Form, ButtonGroup, Modal } from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router-dom';
-import { FaPlay, FaStop, FaSync, FaTrash, FaServer } from 'react-icons/fa';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Form, OverlayTrigger, Tooltip, Modal, Button } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
+import { 
+  FaPlay, FaStop, FaSyncAlt, FaTrashAlt, 
+  FaSearch, FaTimes, FaCaretDown, 
+  FaThLarge, FaList, FaFileCsv, FaCheck
+} from 'react-icons/fa';
 import api from '../services/api';
 import './Devices.css';
 
@@ -10,582 +14,387 @@ const Devices = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedDevices, setSelectedDevices] = useState(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState('grid');
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  
+  // Tunnels Modal State
   const [showTunnelModal, setShowTunnelModal] = useState(false);
   const [tunnelTopology, setTunnelTopology] = useState('full-mesh');
   const [creatingTunnels, setCreatingTunnels] = useState(false);
-  const navigate = useNavigate();
+
+  const menuRef = useRef(null);
 
   useEffect(() => {
     fetchDevices();
-  }, []);
-
-  const apiCall = async (url, options = {}) => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      navigate('/login');
-      return null;
-    }
-
-    try {
-      const cleanUrl = url.replace(/^\/api/, '');
-      const response = await api({
-        url: cleanUrl,
-        method: options.method || 'GET',
-        data: options.body ? JSON.parse(options.body) : undefined,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          ...options.headers
-        }
-      });
-
-      return {
-        ok: response.status >= 200 && response.status < 300,
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-        json: async () => response.data,
-        text: async () => typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
-      };
-    } catch (error) {
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-        navigate('/login');
-        return null;
+    
+    // Click outside listener for closing menu
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowActionsMenu(false);
       }
-      throw error;
-    }
-  };
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchDevices = async () => {
     try {
+      setLoading(true);
       const response = await api.get('/devices?response=detailed');
-      const data = response.data;
-      console.log('Fetched devices:', data);
-      
-      const transformedDevices = data.map(device => ({
-        id: device._id || device.id,
-        name: device.name || 'Unknown Device',
-        type: device.type || 'Router',
-        hostname: device.hostname || 'N/A',
-        wanIPs: device.interfaces?.filter(iface => iface.type === 'WAN')
-          .map(iface => iface.IPv4 || iface.PublicIP)
-          .filter(ip => ip)
-          .join(', ') || 'N/A',
-        status: device.isApproved ? 'Approved' : 'Pending',
-        connection: device.isConnected ? 'Connected' : 'Not Connected',
-        isConnected: device.isConnected,
-        isApproved: device.isApproved,
-        pps: device.stats?.pps || 'N/A',
-        bps: device.stats?.bps || 'N/A',
-        vRouter: device.state || '',
-        syncState: device.sync?.state || 'unknown',
-        location: device.location || '',
-        lastSeen: device.lastSeen || '',
-        serial: device.serial || 'N/A',
-        description: device.description || '',
-        machineId: device.machineId || 'N/A'
-      }));
-
-      setDevices(transformedDevices);
+      setDevices(Array.isArray(response.data) ? response.data : []);
       setError(null);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching devices:', error);
-      setError(error.message || 'Failed to fetch devices');
+      setError('Failed to load devices');
+    } finally {
       setLoading(false);
     }
   };
 
-  const getStatusBadge = (status) => {
-    const variants = {
-      'Approved': 'success',
-      'Pending': 'warning',
-      'Rejected': 'danger'
-    };
-    return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
+  const filteredDevices = useMemo(() => {
+    return devices.filter(d => 
+      (d.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (d.hostname || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [devices, searchTerm]);
+
+  const handleDeviceSelect = (id) => {
+    const next = new Set(selectedDevices);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedDevices(next);
   };
 
-  const getConnectionBadge = (connection) => {
-    const variants = {
-      'Connected': 'success',
-      'Not Connected': 'danger',
-      'Connecting': 'warning'
-    };
-    return <Badge bg={variants[connection] || 'secondary'}>{connection}</Badge>;
-  };
+  const handleSelectAll = () => {
+    // If all filtered devices are currently selected, deselect them all
+    // Otherwise, select all filtered devices
+    const allFilteredIds = filteredDevices.map(d => d._id || d.id);
+    const isAllSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedDevices.has(id));
 
-  const getVRouterBadge = (vRouterStatus, isConnected) => {
-    // Don't show status if device is not connected
-    if (!isConnected) {
-      return <Badge bg="secondary">Offline</Badge>;
-    }
-
-    let statusText, variant;
-    
-    switch(vRouterStatus) {
-      case 'running':
-        statusText = 'Running';
-        variant = 'success';
-        break;
-      case 'stopped':
-        statusText = 'Stopped';
-        variant = 'secondary';
-        break;
-      case 'failed':
-        statusText = 'Failed';
-        variant = 'danger';
-        break;
-      case 'pending':
-        statusText = 'Pending';
-        variant = 'warning';
-        break;
-      case 'starting':
-        statusText = 'Starting...';
-        variant = 'warning';
-        break;
-      case 'stopping':
-        statusText = 'Stopping...';
-        variant = 'warning';
-        break;
-      case '':
-      default:
-        statusText = 'Not Running';
-        variant = 'secondary';
-        break;
-    }
-    
-    return <Badge bg={variant}>{statusText}</Badge>;
-  };
-
-  const handleDeviceSelect = (deviceId, isSelected) => {
-    const newSelection = new Set(selectedDevices);
-    if (isSelected) {
-      newSelection.add(deviceId);
-    } else {
-      newSelection.delete(deviceId);
-    }
-    setSelectedDevices(newSelection);
-  };
-
-  const handleSelectAll = (isSelected) => {
-    if (isSelected) {
-      setSelectedDevices(new Set(devices.map(device => device.id)));
-    } else {
+    if (isAllSelected) {
       setSelectedDevices(new Set());
+    } else {
+      setSelectedDevices(new Set(allFilteredIds));
     }
   };
 
-  const handleStartDevice = async (deviceId) => {
-    try {
-      const device = devices.find(d => d.id === deviceId);
-      setDevices(prevDevices => 
-        prevDevices.map(d => 
-          d.id === deviceId 
-            ? { ...d, vRouter: 'starting' }
-            : d
-        )
-      );
-      
-      const response = await apiCall(`/api/devices/${deviceId}/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: 'start',
-          entity: 'agent',
-          message: 'start-router'
-        })
-      });
-      
-      if (response && response.ok) {
-        setTimeout(() => fetchDevices(), 2000);
-      } else {
-        throw new Error(`Start device failed: ${response?.status}`);
-      }
-    } catch (error) {
-      console.error('Error starting device:', error);
-      const originalDevice = devices.find(d => d.id === deviceId);
-      if (originalDevice) {
-        setDevices(prevDevices => 
-          prevDevices.map(d => 
-            d.id === deviceId 
-              ? { ...d, vRouter: originalDevice.vRouter }
-              : d
-          )
-        );
-      }
+  const performAction = async (action, deviceId = null) => {
+    const targets = deviceId ? [deviceId] : Array.from(selectedDevices);
+    if (targets.length === 0) {
+      if (!deviceId) alert('Please select at least one device.');
+      return;
     }
-  };
 
-  const handleStopDevice = async (deviceId) => {
-    try {
-      const device = devices.find(d => d.id === deviceId);
-      setDevices(prevDevices => 
-        prevDevices.map(d => 
-          d.id === deviceId 
-            ? { ...d, vRouter: 'stopping' }
-            : d
-        )
-      );
-      
-      const response = await apiCall(`/api/devices/${deviceId}/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: 'stop',
-          entity: 'agent',
-          message: 'stop-router'
-        })
-      });
-      
-      if (response && response.ok) {
-        setTimeout(() => fetchDevices(), 2000);
-      } else {
-        throw new Error(`Stop device failed: ${response?.status}`);
-      }
-    } catch (error) {
-      console.error('Error stopping device:', error);
-      const originalDevice = devices.find(d => d.id === deviceId);
-      if (originalDevice) {
-        setDevices(prevDevices => 
-          prevDevices.map(d => 
-            d.id === deviceId 
-              ? { ...d, vRouter: originalDevice.vRouter }
-              : d
-          )
-        );
-      }
-    }
-  };
+    if (action === 'delete' && !window.confirm(`Delete ${targets.length} device(s)?`)) return;
 
-  const handleSyncDevice = async (deviceId) => {
-    try {
-      setDevices(prevDevices => 
-        prevDevices.map(d => 
-          d.id === deviceId 
-            ? { ...d, vRouter: 'syncing' }
-            : d
-        )
-      );
-      
-      const response = await apiCall(`/api/devices/${deviceId}/apply`, {
-        method: 'POST',
-        body: JSON.stringify({ method: 'sync' })
-      });
-      
-      if (response && response.ok) {
-        setTimeout(() => fetchDevices(), 2000);
-      } else {
-        throw new Error(`Sync device failed: ${response?.status}`);
-      }
-    } catch (error) {
-      console.error('Error syncing device:', error);
-      const originalDevice = devices.find(d => d.id === deviceId);
-      if (originalDevice) {
-        setDevices(prevDevices => 
-          prevDevices.map(d => 
-            d.id === deviceId 
-              ? { ...d, vRouter: originalDevice.vRouter }
-              : d
-          )
-        );
-      }
-    }
-  };
-
-  const handleDeleteDevice = async (deviceId) => {
-    if (window.confirm('Are you sure you want to delete this device?')) {
+    for (const id of targets) {
       try {
-        const response = await apiCall(`/api/devices/${deviceId}`, {
-          method: 'DELETE'
-        });
-        
-        if (response && response.ok) {
-          fetchDevices();
+        if (action === 'delete') {
+          await api.delete(`/devices/${id}`);
+        } else {
+          // Map friendly action names to API methods if needed
+          let method = action;
+          let message = `${action}-router`;
+          
+          if (action === 'reset') {
+             // Assuming reset logic or simply restart agent/router
+             message = 'reset-router';
+          }
+
+          await api.post(`/devices/${id}/apply`, {
+            method: method,
+            entity: 'agent',
+            message: message
+          });
         }
-      } catch (error) {
-        console.error('Error deleting device:', error);
+      } catch (err) {
+        console.error(`Action ${action} failed for ${id}:`, err);
       }
     }
+    setShowActionsMenu(false);
+    // Refresh after short delay
+    setTimeout(() => {
+        fetchDevices();
+        if (action === 'delete') setSelectedDevices(new Set());
+    }, 1000);
   };
 
-  const handleCreateTunnels = () => {
+  const handleCreateTunnelsClick = () => {
     if (selectedDevices.size < 2) {
       alert('Please select at least 2 devices to create tunnels');
       return;
     }
     setShowTunnelModal(true);
-  };
-
-  const handleTunnelModalClose = () => {
-    setShowTunnelModal(false);
-    setTunnelTopology('full-mesh');
+    setShowActionsMenu(false);
   };
 
   const handleCreateTunnelsSubmit = async () => {
+    setCreatingTunnels(true);
     try {
-      setCreatingTunnels(true);
-      const deviceIds = Array.from(selectedDevices);
-      
-      // Build devices object for official API
       const devicesObj = {};
-      deviceIds.forEach(id => {
-        devicesObj[id] = true;
-      });
+      Array.from(selectedDevices).forEach(id => devicesObj[id] = true);
       
-      // Map topology to official format
-      const topology = tunnelTopology === 'hub-spoke' ? 'hubAndSpoke' : 'fullMesh';
-      
-      // Use official /devices/apply endpoint with method='tunnels'
-      const response = await apiCall('/api/devices/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: 'tunnels',
-          devices: devicesObj,
-          meta: {
-            tunnelType: 'site-to-site',
-            pathLabels: [],
-            topology: topology,
-            hub: null,
-            advancedOptions: {
-              routing: 'ospf'
-            }
-          }
-        })
+      const response = await api.post('/devices/apply', {
+        method: 'tunnels',
+        devices: devicesObj,
+        meta: {
+          tunnelType: 'site-to-site',
+          pathLabels: [],
+          topology: tunnelTopology === 'hub-spoke' ? 'hubAndSpoke' : 'fullMesh',
+          hub: null,
+          advancedOptions: { routing: 'ospf' }
+        }
       });
 
-      if (response && response.ok) {
-        await response.json().catch(() => ({}));
-        alert(`Tunnels are being created in ${tunnelTopology} topology! Please check the Tunnels page in a moment.`);
+      // Updated condition: Check for successful status explicitly if ok is not available directly on the generic response
+      // api wrapper normally returns { ok: boolean, status: number, ... } but axios response object has status
+      // We'll check response.ok (from our wrapper) OR fall back to status check
+      if (response && (response.ok || (response.status >= 200 && response.status < 300))) {
+        alert('Tunnel creation started.');
         setShowTunnelModal(false);
         setSelectedDevices(new Set());
-        setTimeout(() => fetchDevices(), 2000);
+        fetchDevices();
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.error || `Failed to create tunnels: ${response?.status}`);
+        throw new Error('Failed to create tunnels');
       }
     } catch (error) {
-      console.error('Error creating tunnels:', error);
-      alert(`Error creating tunnels: ${error.message}`);
+      alert(`Error: ${error.message}`);
     } finally {
       setCreatingTunnels(false);
     }
   };
 
+  const isAllSelected = filteredDevices.length > 0 && filteredDevices.every(d => selectedDevices.has(d._id || d.id));
+
   return (
     <div className="devices-page">
-      <div className="page-header">
-        <div>
-          <h2>Devices</h2>
-          <p className="text-muted">Manage your network devices</p>
+      {/* Breadcrumb Navigation */}
+      <div className="breadcrumb-nav">
+        <span>Home</span> <span className="mx-1">»</span> <span>Inventory</span> <span className="mx-1">»</span> <span className="active">Devices</span>
+      </div>
+
+      {/* Page Title */}
+      <h1 className="page-title">
+        Devices
+        {selectedDevices.size > 0 && <span className="selected-count">({selectedDevices.size} selected)</span>}
+      </h1>
+
+      {/* Toolbar Area */}
+      <div className="toolbar-container">
+        
+        <div className="toolbar-left">
+          {/* Custom Checkbox Wrapper matching template */}
+          <div 
+            className={`checkbox-wrapper ${isAllSelected ? 'checked' : ''}`} 
+            onClick={handleSelectAll}
+            title={isAllSelected ? "Deselect All" : "Select All"}
+          >
+            {isAllSelected && <FaCheck />}
+          </div>
+
+          <button className="btn-refresh-template" onClick={fetchDevices} title="Refresh">
+            <FaSyncAlt />
+          </button>
+
+          {/* Actions Dropdown */}
+          <div className="actions-dropdown-container" ref={menuRef}>
+            <button 
+              className="btn-actions-template" 
+              onClick={() => setShowActionsMenu(!showActionsMenu)}
+            >
+              Actions <FaCaretDown className="ms-2" />
+            </button>
+
+            {/* Replicated Actions Menu */}
+            <div className={`actions-menu ${showActionsMenu ? 'show' : ''}`}>
+              <div className="menu-group">
+                <button className="menu-item" onClick={() => performAction('start')}>Start Device</button>
+                <button className="menu-item" onClick={() => performAction('stop')}>Stop Device</button>
+                <button className="menu-item" onClick={() => performAction('reset')}>Reset Device</button>
+                <button className="menu-item text-danger" onClick={() => performAction('delete')}>Delete Selected Device</button>
+              </div>
+              
+              <hr className="menu-divider" />
+              <div className="menu-group">
+                <div className="menu-header">Create Tunnels</div>
+                <button className="menu-item" onClick={handleCreateTunnelsClick}>Create Peer Connection</button>
+              </div>
+
+              <hr className="menu-divider" />
+              <div className="menu-group">
+                <button className="menu-item" disabled style={{opacity: 0.5, cursor: 'default'}}>Install Policy</button>
+                <button className="menu-item" disabled style={{opacity: 0.5, cursor: 'default'}}>Uninstall Policy</button>
+              </div>
+
+              <hr className="menu-divider" />
+              <div className="menu-group">
+                <button className="menu-item" onClick={() => performAction('sync')}>Sync Device</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="search-wrapper-template">
+          <div className="filter-tag-template">
+            <strong>Device Status</strong> == running
+            <button><FaTimes /></button>
+          </div>
+          <input 
+            type="text" 
+            placeholder="Add filter" 
+            className="search-input-template"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <FaSearch className="text-muted mx-2" />
+        </div>
+
+        <div className="toolbar-right">
+          <button className="btn-clear-filters" onClick={() => setSearchTerm('')}>
+            Clear Filters
+          </button>
+          <div className="view-switcher-template">
+            <button 
+              className={viewMode === 'grid' ? 'active' : ''} 
+              onClick={() => setViewMode('grid')}
+            >
+              <FaThLarge />
+            </button>
+            <button 
+              className={viewMode === 'list' ? 'active' : ''} 
+              onClick={() => setViewMode('list')}
+              style={{ borderLeft: '1px solid #e5e7eb' }}
+            >
+              <FaList />
+            </button>
+          </div>
+          <button className="btn-export-csv" title="Export CSV">
+            <FaFileCsv />
+          </button>
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center">
-          <p>Loading devices...</p>
-        </div>
+      {/* Content Area */}
+      {loading && devices.length === 0 ? (
+        <div className="text-center py-5">Loading devices...</div>
       ) : error ? (
-        <Alert variant="danger">
-          <Alert.Heading>Error Loading Devices</Alert.Heading>
-          <p>{error}</p>
-          <Button variant="outline-danger" onClick={fetchDevices}>
-            Try Again
-          </Button>
-        </Alert>
-      ) : devices.length === 0 ? (
-        <Card className="text-center p-5">
-          <Card.Body>
-            <FaServer size={48} className="mb-3 text-muted" />
-            <h4>No devices yet</h4>
-            <p className="text-muted">No devices have been registered to your account.</p>
-            <Button variant="primary" onClick={fetchDevices}>
-              <FaSync className="me-1" />Refresh
-            </Button>
-          </Card.Body>
-        </Card>
+        <div className="alert alert-danger">{error}</div>
       ) : (
-        <div>
-          {selectedDevices.size > 0 && (
-            <div className="bulk-actions-bar mb-3 p-3 bg-light border rounded">
-              <Row className="align-items-center">
-                <Col md={6}>
-                  <span className="fw-bold">
-                    {selectedDevices.size} device{selectedDevices.size !== 1 ? 's' : ''} selected
-                  </span>
-                </Col>
-                <Col md={6} className="text-end">
-                  <ButtonGroup>
-                    <Button variant="primary" size="sm" onClick={handleCreateTunnels} disabled={selectedDevices.size < 2}>
-                      <FaSync className="me-1" />Create Tunnels
-                    </Button>
-                    <Button variant="success" size="sm" onClick={() => Array.from(selectedDevices).forEach(handleStartDevice)}>
-                      <FaPlay className="me-1" />Start
-                    </Button>
-                    <Button variant="danger" size="sm" onClick={() => Array.from(selectedDevices).forEach(handleStopDevice)}>
-                      <FaStop className="me-1" />Stop
-                    </Button>
-                    <Button variant="info" size="sm" onClick={() => Array.from(selectedDevices).forEach(handleSyncDevice)}>
-                      <FaSync className="me-1" />Sync
-                    </Button>
-                    <Button variant="danger" size="sm" onClick={() => Array.from(selectedDevices).forEach(handleDeleteDevice)}>
-                      <FaTrash className="me-1" />Delete
-                    </Button>
-                  </ButtonGroup>
-                </Col>
-              </Row>
-            </div>
-          )}
+        <div className={viewMode === 'grid' ? "device-grid-template" : "device-list-template"}>
+          {filteredDevices.map(device => {
+            const id = device._id || device.id;
+            const isSelected = selectedDevices.has(id);
+            const isOnline = device.isConnected;
+            const isRunning = device.state === 'running';
+            const isApproved = device.isApproved;
+            const isSynced = device.sync?.state === 'synced';
 
-          <Card>
-            <Card.Header>
-              <div className="devices-header-flex">
-                <Form.Check
-                  type="checkbox"
-                  id="select-all"
-                  label="Select All Devices"
-                  checked={devices.length > 0 && selectedDevices.size === devices.length}
-                  onChange={(e) => handleSelectAll(e.target.checked)}
-                />
-                <small className="text-muted devices-count">{devices.length} device{devices.length !== 1 ? 's' : ''} total</small>
-              </div>
-            </Card.Header>
-            <Card.Body>
-              {devices.map((device) => (
-                <div key={device.id} className="device-item mb-3 p-3 border rounded">
-                  <Row className="align-items-center">
-                    <Col xs={1}>
-                      <Form.Check
-                        type="checkbox"
-                        id={`device-${device.id}`}
-                        checked={selectedDevices.has(device.id)}
-                        onChange={(e) => handleDeviceSelect(device.id, e.target.checked)}
-                      />
-                    </Col>
-                    <Col xs={3}>
-                      <Link to={`/devices/${device.id}`} className="device-name">
-                        {device.name}
-                      </Link>
-                      <div className="small text-muted">
-                        ID: {device.machineId}
-                      </div>
-                    </Col>
-                    <Col xs={2}>
-                      {getStatusBadge(device.status)}
-                      <div className="mt-1">
-                        {getConnectionBadge(device.connection)}
-                      </div>
-                    </Col>
-                    <Col xs={2}>
-                      {getVRouterBadge(device.vRouter, device.isConnected)}
-                    </Col>
-                    <Col xs={2}>
-                      <div className="small">
-                        WAN IP: {device.wanIPs}
-                      </div>
-                      <div className="small text-muted">
-                        Hostname: {device.hostname}
-                      </div>
-                    </Col>
-                    <Col xs={2}>
-                      <ButtonGroup size="sm">
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={() => handleStartDevice(device.id)}
-                          disabled={
-                            !device.isConnected ||
-                            !device.isApproved ||
-                            device.vRouter === 'running' ||
-                            device.vRouter === 'starting' ||
-                            device.vRouter === 'pending'
-                          }
-                          title={
-                            !device.isConnected ? 'Device must be connected' :
-                            !device.isApproved ? 'Device must be approved' :
-                            device.vRouter === 'running' ? 'Device is already running' :
-                            'Start vRouter'
-                          }
-                        >
-                          <FaPlay />
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleStopDevice(device.id)}
-                          disabled={
-                            !device.isConnected ||
-                            !device.isApproved ||
-                            device.vRouter === 'stopped' ||
-                            device.vRouter === '' ||
-                            device.vRouter === 'stopping' ||
-                            device.vRouter === 'pending'
-                          }
-                          title={
-                            !device.isConnected ? 'Device must be connected' :
-                            !device.isApproved ? 'Device must be approved' :
-                            (device.vRouter === 'stopped' || device.vRouter === '') ? 'Device is not running' :
-                            'Stop vRouter'
-                          }
-                        >
-                          <FaStop />
-                        </Button>
-                        <Button
-                          variant="info"
-                          size="sm"
-                          onClick={() => handleSyncDevice(device.id)}
-                          disabled={device.vRouter === 'syncing'}
-                        >
-                          <FaSync />
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleDeleteDevice(device.id)}
-                        >
-                          <FaTrash />
-                        </Button>
-                      </ButtonGroup>
-                    </Col>
-                  </Row>
+            return (
+              <div key={id} className={`device-card-template ${isSelected ? 'border-orange-400' : ''}`}>
+                {/* Card Header */}
+                <div className="device-card-header-template">
+                  <div className="device-card-title-area">
+                    <input 
+                      type="checkbox" 
+                      className="form-check-input" 
+                      checked={isSelected}
+                      onChange={() => handleDeviceSelect(id)}
+                    />
+                    <Link to={`/devices/${id}`} className="device-card-name-link">
+                      {device.name || 'Unknown'}
+                    </Link>
+                  </div>
+                  
+                  {/* Action Icons */}
+                  <div className="device-card-actions-template">
+                    <OverlayTrigger overlay={<Tooltip>Start</Tooltip>}>
+                      <button className="btn-icon-play" onClick={() => performAction('start', id)} disabled={!isOnline || isRunning}>
+                        <FaPlay className="text-xxs" />
+                      </button>
+                    </OverlayTrigger>
+                    <OverlayTrigger overlay={<Tooltip>Stop</Tooltip>}>
+                      <button className="btn-icon-stop" onClick={() => performAction('stop', id)} disabled={!isOnline || !isRunning}>
+                        <FaStop className="text-xxs" />
+                      </button>
+                    </OverlayTrigger>
+                    <OverlayTrigger overlay={<Tooltip>Sync</Tooltip>}>
+                      <button className="btn-icon-sync" onClick={() => performAction('sync', id)} disabled={!isOnline}>
+                        <FaSyncAlt className="text-xxs" />
+                      </button>
+                    </OverlayTrigger>
+                    <OverlayTrigger overlay={<Tooltip>Delete</Tooltip>}>
+                      <button className="btn-icon-trash" onClick={() => performAction('delete', id)}>
+                        <FaTrashAlt className="text-xxs" />
+                      </button>
+                    </OverlayTrigger>
+                  </div>
                 </div>
-              ))}
-            </Card.Body>
-          </Card>
+
+                {/* Status Badges */}
+                <div className="device-card-badges-template">
+                  {isApproved && <span className="badge-template badge-success-template">Approved</span>}
+                  <span className={`badge-template ${isOnline ? 'badge-success-template' : 'badge-secondary-template'}`}>
+                    {isOnline ? 'Connected' : 'Offline'}
+                  </span>
+                  {isSynced && <span className="badge-template badge-success-template">Synced</span>}
+                </div>
+
+                {/* Info Grid */}
+                <div className="device-card-info-template">
+                  <div className="info-left-template text-start">
+                    <p>vRouter: <span className={`font-bold-template ${isRunning ? 'text-green-template' : ''}`}>{isRunning ? 'Running' : 'Stopped'}</span></p>
+                    <p>Hostname: <span className="text-dark-template">{device.hostname || 'N/A'}</span></p>
+                    <p>WAN IPs: {device.interfaces?.filter(i => i.type === 'WAN').map(i => i.IPv4 || i.PublicIP).join(', ') || 'N/A'}</p>
+                    <p className="text-xxs-template">ID: {device.machineId || id}</p>
+                  </div>
+                  <div className="info-right-template text-end">
+                    <p>PPS: RX: {device.stats?.pps?.rx || 0} TX: {device.stats?.pps?.tx || 0}</p>
+                    <p>BPS: RX: {device.stats?.bps?.rx || 0} TX: {device.stats?.bps?.tx || 0}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Tunnel Creation Modal */}
-      <Modal show={showTunnelModal} onHide={handleTunnelModalClose}>
+      <Modal show={showTunnelModal} onHide={() => setShowTunnelModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>Create Tunnels</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p>
-            You have selected <strong>{selectedDevices.size}</strong> devices to create tunnels.
+          <p className="text-muted">
+            Create a VPN tunnel network between <strong>{selectedDevices.size}</strong> selected devices.
           </p>
           <Form.Group className="mb-3">
-            <Form.Label>Tunnel Topology</Form.Label>
-            <Form.Select 
-              value={tunnelTopology} 
-              onChange={(e) => setTunnelTopology(e.target.value)}
-            >
-              <option value="full-mesh">Full Mesh</option>
-              <option value="hub-spoke">Hub and Spoke</option>
-            </Form.Select>
-            <Form.Text className="text-muted">
-              {tunnelTopology === 'full-mesh' 
-                ? `Full Mesh will create ${(selectedDevices.size * (selectedDevices.size - 1)) / 2} bidirectional tunnels connecting all devices.`
-                : 'Hub and Spoke will create tunnels from a central hub to all spoke devices.'
-              }
-            </Form.Text>
+            <Form.Label className="fw-bold small text-uppercase text-muted">Topology</Form.Label>
+            <div className="d-grid gap-2">
+              <div 
+                className={`p-3 border rounded cursor-pointer ${tunnelTopology === 'full-mesh' ? 'border-primary bg-light' : ''}`}
+                onClick={() => setTunnelTopology('full-mesh')}
+                style={{cursor: 'pointer'}}
+              >
+                <div className="fw-bold">Full Mesh</div>
+                <div className="small text-muted">Every device connects to every other device. Best for resilience.</div>
+              </div>
+              <div 
+                className={`p-3 border rounded cursor-pointer ${tunnelTopology === 'hub-spoke' ? 'border-primary bg-light' : ''}`}
+                onClick={() => setTunnelTopology('hub-spoke')}
+                style={{cursor: 'pointer'}}
+              >
+                <div className="fw-bold">Hub and Spoke</div>
+                <div className="small text-muted">One central hub device connects to all spokes. Efficient for large networks.</div>
+              </div>
+            </div>
           </Form.Group>
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleTunnelModalClose} disabled={creatingTunnels}>
+        <Modal.Footer className="border-0 pt-0">
+          <Button variant="link" className="text-muted text-decoration-none" onClick={() => setShowTunnelModal(false)} disabled={creatingTunnels}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleCreateTunnelsSubmit} disabled={creatingTunnels}>
+          <Button variant="primary" onClick={handleCreateTunnelsSubmit} disabled={creatingTunnels} className="px-4">
             {creatingTunnels ? 'Creating...' : 'Create Tunnels'}
           </Button>
         </Modal.Footer>

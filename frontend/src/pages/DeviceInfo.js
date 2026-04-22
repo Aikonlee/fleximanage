@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Badge, Modal, Form, Table, Button, Alert, Spinner, Row, Col } from 'react-bootstrap';
 import { 
   FaArrowLeft, FaCaretDown, FaColumns, 
-  FaPlay, FaStop, FaSyncAlt, FaMicrochip, FaEdit, FaCheck, FaSave, FaTrash, FaInfoCircle
+  FaPlay, FaStop, FaSyncAlt, FaMicrochip, FaEdit, FaCheck, FaSave, FaTrash, FaInfoCircle, FaCog
 } from 'react-icons/fa';
 import api from '../services/api';
 import './DeviceInfo.css';
@@ -23,6 +23,15 @@ const DeviceInfo = () => {
   const [description, setDescription] = useState('');
   const [isApproved, setIsApproved] = useState(false);
   
+  // OSPF State
+  const [ospfConfig, setOspfConfig] = useState({
+    routerId: '',
+    redistributeDefault: false,
+    redistributeConnected: false,
+    redistributeStatic: false,
+    redistributeBgp: false
+  });
+
   // Functional State
   const [interfaceChanges, setInterfaceChanges] = useState({});
   const [syncing, setSyncing] = useState(false);
@@ -45,8 +54,61 @@ const DeviceInfo = () => {
     destination: '', gateway: '', ifname: '', metric: '', redistributeViaOSPF: false, redistributeViaBGP: false, onLink: false, conditions: []
   });
 
+  // DHCP State
+  const [dhcpServers, setDhcpServers] = useState([]);
+  const [showDhcpModal, setShowDhcpModal] = useState(false);
+  const [editingDhcp, setEditingDhcp] = useState(null);
+  const [dhcpForm, setDhcpForm] = useState({
+    interface: '', rangeStart: '', rangeEnd: '', dns: '', defaultLeaseTime: '', maxLeaseTime: ''
+  });
+
   // Dropdown visibility state
   const [activeDropdown, setActiveDropdown] = useState(null);
+
+  // Map State
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+
+  useEffect(() => {
+    if (activeTab === 'general' && mapContainerRef.current && !mapInstanceRef.current && device) {
+      const L = window.L;
+      if (L) {
+        const lat = device.location?.lat || 51.505;
+        const lon = device.location?.lon || -0.09;
+        const zoom = device.location?.lat ? 13 : 13; // Default zoom
+
+        const map = L.map(mapContainerRef.current).setView([lat, lon], zoom);
+
+        // Create tile layer with proper configuration
+        const tileLayer = L.tileLayer('/api/public/tiles/{z}/{x}/{y}', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+          crossOrigin: 'anonymous'
+        });
+
+        tileLayer.addTo(map);
+
+        L.marker([lat, lon]).addTo(map)
+            .bindPopup(device.name || 'Device')
+            .openPopup();
+
+        mapInstanceRef.current = map;
+      }
+    } else if (activeTab !== 'general' && mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+    }
+  }, [activeTab, device]);
+
+  // Cleanup map on unmount
+  useEffect(() => {
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
 
   // --- API Logic ---
 
@@ -79,10 +141,25 @@ const DeviceInfo = () => {
       setDescription(deviceData?.description || '');
       setIsApproved(Boolean(deviceData?.isApproved));
       
+      // Initialize OSPF config
+      if (deviceData.ospf) {
+        setOspfConfig({
+          routerId: deviceData.ospf.routerId || '',
+          redistributeDefault: Boolean(deviceData.ospf.redistributeDefault),
+          redistributeConnected: Boolean(deviceData.ospf.redistributeConnected),
+          redistributeStatic: Boolean(deviceData.ospf.redistributeStatic),
+          redistributeBgp: Boolean(deviceData.ospf.redistributeBgp),
+          helloInterval: deviceData.ospf.helloInterval || '10',
+          deadInterval: deviceData.ospf.deadInterval || '40'
+        });
+      }
+      
       setHwCpuCores(deviceData?.cpuInfo?.hwCores || '4');
       setCurrentVRouterCores(deviceData?.cpuInfo?.vppCores || '1');
       setVRouterCores(deviceData?.cpuInfo?.configuredVppCores || deviceData?.cpuInfo?.vppCores || '1');
       setPowerSaving(Boolean(deviceData?.cpuInfo?.powerSaving));
+      
+      setDhcpServers(deviceData.dhcp || []);
 
       setLoading(false);
     } catch (err) {
@@ -136,14 +213,52 @@ const DeviceInfo = () => {
       setLoading(true);
       const updateData = { name: deviceName, description, isApproved };
       if (Object.keys(interfaceChanges).length > 0 && device?.interfaces) {
-        updateData.interfaces = device.interfaces.map(iface => ({ ...iface, ...interfaceChanges[iface._id] }));
+        updateData.interfaces = device.interfaces.map(iface => {
+          // Clone changes to avoid mutating state
+          const changes = { ...(interfaceChanges[iface._id] || {}) };
+          
+          // Handle CIDR parsing for IPv4 input
+          if (changes.IPv4 && changes.IPv4.includes('/')) {
+            const [ip, mask] = changes.IPv4.split('/');
+            changes.IPv4 = ip.trim();
+            // Only update mask if provided and not empty
+            if (mask && mask.trim()) {
+              changes.IPv4Mask = mask.trim();
+            }
+          } else if (changes.IPv4) {
+             changes.IPv4 = changes.IPv4.trim();
+          }
+
+          const mergedInterface = { ...iface, ...changes };
+          if (changes.ospf && iface.ospf) {
+             mergedInterface.ospf = { ...iface.ospf, ...changes.ospf };
+          } else if (changes.ospf) {
+             mergedInterface.ospf = changes.ospf;
+          }
+          return mergedInterface;
+        });
       }
       await apiCall(`/devices/${deviceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updateData) });
       await fetchDeviceInfo(true);
       setInterfaceChanges({});
       alert('Device updated successfully');
     } catch (err) {
-      alert('Update failed: ' + err.message);
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Unknown error';
+      alert('Update failed: ' + errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveOSPF = async () => {
+    try {
+      setLoading(true);
+      const updateData = { ospf: ospfConfig };
+      await apiCall(`/devices/${deviceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updateData) });
+      await fetchDeviceInfo(true);
+      alert('OSPF configuration saved successfully');
+    } catch (err) {
+      alert('Failed to save OSPF configuration: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -204,6 +319,41 @@ const DeviceInfo = () => {
     }
   };
 
+  const handleSaveDHCP = async () => {
+    try {
+      // dns should be an array of strings
+      const dnsArray = dhcpForm.dns.split(',').map(s => s.trim()).filter(s => s);
+      const payload = {
+        ...dhcpForm,
+        dns: dnsArray
+      };
+      
+      await apiCall(`/devices/${deviceId}/dhcp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      setShowDhcpModal(false);
+      await fetchDeviceInfo(true);
+      alert('DHCP server saved successfully');
+    } catch (error) {
+      alert('Failed to save DHCP server: ' + error.message);
+    }
+  };
+
+  const handleDeleteDHCP = async (ifaceName) => {
+    if (!window.confirm('Delete DHCP server for ' + ifaceName + '?')) return;
+    try {
+      // Filter out the deleted DHCP config from the current list
+      const newDhcpList = dhcpServers.filter(d => d.interface !== ifaceName);
+      // Update device with the new list
+      await apiCall(`/devices/${deviceId}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ dhcp: newDhcpList }) 
+      });
+      await fetchDeviceInfo(true);
+    } catch (error) {
+      alert('Failed to delete DHCP server: ' + error.message);
+    }
+  };
+
   const handleInterfaceEdit = (iface, field, value) => {
     setInterfaceChanges(prev => ({ ...prev, [iface._id]: { ...prev[iface._id], [field]: value } }));
   };
@@ -224,6 +374,12 @@ const DeviceInfo = () => {
     setActiveTab(parentTab);
     setCurrentSubTab(subTab);
     setActiveDropdown(null);
+  };
+
+  // Helper to get interfaces enabled for OSPF
+  const getOspfInterfaces = () => {
+    if (!device || !device.interfaces) return [];
+    return device.interfaces.filter(iface => iface.routing === 'OSPF' || (iface.type === 'LAN' && iface.isAssigned));
   };
 
   if (loading && !device) {
@@ -273,6 +429,7 @@ const DeviceInfo = () => {
             <button className={`dropdown-item ${currentSubTab === 'interfaces' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'interfaces')}>Interfaces</button>
             <button className={`dropdown-item ${currentSubTab === 'firewall' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'firewall')}>Firewall & NAT</button>
             <button className={`dropdown-item ${currentSubTab === 'static-routes' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'static-routes')}>Static Routes</button>
+            <button className={`dropdown-item ${currentSubTab === 'dhcp' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'dhcp')}>DHCP Server</button>
             <button className={`dropdown-item ${currentSubTab === 'ospf' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'ospf')}>OSPF</button>
             <button className={`dropdown-item ${currentSubTab === 'bgp' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'bgp')}>BGP</button>
             <button className={`dropdown-item ${currentSubTab === 'routing-filters' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'routing-filters')}>Routing Filters</button>
@@ -280,17 +437,17 @@ const DeviceInfo = () => {
           </div>
         </div>
 
-        {/* Status */}
+        {/* Status Dropdown */}
         <div className={`tab-item tab-dropdown ${activeTab === 'status' ? 'active' : ''}`} onClick={(e) => handleTabClick(e, 'status')}>
           Status <FaCaretDown className="tab-caret" />
           <div className={`tab-dropdown-menu ${activeDropdown === 'status' ? 'show' : ''}`}>
-            {['apps', 'bgp-neighbors', 'dhcp', 'policies', 'routing-table', 'statistics', 'vrrp'].map(sub => (
+            {['apps', 'bgp-neighbors', 'policies', 'routing-table', 'statistics', 'vrrp'].map(sub => (
               <button key={sub} className={`dropdown-item ${currentSubTab === sub ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'status', sub)}>{sub.replace('-', ' ').toUpperCase()}</button>
             ))}
           </div>
         </div>
 
-        {/* Troubleshooting */}
+        {/* Troubleshooting Dropdown */}
         <div className={`tab-item tab-dropdown ${activeTab === 'troubleshooting' ? 'active' : ''}`} onClick={(e) => handleTabClick(e, 'troubleshooting')}>
           Troubleshooting <FaCaretDown className="tab-caret" />
           <div className={`tab-dropdown-menu ${activeDropdown === 'troubleshooting' ? 'show' : ''}`}>
@@ -321,6 +478,7 @@ const DeviceInfo = () => {
                   <label 
                     htmlFor="approved-toggle" 
                     className={`toggle-label ${isApproved ? 'checked' : ''}`}
+                    onClick={() => setIsApproved(!isApproved)}
                   ></label>
                 </div>
               </div>
@@ -329,19 +487,85 @@ const DeviceInfo = () => {
             <div className="grid-row"><label className="grid-label">S/N</label><div className="grid-content"><input type="text" className="input-template input-readonly" value={device.serial || 'N/A'} readOnly /></div></div>
             <div className="grid-row"><label className="grid-label">Machine ID</label><div className="grid-content"><input type="text" className="input-template input-readonly" value={device.machineId || ''} readOnly /></div></div>
             <div className="grid-row"><label className="grid-label">Device Version</label><div className="grid-content"><input type="text" className="input-template input-readonly" value={device.versions?.agent || device.versions?.device || ''} readOnly /></div></div>
-            <div className="grid-row" style={{marginTop: '2rem'}}><div className="col-span-12" style={{gridColumn: 'span 12'}}><div className="map-container-template"><span className="text-muted small">Map Placeholder (Leaflet Integration Required)</span></div></div></div>
+            <div className="grid-row" style={{marginTop: '2rem'}}><div className="col-span-12" style={{gridColumn: 'span 12'}}><div id="device-map" ref={mapContainerRef} className="map-container-template"></div></div></div>
           </div>
         )}
 
         {activeTab === 'configuration' && currentSubTab === 'interfaces' && (
           <div className="table-container-template">
             <table className="custom-table-template">
-              <thead><tr><th className="text-center" style={{width: '40px'}}><FaColumns /></th><th>Name</th><th>Type</th><th>Assigned</th><th>IPv4</th><th>GW</th><th>DNS</th><th>Actions</th></tr></thead>
+              <thead>
+                <tr>
+                  <th className="text-center" style={{width: '40px'}}><FaColumns /></th>
+                  <th>Name <span className="sort-icon">▲</span></th>
+                  <th>Type <span className="sort-icon">▼</span></th>
+                  <th>Assigned <span className="sort-icon">▼</span></th>
+                  <th>IPv4 <span className="sort-icon">▼</span></th>
+                  <th>GW <span className="sort-icon">▼</span></th>
+                  <th>Metric <span className="sort-icon">▼</span></th>
+                  <th>Public IP <span className="sort-icon">▼</span></th>
+                  <th>Path Labels <span className="sort-icon">▼</span></th>
+                  <th>Routing <span className="sort-icon">▼</span></th>
+                </tr>
+              </thead>
               <tbody>
                 {device.interfaces?.map((iface, idx) => {
                   const isIfaceAssigned = (interfaceChanges[iface._id]?.isAssigned !== undefined) ? interfaceChanges[iface._id].isAssigned : iface.isAssigned;
+                  const isUp = iface.linkStatus === 'up' || (iface.IPv4 && iface.IPv4.length > 0); // Simple heuristic for green status
+                  
                   return (
-                    <tr key={iface._id || idx}><td className="text-center"><input type="checkbox" className="form-check-input" /></td><td className="fw-bold text-primary">{iface.name}</td><td><Badge bg={iface.type === 'WAN' ? 'primary' : 'secondary'}>{iface.type}</Badge></td><td><Badge bg={isIfaceAssigned ? 'success' : 'secondary'} style={{cursor: 'pointer'}} onClick={() => handleInterfaceEdit(iface, 'isAssigned', !isIfaceAssigned)}>{isIfaceAssigned ? 'Yes' : 'No'}</Badge></td><td>{isIfaceAssigned ? (iface.IPv4 || '-') : '-'}</td><td>{isIfaceAssigned ? (iface.gateway || '-') : '-'}</td><td>{iface.dnsServers?.join(', ') || '-'}</td><td><button className="btn-icon-action" onClick={() => setEditingInterface(iface)}><FaEdit size={12} /></button></td></tr>
+                    <tr key={iface._id || idx}>
+                      <td className="text-center">
+                        <button className="btn-icon-action" onClick={() => setEditingInterface(iface)}>
+                          <FaCog />
+                        </button>
+                      </td>
+                      <td className="fw-bold text-dark">
+                        <span className={`status-dot ${isUp ? 'bg-success' : 'bg-secondary'}`}></span>
+                        {iface.name}
+                        {iface.deviceType === 'lte' && <span className="text-muted small ms-1">(LTE)</span>}
+                        {iface.deviceType === 'wifi' && <span className="text-muted small ms-1">(WiFi)</span>}
+                      </td>
+                      <td>{iface.type}</td>
+                      <td>
+                        <div className="form-check form-switch d-flex justify-content-center">
+                          <input 
+                            className="form-check-input" 
+                            type="checkbox" 
+                            checked={isIfaceAssigned} 
+                            onChange={(e) => handleInterfaceEdit(iface, 'isAssigned', e.target.checked)} 
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </div>
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-sm"
+                          value={interfaceChanges[iface._id]?.IPv4 !== undefined ? interfaceChanges[iface._id].IPv4 : (iface.IPv4 ? `${iface.IPv4}/${iface.IPv4Mask || '24'}` : '')}
+                          onChange={(e) => handleInterfaceEdit(iface, 'IPv4', e.target.value)}
+                          placeholder="IP/Mask"
+                          style={{ minWidth: '130px' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-sm"
+                          value={(interfaceChanges[iface._id]?.gateway !== undefined ? interfaceChanges[iface._id].gateway : iface.gateway) || ''}
+                          onChange={(e) => handleInterfaceEdit(iface, 'gateway', e.target.value)}
+                          placeholder="Gateway"
+                          style={{ minWidth: '120px' }}
+                        />
+                      </td>
+                      <td>{iface.metric || ''}</td>
+                      <td>
+                        {iface.PublicIP}
+                        {iface.NatType && <div className="text-muted small" style={{fontSize: '0.7rem'}}>{iface.NatType}</div>}
+                      </td>
+                      <td>{iface.pathLabels || ''}</td>
+                      <td>{iface.routing || 'None'}</td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -363,7 +587,158 @@ const DeviceInfo = () => {
           </div>
         )}
 
-        {(activeTab === 'status' || activeTab === 'troubleshooting' || (activeTab === 'configuration' && !['interfaces', 'static-routes'].includes(currentSubTab))) && (
+        {activeTab === 'configuration' && currentSubTab === 'dhcp' && (
+          <div className="p-4 bg-white border border-gray-300 rounded shadow-sm">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="mb-0 fw-bold">DHCP Server Configuration</h5>
+              <Button variant="primary" size="sm" onClick={() => { 
+                setEditingDhcp(null); 
+                setDhcpForm({ interface: '', rangeStart: '', rangeEnd: '', dns: '8.8.8.8, 8.8.4.4', defaultLeaseTime: '', maxLeaseTime: '' }); 
+                setShowDhcpModal(true); 
+              }}>Add DHCP Server</Button>
+            </div>
+            <div className="table-container-template">
+              <table className="custom-table-template">
+                <thead>
+                  <tr>
+                    <th>Interface</th>
+                    <th>Range</th>
+                    <th>DNS</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dhcpServers.length > 0 ? dhcpServers.map((dhcp, i) => (
+                    <tr key={i}>
+                      <td className="fw-bold text-primary">{dhcp.interface}</td>
+                      <td>{dhcp.rangeStart} - {dhcp.rangeEnd}</td>
+                      <td>{dhcp.dns?.join(', ')}</td>
+                      <td><Badge bg={dhcp.status === 'installed' ? 'success' : 'warning'}>{dhcp.status || 'pending'}</Badge></td>
+                      <td>
+                        <button className="btn-icon-action" onClick={() => { 
+                          setEditingDhcp(dhcp); 
+                          setDhcpForm({ 
+                            interface: dhcp.interface, 
+                            rangeStart: dhcp.rangeStart, 
+                            rangeEnd: dhcp.rangeEnd, 
+                            dns: dhcp.dns?.join(', ') || '',
+                            defaultLeaseTime: dhcp.defaultLeaseTime,
+                            maxLeaseTime: dhcp.maxLeaseTime
+                          }); 
+                          setShowDhcpModal(true); 
+                        }} title="Edit">
+                          <FaEdit size={12} />
+                        </button>
+                        <button className="btn-icon-action text-danger" onClick={() => handleDeleteDHCP(dhcp.interface)} title="Delete">
+                          <FaTrash size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="5" className="text-center text-muted py-4">No DHCP servers configured.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'configuration' && currentSubTab === 'ospf' && (
+          <div className="ospf-container">
+            <h5 className="section-header">OSPF Configuration</h5>
+            
+            <div className="mb-4">
+               <button className="btn-template btn-save-gray" onClick={handleSaveOSPF}>Save</button>
+            </div>
+
+            <div className="global-settings-card">
+              <Row>
+                <Col md={6}>
+                  <div className="settings-field">
+                    <label>Router ID</label>
+                    <input 
+                      type="text" 
+                      className="input-template" 
+                      value={ospfConfig.routerId} 
+                      onChange={(e) => setOspfConfig({...ospfConfig, routerId: e.target.value})} 
+                    />
+                  </div>
+                  <div className="settings-field mt-3">
+                    <label>Redistribute BGP Routes</label>
+                    <div className="toggle-wrapper">
+                      <input type="checkbox" id="toggle-bgp" className="toggle-checkbox" checked={ospfConfig.redistributeBgp} onChange={(e) => setOspfConfig({...ospfConfig, redistributeBgp: e.target.checked})} />
+                      <label htmlFor="toggle-bgp" className={`toggle-label ${ospfConfig.redistributeBgp ? 'checked' : ''}`} onClick={() => setOspfConfig({...ospfConfig, redistributeBgp: !ospfConfig.redistributeBgp})}></label>
+                    </div>
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <div className="settings-field">
+                    <label>Hello Interval (seconds)</label>
+                    <input 
+                      type="number" 
+                      className="input-template" 
+                      value={ospfConfig.helloInterval} 
+                      onChange={(e) => setOspfConfig({...ospfConfig, helloInterval: e.target.value})} 
+                    />
+                  </div>
+                  <div className="settings-field mt-3">
+                    <label>Dead Interval (seconds)</label>
+                    <input 
+                      type="number" 
+                      className="input-template" 
+                      value={ospfConfig.deadInterval} 
+                      onChange={(e) => setOspfConfig({...ospfConfig, deadInterval: e.target.value})} 
+                    />
+                  </div>
+                  <div className="text-end mt-3">
+                    <button className="btn-outline-gray">CLI Commands</button>
+                  </div>
+                </Col>
+              </Row>
+            </div>
+
+            <h5 className="section-header mt-4">Networks</h5>
+            <div className="table-container-template">
+              <table className="custom-table-template">
+                <thead>
+                  <tr>
+                    <th>Interface</th>
+                    <th>Network</th>
+                    <th>Area</th>
+                    <th>Authentication key ID</th>
+                    <th>Authentication key</th>
+                    <th>Cost</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getOspfInterfaces().length > 0 ? getOspfInterfaces().map((iface, idx) => (
+                    <tr key={iface._id || idx}>
+                      <td>{iface.name}</td>
+                      <td>{iface.IPv4 ? `${iface.IPv4}/${iface.IPv4Mask || '24'}` : '-'}</td>
+                      <td>{iface.ospf?.area || '0'}</td>
+                      <td>{iface.ospf?.authKeyId || ''}</td>
+                      <td>{iface.ospf?.authKey || ''}</td>
+                      <td>{iface.ospf?.cost || ''}</td>
+                      <td>
+                        <button className="btn-icon-yellow" onClick={() => setEditingInterface(iface)}>
+                          <FaCog />
+                        </button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan="7" className="text-center text-muted py-4">No interfaces configured for OSPF. Enable OSPF on an interface in the "Interfaces" tab first.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {(activeTab === 'status' || activeTab === 'troubleshooting' || (activeTab === 'configuration' && !['interfaces', 'static-routes', 'ospf'].includes(currentSubTab))) && (
           <div className="p-5 bg-white border border-gray-300 rounded shadow-sm text-center text-muted">
             <p className="mb-0">Content for <strong>{currentSubTab || activeTab}</strong></p>
           </div>
@@ -390,18 +765,152 @@ const DeviceInfo = () => {
           <Modal.Header closeButton><Modal.Title>Edit {editingInterface.name}</Modal.Title></Modal.Header>
           <Modal.Body>
             <Form>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>IPv4 Address / Mask</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={(interfaceChanges[editingInterface._id]?.IPv4 !== undefined ? interfaceChanges[editingInterface._id].IPv4 : (editingInterface.IPv4 ? `${editingInterface.IPv4}/${editingInterface.IPv4Mask || '24'}` : '')) || ''} 
+                      onChange={(e) => handleInterfaceEdit(editingInterface, 'IPv4', e.target.value)} 
+                      placeholder="e.g. 192.168.1.1/24"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Gateway</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={(interfaceChanges[editingInterface._id]?.gateway !== undefined ? interfaceChanges[editingInterface._id].gateway : editingInterface.gateway) || ''} 
+                      onChange={(e) => handleInterfaceEdit(editingInterface, 'gateway', e.target.value)} 
+                      placeholder="e.g. 192.168.1.254"
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>IPv4 Mask (Optional override)</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={(interfaceChanges[editingInterface._id]?.IPv4Mask !== undefined ? interfaceChanges[editingInterface._id].IPv4Mask : editingInterface.IPv4Mask) || ''} 
+                      onChange={(e) => handleInterfaceEdit(editingInterface, 'IPv4Mask', e.target.value)} 
+                      placeholder="e.g. 24"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                   <Form.Group className="mb-3"><Form.Label>Metric</Form.Label><Form.Control type="text" value={(interfaceChanges[editingInterface._id]?.metric !== undefined ? interfaceChanges[editingInterface._id].metric : editingInterface.metric) || ''} onChange={(e) => handleInterfaceEdit(editingInterface, 'metric', e.target.value)} /></Form.Group>
+                </Col>
+              </Row>
+
               <Form.Group className="mb-3"><Form.Label>Routing Protocol</Form.Label><Form.Select value={interfaceChanges[editingInterface._id]?.routing || editingInterface.routing || 'NONE'} onChange={(e) => handleInterfaceEdit(editingInterface, 'routing', e.target.value)}><option value="NONE">None</option><option value="OSPF">OSPF</option><option value="BGP">BGP</option></Form.Select></Form.Group>
               <Form.Group className="mb-3"><Form.Label>Bandwidth (Upload)</Form.Label><Form.Control type="number" value={interfaceChanges[editingInterface._id]?.bandwidthMbps?.tx || editingInterface.bandwidthMbps?.tx || ''} onChange={(e) => handleInterfaceEdit(editingInterface, 'bandwidthMbps', { ...editingInterface.bandwidthMbps, tx: e.target.value })} /></Form.Group>
+              
+              {/* OSPF Settings - displayed if routing is OSPF */}
+              {(interfaceChanges[editingInterface._id]?.routing === 'OSPF' || (editingInterface.routing === 'OSPF' && !interfaceChanges[editingInterface._id]?.routing)) && (
+                <>
+                  <hr className="my-4" />
+                  <h6 className="mb-3 fw-bold">OSPF Settings</h6>
+                  <Row>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Area</Form.Label>
+                        <Form.Control type="text" value={interfaceChanges[editingInterface._id]?.ospf?.area || editingInterface.ospf?.area || '0.0.0.0'} onChange={(e) => handleInterfaceEdit(editingInterface, 'ospf', { ...editingInterface.ospf, ...interfaceChanges[editingInterface._id]?.ospf, area: e.target.value })} />
+                      </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Cost</Form.Label>
+                        <Form.Control type="number" value={interfaceChanges[editingInterface._id]?.ospf?.cost || editingInterface.ospf?.cost || '10'} onChange={(e) => handleInterfaceEdit(editingInterface, 'ospf', { ...editingInterface.ospf, ...interfaceChanges[editingInterface._id]?.ospf, cost: e.target.value })} />
+                      </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Hello Interval</Form.Label>
+                        <Form.Control type="number" value={interfaceChanges[editingInterface._id]?.ospf?.helloInterval || editingInterface.ospf?.helloInterval || '10'} onChange={(e) => handleInterfaceEdit(editingInterface, 'ospf', { ...editingInterface.ospf, ...interfaceChanges[editingInterface._id]?.ospf, helloInterval: e.target.value })} />
+                      </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Dead Interval</Form.Label>
+                        <Form.Control type="number" value={interfaceChanges[editingInterface._id]?.ospf?.deadInterval || editingInterface.ospf?.deadInterval || '40'} onChange={(e) => handleInterfaceEdit(editingInterface, 'ospf', { ...editingInterface.ospf, ...interfaceChanges[editingInterface._id]?.ospf, deadInterval: e.target.value })} />
+                      </Form.Group>
+                    </Col>
+                  </Row>
+                </>
+              )}
             </Form>
           </Modal.Body>
           <Modal.Footer><Button variant="secondary" onClick={() => setEditingInterface(null)}>Cancel</Button><Button variant="primary" onClick={() => setEditingInterface(null)}>Save Locally</Button></Modal.Footer>
         </Modal>
       )}
 
+      {/* Update Device Modal removed */}
+
       <Modal show={showRouteModal} onHide={() => setShowRouteModal(false)} centered size="lg">
         <Modal.Header closeButton><Modal.Title>{editingRoute ? 'Edit Route' : 'Add Route'}</Modal.Title></Modal.Header>
         <Modal.Body><Form><Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Destination Network</Form.Label><Form.Control value={routeForm.destination} onChange={e => setRouteForm({...routeForm, destination: e.target.value})} placeholder="192.168.10.0/24" /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Gateway</Form.Label><Form.Control value={routeForm.gateway} onChange={e => setRouteForm({...routeForm, gateway: e.target.value})} placeholder="192.168.1.1" /></Form.Group></Col></Row><Form.Check label="Redistribute OSPF" checked={routeForm.redistributeViaOSPF} onChange={e => setRouteForm({...routeForm, redistributeViaOSPF: e.target.checked})} /><Form.Check label="Redistribute BGP" checked={routeForm.redistributeViaBGP} onChange={e => setRouteForm({...routeForm, redistributeViaBGP: e.target.checked})} /></Form></Modal.Body>
         <Modal.Footer><Button variant="secondary" onClick={() => setShowRouteModal(false)}>Cancel</Button><Button variant="primary" onClick={handleSaveRoute}><FaSave className="me-2"/>Save Route</Button></Modal.Footer>
+      </Modal>
+
+      <Modal show={showDhcpModal} onHide={() => setShowDhcpModal(false)} centered size="lg">
+        <Modal.Header closeButton><Modal.Title>{editingDhcp ? 'Edit DHCP Server' : 'Add DHCP Server'}</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label>Interface</Form.Label>
+              <Form.Select 
+                value={dhcpForm.interface} 
+                onChange={e => setDhcpForm({...dhcpForm, interface: e.target.value})}
+                disabled={!!editingDhcp} // Disable interface selection when editing
+              >
+                <option value="">Select Interface</option>
+                {device?.interfaces?.filter(i => i.type === 'LAN').map(i => (
+                  <option key={i._id} value={i.name}>{i.name} ({i.IPv4})</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Range Start</Form.Label>
+                  <Form.Control value={dhcpForm.rangeStart} onChange={e => setDhcpForm({...dhcpForm, rangeStart: e.target.value})} placeholder="192.168.1.100" />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Range End</Form.Label>
+                  <Form.Control value={dhcpForm.rangeEnd} onChange={e => setDhcpForm({...dhcpForm, rangeEnd: e.target.value})} placeholder="192.168.1.200" />
+                </Form.Group>
+              </Col>
+            </Row>
+            <Form.Group className="mb-3">
+              <Form.Label>DNS Servers (comma separated)</Form.Label>
+              <Form.Control value={dhcpForm.dns} onChange={e => setDhcpForm({...dhcpForm, dns: e.target.value})} placeholder="8.8.8.8, 8.8.4.4" />
+            </Form.Group>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Default Lease Time (seconds)</Form.Label>
+                  <Form.Control type="number" value={dhcpForm.defaultLeaseTime} onChange={e => setDhcpForm({...dhcpForm, defaultLeaseTime: e.target.value})} placeholder="600" />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Max Lease Time (seconds)</Form.Label>
+                  <Form.Control type="number" value={dhcpForm.maxLeaseTime} onChange={e => setDhcpForm({...dhcpForm, maxLeaseTime: e.target.value})} placeholder="7200" />
+                </Form.Group>
+              </Col>
+            </Row>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDhcpModal(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSaveDHCP}><FaSave className="me-2"/>Save DHCP Server</Button>
+        </Modal.Footer>
       </Modal>
     </div>
   );

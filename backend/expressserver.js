@@ -37,6 +37,7 @@ const createError = require('http-errors');
 const passport = require('passport');
 const auth = require('./authenticate');
 const { connectRouter } = require('./routes/connect');
+const { getSwVerUpdaterInstance } = require('./deviceLogic/DevSwVersionUpdateManager');
 const morgan = require('morgan');
 const logger = require('./logging/logging')({ module: module.filename, type: 'req' });
 const { reqLogger, errLogger } = require('./logging/request-logging');
@@ -122,6 +123,22 @@ class ExpressServer {
 
     //   next();
     // });
+
+    // Collapse accidental repeated slashes (e.g. a client building
+    // '<baseUrl-with-trailing-slash>' + '/some/path' -> '/api//some/path').
+    // Express's `app.use(mountPath, ...)` only matches an exact path-segment
+    // prefix, so a stray double slash silently skips a route's intended mount
+    // (e.g. the public, unauthenticated /api/public/* routes) and falls
+    // through to later middleware such as the global JWT auth gate.
+    this.app.use((req, res, next) => {
+      const qIdx = req.url.indexOf('?');
+      const pathPart = qIdx === -1 ? req.url : req.url.slice(0, qIdx);
+      if (pathPart.includes('//')) {
+        const queryPart = qIdx === -1 ? '' : req.url.slice(qIdx);
+        req.url = pathPart.replace(/\/{2,}/g, '/') + queryPart;
+      }
+      next();
+    });
 
     // Request logging middleware - must be defined before routers.
     this.app.use(reqLogger);
@@ -250,7 +267,19 @@ class ExpressServer {
     this.app.use('/spec', express.static(path.join(__dirname, 'api', 'openapi.yaml')));
     this.app.get('/hello', (req, res) => res.send('Hello World'));
 
-    this.app.get('/api/version', (req, res) => res.json({ version }));
+    this.app.get('/api/version', async (req, res) => {
+      const payload = { version };
+      try {
+        const latest = await getSwVerUpdaterInstance().getLatestSwVersions();
+        if (latest) {
+          payload.device = latest.versions?.device;
+          payload.upgradeDeadline = latest.versionDeadline;
+        }
+      } catch (err) {
+        logger.warn('Failed to fetch latest device software version', { params: { err: err.message } });
+      }
+      res.json(payload);
+    });
     this.app.get('/api/restServers', (req, res) => res.json({ version }));
 
     this.app.use(auth.verifyUserJWT);
@@ -259,7 +288,7 @@ class ExpressServer {
     try {
       // FIXME: temporary map the OLD routes
       // this.app.use('/api/devices', require('./routes/devices'));
-      // this.app.use('/api/devicestats', require('./routes/deviceStats'));
+      this.app.use('/api/devicestats', require('./routes/deviceStats'));
       // this.app.use('/api/jobs', require('./routes/deviceQueue'));
       this.app.use('/api/portals', require('./routes/portals'));
       // Interface routing configuration routes

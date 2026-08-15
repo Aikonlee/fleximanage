@@ -4,6 +4,7 @@
 *.swp
 *.swo
 logs/
+tmp/
 
 # Archives and builds
 *.tar.gz
@@ -50,5 +51,5 @@ backend/logs/
 frontend/build/
 
 # myself readme
-#docs/
-#scripts/
+docs/
+scripts/

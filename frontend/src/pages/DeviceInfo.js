@@ -708,11 +708,11 @@ const DeviceInfo = () => {
         <div className={`tab-item ${activeTab === 'general' ? 'active' : ''}`} onClick={(e) => handleTabClick(e, 'general')}>General</div>
         
         {/* Configuration */}
-        <div className={`tab-item tab-dropdown ${activeTab === 'configuration' ? 'active' : ''}`} onClick={(e) => handleTabClick(e, 'configuration')}>
+        <div className={`tab-item tab-dropdown ${activeTab === 'configuration' ? 'active' : ''} ${activeDropdown === 'configuration' ? 'dropdown-open' : ''}`} onClick={(e) => handleTabClick(e, 'configuration')}>
           Configuration <FaCaretDown className="tab-caret" />
           <div className={`tab-dropdown-menu ${activeDropdown === 'configuration' ? 'show' : ''}`}>
             <button className={`dropdown-item ${currentSubTab === 'interfaces' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'interfaces')}>Interfaces</button>
-            <button className={`dropdown-item ${currentSubTab === 'firewall' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'firewall')}>Firewall & NAT</button>
+            <button className={`dropdown-item ${currentSubTab === 'firewall' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'firewall')}>Firewall and NAT</button>
             <button className={`dropdown-item ${currentSubTab === 'static-routes' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'static-routes')}>Static Routes</button>
             <button className={`dropdown-item ${currentSubTab === 'dhcp' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'dhcp')}>DHCP Server</button>
             <button className={`dropdown-item ${currentSubTab === 'ospf' ? 'active' : ''}`} onClick={(e) => handleSubTabClick(e, 'configuration', 'ospf')}>OSPF</button>
@@ -723,7 +723,7 @@ const DeviceInfo = () => {
         </div>
 
         {/* Status Dropdown */}
-        <div className={`tab-item tab-dropdown ${activeTab === 'status' ? 'active' : ''}`} onClick={(e) => handleTabClick(e, 'status')}>
+        <div className={`tab-item tab-dropdown ${activeTab === 'status' ? 'active' : ''} ${activeDropdown === 'status' ? 'dropdown-open' : ''}`} onClick={(e) => handleTabClick(e, 'status')}>
           Status <FaCaretDown className="tab-caret" />
           <div className={`tab-dropdown-menu ${activeDropdown === 'status' ? 'show' : ''}`}>
             {['apps', 'bgp-neighbors', 'policies', 'routing-table', 'statistics', 'vrrp'].map(sub => (
@@ -733,7 +733,7 @@ const DeviceInfo = () => {
         </div>
 
         {/* Troubleshooting Dropdown */}
-        <div className={`tab-item tab-dropdown ${activeTab === 'troubleshooting' ? 'active' : ''}`} onClick={(e) => handleTabClick(e, 'troubleshooting')}>
+        <div className={`tab-item tab-dropdown ${activeTab === 'troubleshooting' ? 'active' : ''} ${activeDropdown === 'troubleshooting' ? 'dropdown-open' : ''}`} onClick={(e) => handleTabClick(e, 'troubleshooting')}>
           Troubleshooting <FaCaretDown className="tab-caret" />
           <div className={`tab-dropdown-menu ${activeDropdown === 'troubleshooting' ? 'show' : ''}`}>
             {['command', 'edge-setting', 'logs', 'packet-traces', 'recovery-info'].map(sub => (
@@ -760,8 +760,8 @@ const DeviceInfo = () => {
                     checked={isApproved} 
                     onChange={(e) => setIsApproved(e.target.checked)} 
                   />
-                  <label 
-                    htmlFor="approved-toggle" 
+                  <label
+                    htmlFor="approved-toggle"
                     className={`toggle-label ${isApproved ? 'checked' : ''}`}
                     onClick={() => setIsApproved(!isApproved)}
                   ></label>

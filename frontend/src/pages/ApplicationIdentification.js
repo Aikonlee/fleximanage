@@ -163,8 +163,8 @@ const ApplicationIdentification = () => {
               <Col md={6}><Form.Group className="mb-3"><Form.Label>Description</Form.Label><Form.Control value={customForm.description} onChange={(e) => setCustomForm({ ...customForm, description: e.target.value })} /></Form.Group></Col>
             </Row>
             <Row>
-              <Col md={4}><Form.Group className="mb-3"><Form.Label>Category</Form.Label><Form.Control value={customForm.category} onChange={(e) => setCustomForm({ ...customForm, category: e.target.value })} /></Form.Group></Col>
-              <Col md={4}><Form.Group className="mb-3"><Form.Label>Service Class</Form.Label><Form.Control value={customForm.serviceClass} onChange={(e) => setCustomForm({ ...customForm, serviceClass: e.target.value })} /></Form.Group></Col>
+              <Col md={4}><Form.Group className="mb-3"><Form.Label>Category *</Form.Label><Form.Control value={customForm.category} onChange={(e) => setCustomForm({ ...customForm, category: e.target.value })} /></Form.Group></Col>
+              <Col md={4}><Form.Group className="mb-3"><Form.Label>Service Class *</Form.Label><Form.Control value={customForm.serviceClass} onChange={(e) => setCustomForm({ ...customForm, serviceClass: e.target.value })} /></Form.Group></Col>
               <Col md={4}>
                 <Form.Group className="mb-3">
                   <Form.Label>Importance</Form.Label>
@@ -199,7 +199,7 @@ const ApplicationIdentification = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowCustomModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveCustom} disabled={!customForm.name}>Save</Button>
+          <Button variant="primary" onClick={handleSaveCustom} disabled={!customForm.name || !customForm.category || !customForm.serviceClass}>Save</Button>
         </Modal.Footer>
       </Modal>
 

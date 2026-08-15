@@ -34,6 +34,7 @@ const AppStore = () => {
   const isPurchased = (appId) => purchased.some((p) => (p.app?._id || p.app) === appId);
 
   const handlePurchase = async (app) => {
+    if (!window.confirm(`Install "${app.name}" for this organization?`)) return;
     setBusyId(app._id);
     try {
       await api.post(`/appstore/purchase/${app._id}`);

@@ -42,8 +42,9 @@ organizationsRouter.use(bodyParser.json());
 
 // Error formatter
 const formatErr = (err, msg) => {
-  // Check for unique error
-  if (err.name === 'MongoError' && err.code === 11000) {
+  // Check for unique error. err.name is 'MongoServerError' since mongodb driver v4
+  // (was 'MongoError' before) - match on the version-independent code instead
+  if (err.code === 11000) {
     return ({ status: 500, error: 'Organization ' + msg.name + ' already exists' });
   } else {
     return ({ status: 500, error: 'Add organization error' });

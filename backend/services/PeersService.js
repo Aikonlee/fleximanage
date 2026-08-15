@@ -117,8 +117,10 @@ class PeersService {
       let msg = e.message || 'Internal Server Error';
       const status = e.status || 500;
 
-      // Change the duplicate error message to make it clearer
-      if (e.name === 'MongoError' && e.code === 11000) {
+      // Change the duplicate error message to make it clearer. e.name is
+      // 'MongoServerError' since mongodb driver v4 (was 'MongoError' before) -
+      // match on the version-independent code instead
+      if (e.code === 11000) {
         msg = `Peer name "${peer.name}" already exists for this organization`;
       }
 
@@ -232,8 +234,10 @@ class PeersService {
       let msg = e.message || 'Internal Server Error';
       const status = e.status || 500;
 
-      // Change the duplicate error message to make it clearer
-      if (e.name === 'MongoError' && e.code === 11000) {
+      // Change the duplicate error message to make it clearer. e.name is
+      // 'MongoServerError' since mongodb driver v4 (was 'MongoError' before) -
+      // match on the version-independent code instead
+      if (e.code === 11000) {
         msg = `Peer name "${peer.name}" already exists for this organization`;
       }
 

@@ -30,8 +30,9 @@ resourcesRouter.use(bodyParser.json());
 
 // Error formatter
 const formatErr = (err, msg) => {
-  // Check for unique error
-  if (err.name === 'MongoError' && err.code === 11000) {
+  // Check for unique error. err.name is 'MongoServerError' since mongodb driver v4
+  // (was 'MongoError' before) - match on the version-independent code instead
+  if (err.code === 11000) {
     if (err.errmsg.includes('downloadObject')) {
       // Check if object ID is not unique
       return ({ status: 500, error: 'Resource for this object already exist' });

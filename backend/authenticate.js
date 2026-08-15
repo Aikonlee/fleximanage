@@ -290,7 +290,9 @@ exports.verifyUserJWT = function (req, res, next) {
               return next(createError(401, 'session expired'));
             }
             logger.warn('User token refresh failed', { params: { err: err.message }, req: req });
-            return err.name === 'MongoError'
+            // err.name is e.g. 'MongoServerError'/'MongoNetworkError' for driver errors,
+            // 'MongoError' only in mongodb driver v3 and earlier
+            return err.name && err.name.startsWith('Mongo')
               ? next(createError(500))
               : next(createError(401));
           }

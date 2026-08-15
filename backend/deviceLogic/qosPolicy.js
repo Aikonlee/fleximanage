@@ -531,7 +531,9 @@ const apply = async (deviceList, user, data) => {
       data.devices || { [deviceList[0]._id]: true }, org, qosPolicy, op
     );
   } catch (err) {
-    throw err.name === 'MongoError'
+    // err.name is e.g. 'MongoServerError' for current mongodb driver versions,
+    // 'MongoError' only in driver v3 and earlier
+    throw err.name && err.name.startsWith('Mongo')
       ? new Error() : err;
   }
   const deviceIdsSet = new Set(deviceIds.map(id => id.toString()));

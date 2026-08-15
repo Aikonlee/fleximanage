@@ -1688,6 +1688,27 @@ class DevicesService {
 
         // Make sure interfaces are not deleted, only modified
         if (Array.isArray(deviceRequest.interfaces)) {
+          // Guard against losing an interface's devId (its stable hardware bus
+          // address, e.g. a PCI/USB address). All the matching logic below keys
+          // interfaces by devId, so a client that submits an interface without
+          // echoing back its devId (or with it blanked/nulled) would silently
+          // overwrite a previously-valid value on save, permanently breaking
+          // that interface's identity. _id is server-assigned and never
+          // changes, so use it to recover a dropped/blanked devId before any
+          // devId-keyed matching happens.
+          const origInterfacesById = keyBy(origDevice.interfaces, (ifc) => ifc._id.toString());
+          deviceRequest.interfaces.forEach((updIntf) => {
+            if (!updIntf.devId && updIntf._id) {
+              const matchById = origInterfacesById[updIntf._id.toString()];
+              if (matchById && matchById.devId) {
+                logger.warn('Recovered devId dropped by client for interface update', {
+                  params: { deviceId: origDevice._id, interfaceId: updIntf._id, devId: matchById.devId }
+                });
+                updIntf.devId = matchById.devId;
+              }
+            }
+          });
+
           const interfacesByDevId = keyBy(deviceRequest.interfaces, 'devId');
 
           // not allowed to assign path labels of a different organization

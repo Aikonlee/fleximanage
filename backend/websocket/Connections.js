@@ -873,9 +873,25 @@ class Connections {
 
         const interfaces = [];
         for (const i of origDevice.interfaces) {
-          const updatedConfig = incomingInterfaces.find(u => u.devId === i.devId);
+          let updatedConfig = incomingInterfaces.find(u => u.devId === i.devId);
+          if (!updatedConfig && !i.devId && i.MAC) {
+            // devId was previously lost (e.g. an edit that dropped it before the
+            // DevicesService guard existed) and can't be reconstructed locally -
+            // it can only come from a live agent report. MAC is hardware-stable
+            // and reported on every sync, so use it to re-identify the interface
+            // and backfill the real devId below.
+            updatedConfig = incomingInterfaces.find(u =>
+              u.MAC && u.MAC.toLowerCase() === i.MAC.toLowerCase());
+            if (updatedConfig) {
+              logger.warn('Recovered devId via MAC match for interface with missing devId', {
+                params: {
+                  machineId, interface: i.name, MAC: i.MAC, devId: updatedConfig.devId
+                }
+              });
+            }
+          }
           if (!updatedConfig) {
-            if (i.devId.startsWith('vlan')) {
+            if (i.devId && i.devId.startsWith('vlan')) {
               // the VLAN sub-interface is removed in device
               // it should be unlocked in manage if assigned or removed if not assigned
               if (i.isAssigned) {
@@ -918,6 +934,7 @@ class Connections {
 
           const updInterface = {
             ...i.toJSON(),
+            devId: updatedConfig.devId,
             PublicIP: updatedConfig.public_ip && i.useStun
               ? updatedConfig.public_ip : i.PublicIP,
             PublicPort: updatedConfig.public_port && i.useStun

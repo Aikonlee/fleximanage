@@ -35,6 +35,7 @@ import IpsecPeeringEditor from './pages/IpsecPeeringEditor';
 import HighAvailability from './pages/HighAvailability';
 import HighAvailabilityEditor from './pages/HighAvailabilityEditor';
 import DeviceUpgrade from './pages/DeviceUpgrade';
+import Notifications from './pages/Notifications';
 import AppStore from './pages/AppStore';
 import LinkMonitors from './pages/LinkMonitors';
 import ApplicationIdentification from './pages/ApplicationIdentification';
@@ -145,11 +146,18 @@ function App() {
             <Route path="/firewall-policies/:id" element={<Guard permKey="firewallpolicies" element={<FirewallPolicyEditor />} />} />
             <Route path="/high-availability" element={<Guard permKey="vrrp" element={<HighAvailability />} />} />
             <Route path="/high-availability/:id" element={<Guard permKey="vrrp" element={<HighAvailabilityEditor />} />} />
-            <Route path="/ai-network-healing" element={<Guard permKey="devices" element={<ComingSoon title="AI Network Healing" breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Security' }, { label: 'AI Network Healing' }]} />} />} />
+            <Route path="/ai-network-healing" element={<Guard permKey="devices" element={<ComingSoon
+              title="AI Network Healing"
+              breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Security' }, { label: 'AI Network Healing' }]}
+              message={'AI Network Healing isn\'t a standalone settings page in flexiWAN - it runs automatically in the background. ' +
+                'Watch for it via a tunnel\'s "Pending" status (hover for the detected issue) on the Tunnels page, ' +
+                'related entries on Troubleshoot › Notifications, and the "Sync" action on a device’s page.'}
+            />} />} />
             <Route path="/dashboards/network" element={<NetworkConnectivity />} />
             <Route path="/dashboards/world-map" element={<WorldMapDashboard />} />
             <Route path="/dashboards/traffic" element={<TrafficDashboard />} />
             <Route path="/device-upgrade" element={<Guard permKey="devices" element={<DeviceUpgrade />} />} />
+            <Route path="/troubleshoot/notifications" element={<Guard permKey="notifications" element={<Notifications />} />} />
             <Route path="/about" element={<About />} />
           </Routes>
         </div>

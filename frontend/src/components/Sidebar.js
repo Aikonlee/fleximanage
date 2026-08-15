@@ -107,6 +107,7 @@ const Sidebar = ({ collapsed }) => {
       label: 'Troubleshoot',
       children: [
         { path: '/device-upgrade', label: 'Device Upgrade' },
+        { path: '/troubleshoot/notifications', label: 'Notifications', permKey: 'notifications' },
       ]
     },
     { type: 'item', path: '/about', icon: <FaInfoCircle />, label: 'About' },

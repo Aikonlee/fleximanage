@@ -139,6 +139,10 @@ class DeviceStatus {
       utc: Joi.date().timestamp('unix').required(),
       tunnel_stats: Joi.object().optional(),
       application_stats: Joi.object().optional(),
+      current_job: Joi.object().optional(),
+      // Reported by fwagent as of flexiEdge 6.5.19 (e.g. "IDLE"); accept any
+      // string since the full set of recovery states isn't documented here
+      recovery: Joi.string().allow('').optional(),
       lte_stats: Joi.object().optional(),
       wifi_stats: Joi.object().optional(),
       alerts: Joi.object().optional(),
@@ -187,7 +191,7 @@ class DeviceStatus {
         }))
       }).allow({}).optional(),
       wan_monitoring: Joi.object().pattern(/^[a-z0-9:._/-]{1,64}$/i, Joi.object({
-        ifname: Joi.string().optional(),
+        ifname: Joi.string().allow('').optional(),
         rtt: Joi.number().optional(),
         drop_rate: Joi.number().optional(),
         connected: Joi.boolean().optional()

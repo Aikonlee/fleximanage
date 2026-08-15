@@ -6,7 +6,11 @@ import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import './QoSEditor.css';
 
-const DSCP_OPTIONS = ['CS0', 'CS1', 'CS2', 'CS3', 'CS4', 'CS5', 'CS6', 'CS7', 'AF11', 'AF21', 'AF31', 'AF41', 'EF'];
+const DSCP_OPTIONS = [
+  'CS0', 'CS1', 'CS2', 'CS3', 'CS4', 'CS5', 'CS6', 'CS7',
+  'AF11', 'AF12', 'AF13', 'AF21', 'AF22', 'AF23', 'AF31', 'AF32', 'AF33', 'AF41', 'AF42', 'AF43',
+  'EF', 'VA'
+];
 
 const DATA_QUEUES = [
   { key: 'control-signaling', label: 'Control / Signaling' },
@@ -112,7 +116,8 @@ const QoSEditor = () => {
           <Col md={4}>
             <Form.Group>
               <Form.Label>Bandwidth Limit %</Form.Label>
-              <Form.Control type="number" min={0} max={100} value={outbound.realtime.bandwidthLimitPercent} onChange={(e) => updateOutbound('realtime', 'bandwidthLimitPercent', Number(e.target.value))} />
+              <Form.Control type="number" min={10} max={90} value={outbound.realtime.bandwidthLimitPercent} onChange={(e) => updateOutbound('realtime', 'bandwidthLimitPercent', Number(e.target.value))} />
+              <Form.Text className="text-muted">Must be between 10% and 90%.</Form.Text>
             </Form.Group>
           </Col>
           {advanced && (
@@ -132,13 +137,13 @@ const QoSEditor = () => {
         <h6 className="fw-bold mb-1">Outbound — Data Queues</h6>
         <p className="text-muted small">
           Remaining bandwidth is shared between these queues by weighted round-robin
-          (current weights: {DATA_QUEUES.map((q) => `${outbound[q.key]?.weight ?? 0}`).join(' / ')}, sum {dataQueueWeightSum}).
+          (current weights: {DATA_QUEUES.map((q) => `${outbound[q.key]?.weight ?? 0}`).join(' / ')}, sum {dataQueueWeightSum}). Each weight must be between 10 and 70.
         </p>
         {DATA_QUEUES.map((q) => (
           <Row key={q.key} className="align-items-end mb-2">
             <Col md={3}><Form.Label className="mb-0">{q.label}</Form.Label></Col>
             <Col md={3}>
-              <Form.Control type="number" min={0} max={100} value={outbound[q.key]?.weight ?? 0} onChange={(e) => updateOutbound(q.key, 'weight', Number(e.target.value))} placeholder="Weight" />
+              <Form.Control type="number" min={10} max={70} value={outbound[q.key]?.weight ?? 0} onChange={(e) => updateOutbound(q.key, 'weight', Number(e.target.value))} placeholder="Weight" />
             </Col>
             {advanced && (
               <Col md={4}>

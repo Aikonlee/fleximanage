@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../services/api';
+import L from 'leaflet';
+import api, { inferBaseURL } from '../services/api';
 import './Home.css';
+
+// Absolute URL so tile requests hit the real backend directly, bypassing the
+// dev-server's /api proxy (which is only correctly configured inside docker-compose).
+const TILE_URL_TEMPLATE = `${inferBaseURL().replace(/\/+$/, '')}/public/tiles/{z}/{x}/{y}`;
 
 const Home = () => {
   const [deviceStats, setDeviceStats] = useState({
@@ -31,57 +36,49 @@ const Home = () => {
   const [error, setError] = useState(null);
 
   const initializeMap = (devicesList = []) => {
-    // Delayed init to ensure DOM is ready
-    setTimeout(() => {
-      if (!window.L) {
-        console.warn('Leaflet library not loaded');
-        return;
-      }
+    const mapElement = document.getElementById('map');
+    if (!mapElement) return;
 
-      const mapElement = document.getElementById('map');
-      if (!mapElement) return;
+    // Clean up existing map instance if any
+    if (mapElement._leaflet_id) return;
 
-      // Clean up existing map instance if any
-      if (mapElement._leaflet_id) return;
+    try {
+      const map = L.map('map', { zoomControl: true }).setView([50.1109, 8.6821], 5);
 
-      try {
-        const map = window.L.map('map', { zoomControl: true }).setView([50.1109, 8.6821], 5);
+      // Create tile layer with proper configuration
+      const tileLayer = L.tileLayer(TILE_URL_TEMPLATE, {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        crossOrigin: 'anonymous'
+      });
 
-        // Create tile layer with proper configuration
-        const tileLayer = window.L.tileLayer('/api/public/tiles/{z}/{x}/{y}', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19,
-          crossOrigin: 'anonymous'
+      tileLayer.addTo(map);
+
+      // Add device markers
+      if (devicesList && devicesList.length > 0) {
+        devicesList.forEach((device) => {
+          const coords = device.coords || [];
+          if (coords.length === 2) {
+            // Schema default is [40.416775, -3.703790] (Madrid), which is [lat, lng]
+            const [latitude, longitude] = coords;
+            const color = device.state === 'running' ? '#16a34a' : '#dc2626';
+
+            const icon = L.divIcon({
+              className: 'custom-map-marker',
+              html: `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+              iconSize: [12, 12],
+              popupAnchor: [0, -6]
+            });
+
+            L.marker([latitude, longitude], { icon })
+              .bindPopup(`<strong>${device.name}</strong><br/>${device.state === 'running' ? 'Running' : 'Stopped'}`)
+              .addTo(map);
+          }
         });
-
-        tileLayer.addTo(map);
-
-        // Add device markers
-        if (devicesList && devicesList.length > 0) {
-          devicesList.forEach((device) => {
-            const coords = device.coords || [];
-            if (coords.length === 2) {
-              // Schema default is [40.416775, -3.703790] (Madrid), which is [lat, lng]
-              const [latitude, longitude] = coords;
-              const color = device.status === 'running' ? '#16a34a' : '#dc2626';
-              
-              const icon = window.L.divIcon({
-                className: 'custom-map-marker',
-                html: `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-                iconSize: [12, 12],
-                popupAnchor: [0, -6]
-              });
-
-              window.L.marker([latitude, longitude], { icon })
-                .bindPopup(`<strong>${device.name}</strong><br/>${device.status === 'running' ? 'Running' : 'Stopped'}`)
-                .addTo(map);
-            }
-          });
-        }
-      } catch (err) {
-        console.error('Map initialization error:', err);
       }
-    }, 200);
+    } catch (err) {
+      console.error('Map initialization error:', err);
+    }
   };
 
   const fetchDashboardData = useCallback(async () => {
@@ -98,13 +95,15 @@ const Home = () => {
         const devRes = await api.get('/devices');
         devicesList = devRes.data?.devices || devRes.data || [];
       } catch (e) {
-        console.warn('Failed to fetch devices list, using summary data');
-        devicesList = data.devices || [];
+        // Note: data.devices from /organizations/summary is just a count,
+        // not a device array, so there's no richer fallback to use here.
+        console.warn('Failed to fetch devices list', e);
+        devicesList = [];
       }
       
       // Calculate Stats
       const totalDevs = devicesList.length;
-      const running = devicesList.filter(d => d.status === 'running').length;
+      const running = devicesList.filter(d => d.state === 'running').length;
       const connected = devicesList.filter(d => d.isConnected).length;
       const approved = devicesList.filter(d => d.isApproved).length;
       

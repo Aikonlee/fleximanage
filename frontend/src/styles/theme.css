@@ -3,72 +3,86 @@
    ======================================== */
 
 :root {
-  /* Primary Colors - Blue Theme */
-  --primary-color: #5dade2;
-  --primary-hover: #3498db;
-  --primary-active: #2980b9;
-  --primary-light: #aed6f1;
-  --primary-lighter: #ebf5fb;
-  
+  /* Primary Colors - flexiWAN Orange */
+  --primary-color: #f7941d;
+  --primary-hover: #e8830c;
+  --primary-active: #d17600;
+  --primary-light: #fcd9a8;
+  --primary-lighter: #fef3e3;
+
+  /* Brand / logo teal (flexiWAN mark, links) */
+  --brand-teal: #2c9c8f;
+  --brand-teal-dark: #1f7267;
+  --link-color: #2f80c9;
+
   /* Secondary Colors */
   --secondary-color: #95a5a6;
   --secondary-hover: #7f8c8d;
-  
+
   /* Success/Error/Warning/Info Colors */
-  --success-color: #27ae60;
-  --success-light: #d4edda;
-  --error-color: #e74c3c;
-  --error-light: #f8d7da;
-  --warning-color: #f39c12;
-  --warning-light: #fff3cd;
-  --info-color: #3498db;
-  --info-light: #d6eaf8;
-  
+  --success-color: #2ecc71;
+  --success-light: #d9f7e6;
+  --error-color: #e0473f;
+  --error-light: #fbdedc;
+  --warning-color: #f1c40f;
+  --warning-light: #fdf3cd;
+  --info-color: #2f80c9;
+  --info-light: #dceaf7;
+
   /* Status Colors */
-  --status-running: #27ae60;
-  --status-running-bg: #d4edda;
+  --status-running: #2ecc71;
+  --status-running-bg: #d9f7e6;
   --status-stopped: #95a5a6;
   --status-stopped-bg: #e8eaed;
-  --status-connected: #3498db;
-  --status-connected-bg: #d6eaf8;
-  --status-disconnected: #e74c3c;
-  --status-disconnected-bg: #f8d7da;
-  --status-pending: #f39c12;
-  --status-pending-bg: #fff3cd;
-  --status-approved: #27ae60;
-  --status-approved-bg: #d4edda;
-  
+  --status-connected: #2f80c9;
+  --status-connected-bg: #dceaf7;
+  --status-disconnected: #e0473f;
+  --status-disconnected-bg: #fbdedc;
+  --status-pending: #f1c40f;
+  --status-pending-bg: #fdf3cd;
+  --status-approved: #2ecc71;
+  --status-approved-bg: #d9f7e6;
+
+  /* Action icon-button colors (row action clusters, e.g. Firewall rule rows) */
+  --action-red: #e0473f;
+  --action-darkred: #c0392b;
+  --action-yellow: #f1c40f;
+  --action-green: #2ecc71;
+  --action-teal: #2c9c8f;
+
   /* Background Colors */
-  --body-bg: #f5f7fa;
-  --content-bg: #f5f7fa;
+  --body-bg: #eef2f1;
+  --content-bg: #eef2f1;
   --card-bg: #ffffff;
-  --sidebar-bg: #2c3e50;
-  --sidebar-hover: #34495e;
+  --sidebar-bg: #16213a;
+  --sidebar-hover: #223050;
+  --sidebar-accent: #f7941d;
   --header-bg: #ffffff;
-  
+
   /* Text Colors */
   --text-primary: #2c3e50;
   --text-secondary: #7f8c8d;
   --text-muted: #95a5a6;
   --text-light: #ecf0f1;
   --text-white: #ffffff;
-  
+
   /* Border Colors */
   --border-color: #dee2e6;
   --border-light: #e9ecef;
   --border-dark: #adb5bd;
-  
+
   /* Shadows */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
   --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.15);
-  
+
   /* Border Radius */
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+  --radius-pill: 50rem;
   
   /* Spacing */
   --spacing-xs: 0.25rem;
@@ -177,8 +191,8 @@ body {
   font-family: var(--font-family);
   font-size: var(--font-size-sm);
   font-weight: 500;
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-md);
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius-pill);
   border: none;
   transition: all var(--transition-fast);
   cursor: pointer;
@@ -514,14 +528,15 @@ body {
 }
 
 .table thead th {
-  background: var(--primary-color);
-  color: var(--text-white);
-  font-weight: 600;
+  background: #f7f9f9;
+  color: var(--text-primary);
+  font-weight: 700;
   font-size: var(--font-size-sm);
-  text-align: center;
+  text-align: left;
   vertical-align: middle;
   padding: 0.875rem 0.75rem;
   border: none;
+  border-bottom: 2px solid var(--border-light);
   white-space: nowrap;
   position: sticky;
   top: 0;
@@ -544,7 +559,7 @@ body {
 }
 
 .table tbody tr:nth-of-type(even) {
-  background-color: #fafbfc;
+  background-color: #fbfcfc;
 }
 
 .table tbody tr:nth-of-type(even):hover {

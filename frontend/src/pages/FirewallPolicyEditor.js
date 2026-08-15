@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Form, Row, Col, Alert, Modal } from 'react-bootstrap';
-import { FaArrowLeft, FaCog, FaTrash, FaPlus } from 'react-icons/fa';
+import { FaArrowLeft, FaCog, FaTrash, FaPlus, FaArrowUp, FaArrowDown } from 'react-icons/fa';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import './FirewallPolicyEditor.css';
@@ -9,45 +9,70 @@ import './FirewallPolicyEditor.css';
 const EMPTY_RULE = {
   description: '', direction: 'outbound', inbound: 'edgeAccess', internalIP: '', internalPortStart: '',
   priority: 0, enabled: true, action: 'allow',
+  destinationType: 'custom',
   classification: {
     source: { ipPort: { ip: '', ports: '' } },
-    destination: { ipProtoPort: { ip: '', ports: '', protocols: [] } }
+    destination: {
+      ipProtoPort: { ip: '', ports: '', protocols: [] },
+      trafficId: '',
+      trafficTags: { category: '', serviceClass: '', importance: '' }
+    }
   }
 };
 
-const RuleTable = ({ title, rules, onAdd, onEdit, onDelete }) => (
-  <>
-    <div className="d-flex justify-content-between align-items-center mb-2">
-      <h6 className="fw-bold mb-0">{title}</h6>
-      <Button variant="primary" size="sm" onClick={onAdd}><FaPlus className="me-1" /> Add Rule</Button>
-    </div>
-    <div className="table-container-template mb-4">
-      <table className="custom-table-template">
-        <thead>
-          <tr><th>Description</th><th>Source</th><th>Destination</th><th>Action</th><th>Priority</th><th>Enabled</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          {rules.length > 0 ? rules.map((rule, idx) => (
-            <tr key={idx}>
-              <td>{rule.description || '-'}</td>
-              <td>{rule.classification?.source?.ipPort?.ip || 'Any'}</td>
-              <td>{rule.classification?.destination?.ipProtoPort?.ip || 'Any'}{rule.classification?.destination?.ipProtoPort?.ports ? `:${rule.classification.destination.ipProtoPort.ports}` : ''}</td>
-              <td><span className={`badge ${rule.action === 'allow' ? 'badge-success' : 'badge-danger'}`}>{rule.action}</span></td>
-              <td>{rule.priority}</td>
-              <td>{rule.enabled ? 'Yes' : 'No'}</td>
-              <td>
-                <button className="btn-icon-yellow" onClick={() => onEdit(idx)}><FaCog /></button>
-                <button className="btn-icon-red" onClick={() => onDelete(idx)}><FaTrash /></button>
-              </td>
-            </tr>
-          )) : (
-            <tr><td colSpan="7" className="text-center text-muted py-4">No rules yet.</td></tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  </>
-);
+const describeDestination = (rule, appIdentifications) => {
+  const dest = rule.classification?.destination || {};
+  if (dest.trafficId) {
+    const app = appIdentifications.find((a) => (a._id || a.id) === dest.trafficId);
+    return `App: ${app ? app.name : dest.trafficId}`;
+  }
+  if (dest.trafficTags && (dest.trafficTags.category || dest.trafficTags.serviceClass)) {
+    const { category, serviceClass, importance } = dest.trafficTags;
+    return `Tags: ${[category, serviceClass, importance].filter(Boolean).join(' / ')}`;
+  }
+  const ip = dest.ipProtoPort?.ip;
+  const ports = dest.ipProtoPort?.ports;
+  return `${ip || 'Any'}${ports ? `:${ports}` : ''}`;
+};
+
+const RuleTable = ({ title, rules, appIdentifications, onAdd, onEdit, onDelete, onMove }) => {
+  const sorted = rules.slice().sort((a, b) => a.priority - b.priority);
+  return (
+    <>
+      <div className="d-flex justify-content-between align-items-center mb-2">
+        <h6 className="fw-bold mb-0">{title}</h6>
+        <Button variant="primary" size="sm" onClick={onAdd}><FaPlus className="me-1" /> Add Rule</Button>
+      </div>
+      <div className="table-container-template mb-4">
+        <table className="custom-table-template">
+          <thead>
+            <tr><th>Description</th><th>Source</th><th>Destination</th><th>Action</th><th>Priority</th><th>Enabled</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {sorted.length > 0 ? sorted.map((rule, i) => (
+              <tr key={rule._idx}>
+                <td>{rule.description || '-'}</td>
+                <td>{rule.classification?.source?.ipPort?.ip || 'Any'}</td>
+                <td>{describeDestination(rule, appIdentifications)}</td>
+                <td><span className={`badge ${rule.action === 'allow' ? 'badge-success' : 'badge-danger'}`}>{rule.action}</span></td>
+                <td>{rule.priority}</td>
+                <td>{rule.enabled ? 'Yes' : 'No'}</td>
+                <td>
+                  <button className="btn-icon-teal" onClick={() => onMove(rule._idx, 'up')} disabled={i === 0} title="Move up"><FaArrowUp /></button>
+                  <button className="btn-icon-teal" onClick={() => onMove(rule._idx, 'down')} disabled={i === sorted.length - 1} title="Move down"><FaArrowDown /></button>
+                  <button className="btn-icon-yellow" onClick={() => onEdit(rule._idx)}><FaCog /></button>
+                  <button className="btn-icon-red" onClick={() => onDelete(rule._idx)}><FaTrash /></button>
+                </td>
+              </tr>
+            )) : (
+              <tr><td colSpan="7" className="text-center text-muted py-4">No rules yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+};
 
 const FirewallPolicyEditor = () => {
   const { id } = useParams();
@@ -64,6 +89,16 @@ const FirewallPolicyEditor = () => {
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [editingRuleIdx, setEditingRuleIdx] = useState(null);
   const [ruleForm, setRuleForm] = useState(EMPTY_RULE);
+  const [appIdentifications, setAppIdentifications] = useState([]);
+
+  const fetchAppIdentifications = useCallback(async () => {
+    try {
+      const res = await api.get('/appidentifications');
+      setAppIdentifications(res.data?.appIdentifications || []);
+    } catch (err) {
+      // Non-fatal - the Traffic Name destination type just won't have options
+    }
+  }, []);
 
   const fetchPolicy = useCallback(async () => {
     if (isNew) return;
@@ -82,6 +117,7 @@ const FirewallPolicyEditor = () => {
   }, [id, isNew]);
 
   useEffect(() => { fetchPolicy(); }, [fetchPolicy]);
+  useEffect(() => { fetchAppIdentifications(); }, [fetchAppIdentifications]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -104,17 +140,61 @@ const FirewallPolicyEditor = () => {
   };
   const openEdit = (idx) => {
     setEditingRuleIdx(idx);
-    setRuleForm(rules[idx]);
+    const rule = rules[idx];
+    const dest = rule.classification?.destination || {};
+    const destinationType = dest.trafficId ? 'trafficId' : (dest.trafficTags?.category || dest.trafficTags?.serviceClass) ? 'trafficTags' : 'custom';
+    setRuleForm({
+      ...EMPTY_RULE,
+      ...rule,
+      destinationType,
+      classification: {
+        source: { ipPort: { ip: '', ports: '', ...rule.classification?.source?.ipPort } },
+        destination: {
+          ipProtoPort: { ip: '', ports: '', protocols: [], ...dest.ipProtoPort },
+          trafficId: dest.trafficId || '',
+          trafficTags: { category: '', serviceClass: '', importance: '', ...dest.trafficTags }
+        }
+      }
+    });
     setShowRuleModal(true);
   };
   const handleSaveRule = () => {
+    // Only send the classification shape matching the selected destination type
+    let destination;
+    if (ruleForm.destinationType === 'trafficId') destination = { trafficId: ruleForm.classification.destination.trafficId };
+    else if (ruleForm.destinationType === 'trafficTags') destination = { trafficTags: ruleForm.classification.destination.trafficTags };
+    else destination = { ipProtoPort: ruleForm.classification.destination.ipProtoPort };
+
+    const cleanRule = {
+      ...ruleForm,
+      classification: { source: ruleForm.classification.source, destination }
+    };
+    delete cleanRule.destinationType;
+
     const next = [...rules];
-    if (editingRuleIdx !== null) next[editingRuleIdx] = ruleForm;
-    else next.push(ruleForm);
+    if (editingRuleIdx !== null) next[editingRuleIdx] = cleanRule;
+    else next.push(cleanRule);
     setRules(next);
     setShowRuleModal(false);
   };
   const handleDeleteRule = (idx) => setRules(rules.filter((_, i) => i !== idx));
+
+  const handleMoveRule = (idx, dir) => {
+    const group = rules
+      .map((r, i) => ({ ...r, _idx: i }))
+      .filter((r) => r.direction === rules[idx].direction)
+      .sort((a, b) => a.priority - b.priority);
+    const pos = group.findIndex((r) => r._idx === idx);
+    const swapPos = dir === 'up' ? pos - 1 : pos + 1;
+    if (swapPos < 0 || swapPos >= group.length) return;
+    const next = [...rules];
+    const a = group[pos]._idx;
+    const b = group[swapPos]._idx;
+    const tmp = next[a].priority;
+    next[a] = { ...next[a], priority: next[b].priority };
+    next[b] = { ...next[b], priority: tmp };
+    setRules(next);
+  };
 
   const outboundRules = rules.map((r, i) => ({ ...r, _idx: i })).filter((r) => r.direction === 'outbound');
   const inboundRules = rules.map((r, i) => ({ ...r, _idx: i })).filter((r) => r.direction === 'inbound');
@@ -123,8 +203,14 @@ const FirewallPolicyEditor = () => {
     if (section === 'source') {
       setRuleForm({ ...ruleForm, classification: { ...ruleForm.classification, source: { ipPort: { ...ruleForm.classification.source.ipPort, [field]: value } } } });
     } else {
-      setRuleForm({ ...ruleForm, classification: { ...ruleForm.classification, destination: { ipProtoPort: { ...ruleForm.classification.destination.ipProtoPort, [field]: value } } } });
+      setRuleForm({ ...ruleForm, classification: { ...ruleForm.classification, destination: { ...ruleForm.classification.destination, ipProtoPort: { ...ruleForm.classification.destination.ipProtoPort, [field]: value } } } });
     }
+  };
+  const setDestTrafficTag = (field, value) => {
+    setRuleForm({ ...ruleForm, classification: { ...ruleForm.classification, destination: { ...ruleForm.classification.destination, trafficTags: { ...ruleForm.classification.destination.trafficTags, [field]: value } } } });
+  };
+  const setDestTrafficId = (value) => {
+    setRuleForm({ ...ruleForm, classification: { ...ruleForm.classification, destination: { ...ruleForm.classification.destination, trafficId: value } } });
   };
 
   if (loading) return <div className="page-container"><p className="text-muted">Loading...</p></div>;
@@ -153,8 +239,8 @@ const FirewallPolicyEditor = () => {
         </Row>
       </div>
 
-      <RuleTable title="Outbound Rules" rules={outboundRules} onAdd={() => openAdd('outbound')} onEdit={(i) => openEdit(outboundRules[i]._idx)} onDelete={(i) => handleDeleteRule(outboundRules[i]._idx)} />
-      <RuleTable title="Inbound Rules" rules={inboundRules} onAdd={() => openAdd('inbound')} onEdit={(i) => openEdit(inboundRules[i]._idx)} onDelete={(i) => handleDeleteRule(inboundRules[i]._idx)} />
+      <RuleTable title="Outbound Rules" rules={outboundRules} appIdentifications={appIdentifications} onAdd={() => openAdd('outbound')} onEdit={openEdit} onDelete={handleDeleteRule} onMove={handleMoveRule} />
+      <RuleTable title="Inbound Rules" rules={inboundRules} appIdentifications={appIdentifications} onAdd={() => openAdd('inbound')} onEdit={openEdit} onDelete={handleDeleteRule} onMove={handleMoveRule} />
 
       <Modal show={showRuleModal} onHide={() => setShowRuleModal(false)} centered size="lg">
         <Modal.Header closeButton><Modal.Title>{editingRuleIdx !== null ? 'Edit Rule' : `New ${ruleForm.direction === 'inbound' ? 'Inbound' : 'Outbound'} Rule`}</Modal.Title></Modal.Header>
@@ -197,21 +283,57 @@ const FirewallPolicyEditor = () => {
               <Col md={6}><Form.Group className="mb-3"><Form.Label>Source Ports</Form.Label><Form.Control value={ruleForm.classification.source.ipPort.ports} onChange={(e) => setClass('source', 'ports', e.target.value)} /></Form.Group></Col>
             </Row>
             <h6 className="fw-bold">Destination</h6>
-            <Row>
-              <Col md={4}><Form.Group className="mb-3"><Form.Label>Destination IP/Mask</Form.Label><Form.Control value={ruleForm.classification.destination.ipProtoPort.ip} onChange={(e) => setClass('destination', 'ip', e.target.value)} /></Form.Group></Col>
-              <Col md={4}><Form.Group className="mb-3"><Form.Label>Destination Ports</Form.Label><Form.Control value={ruleForm.classification.destination.ipProtoPort.ports} onChange={(e) => setClass('destination', 'ports', e.target.value)} /></Form.Group></Col>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Protocol</Form.Label>
-                  <Form.Select value={ruleForm.classification.destination.ipProtoPort.protocols?.[0] || ''} onChange={(e) => setClass('destination', 'protocols', e.target.value ? [e.target.value] : [])}>
-                    <option value="">Any</option>
-                    <option value="tcp">TCP</option>
-                    <option value="udp">UDP</option>
-                    <option value="icmp">ICMP</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-            </Row>
+            {ruleForm.direction === 'outbound' && (
+              <Form.Group className="mb-3">
+                <Form.Label>Destination Type</Form.Label>
+                <Form.Select value={ruleForm.destinationType} onChange={(e) => setRuleForm({ ...ruleForm, destinationType: e.target.value })}>
+                  <option value="custom">Custom (IP/Port) - leave blank for Any</option>
+                  <option value="trafficTags">Traffic Tags</option>
+                  <option value="trafficId">Traffic Name</option>
+                </Form.Select>
+              </Form.Group>
+            )}
+            {ruleForm.destinationType === 'trafficTags' && ruleForm.direction === 'outbound' ? (
+              <Row>
+                <Col md={4}><Form.Group className="mb-3"><Form.Label>Category</Form.Label><Form.Control value={ruleForm.classification.destination.trafficTags.category} onChange={(e) => setDestTrafficTag('category', e.target.value)} /></Form.Group></Col>
+                <Col md={4}><Form.Group className="mb-3"><Form.Label>Service Class</Form.Label><Form.Control value={ruleForm.classification.destination.trafficTags.serviceClass} onChange={(e) => setDestTrafficTag('serviceClass', e.target.value)} /></Form.Group></Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Importance</Form.Label>
+                    <Form.Select value={ruleForm.classification.destination.trafficTags.importance} onChange={(e) => setDestTrafficTag('importance', e.target.value)}>
+                      <option value="">Any</option>
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+            ) : ruleForm.destinationType === 'trafficId' && ruleForm.direction === 'outbound' ? (
+              <Form.Group className="mb-3">
+                <Form.Label>Traffic Name</Form.Label>
+                <Form.Select value={ruleForm.classification.destination.trafficId} onChange={(e) => setDestTrafficId(e.target.value)}>
+                  <option value="">Select application/traffic identification</option>
+                  {appIdentifications.map((app) => <option key={app._id || app.id} value={app._id || app.id}>{app.name}</option>)}
+                </Form.Select>
+              </Form.Group>
+            ) : (
+              <Row>
+                <Col md={4}><Form.Group className="mb-3"><Form.Label>Destination IP/Mask (blank = Any)</Form.Label><Form.Control value={ruleForm.classification.destination.ipProtoPort.ip} onChange={(e) => setClass('destination', 'ip', e.target.value)} /></Form.Group></Col>
+                <Col md={4}><Form.Group className="mb-3"><Form.Label>Destination Ports</Form.Label><Form.Control value={ruleForm.classification.destination.ipProtoPort.ports} onChange={(e) => setClass('destination', 'ports', e.target.value)} /></Form.Group></Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Protocol</Form.Label>
+                    <Form.Select value={ruleForm.classification.destination.ipProtoPort.protocols?.[0] || ''} onChange={(e) => setClass('destination', 'protocols', e.target.value ? [e.target.value] : [])}>
+                      <option value="">Any</option>
+                      <option value="tcp">TCP</option>
+                      <option value="udp">UDP</option>
+                      <option value="icmp">ICMP</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+            )}
 
             <Row>
               <Col md={6}><Form.Group className="mb-3"><Form.Label>Priority</Form.Label><Form.Control type="number" value={ruleForm.priority} onChange={(e) => setRuleForm({ ...ruleForm, priority: Number(e.target.value) })} /></Form.Group></Col>

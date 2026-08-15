@@ -1668,13 +1668,18 @@ class DevicesService {
 
         // Don't allow any changes if the device is not approved
         if (!origDevice.isApproved && !deviceRequest.isApproved) {
-          // Exception: allow changing the name, description and site
-          const allowedKeys = ['name', 'description', 'site'];
-          Object.keys(deviceRequest).forEach(key => {
-            if (!allowedKeys.includes(key)) {
-              delete deviceRequest[key];
-            }
-          });
+          // Exception: name, description, site and isApproved itself may always be
+          // submitted. Anything else (interfaces, routing, firewall, etc.) requires
+          // the device to be approved first - reject with a clear error instead of
+          // silently discarding it, which used to return a false "success" while
+          // applying none of the submitted changes.
+          const allowedKeys = ['name', 'description', 'site', 'isApproved'];
+          const rejectedKeys = Object.keys(deviceRequest).filter(key => !allowedKeys.includes(key));
+          if (rejectedKeys.length > 0) {
+            throw createError(400,
+              `Device must be approved before changing: ${rejectedKeys.join(', ')}`
+            );
+          }
         }
 
         // check LAN subnet overlap if updated device is running

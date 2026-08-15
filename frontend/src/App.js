@@ -23,6 +23,25 @@ import Tokens from './pages/Tokens';
 import Login from './pages/Login';
 import VerifyAccount from './pages/VerifyAccount';
 import About from './pages/About';
+import PathLabels from './pages/PathLabels';
+import PathSelectionPolicy from './pages/PathSelectionPolicy';
+import PathSelectionPolicyEditor from './pages/PathSelectionPolicyEditor';
+import QoS from './pages/QoS';
+import QoSEditor from './pages/QoSEditor';
+import FirewallPolicies from './pages/FirewallPolicies';
+import FirewallPolicyEditor from './pages/FirewallPolicyEditor';
+import IpsecPeering from './pages/IpsecPeering';
+import IpsecPeeringEditor from './pages/IpsecPeeringEditor';
+import HighAvailability from './pages/HighAvailability';
+import HighAvailabilityEditor from './pages/HighAvailabilityEditor';
+import DeviceUpgrade from './pages/DeviceUpgrade';
+import AppStore from './pages/AppStore';
+import LinkMonitors from './pages/LinkMonitors';
+import ApplicationIdentification from './pages/ApplicationIdentification';
+import WorldMapDashboard from './pages/dashboards/WorldMap';
+import NetworkConnectivity from './pages/dashboards/NetworkConnectivity';
+import TrafficDashboard from './pages/dashboards/TrafficDashboard';
+import ComingSoon from './pages/ComingSoon';
 import { decodeJwtPayload, extractPerms, hasViewPermission } from './auth/permissions';
 import Forbidden from './components/Forbidden';
 import Register from './pages/Register';
@@ -112,6 +131,25 @@ function App() {
             <Route path="/devices/:deviceId" element={<Guard permKey="devices" element={<DeviceInfo />} />} />
             <Route path="/tunnels" element={<Guard permKey="tunnels" element={<Tunnels />} />} />
             <Route path="/tokens" element={<Guard permKey="accesstokens" element={<Tokens />} />} />
+            <Route path="/path-labels" element={<Guard permKey="pathlabels" element={<PathLabels />} />} />
+            <Route path="/path-selection-policy" element={<Guard permKey="mlpolicies" element={<PathSelectionPolicy />} />} />
+            <Route path="/path-selection-policy/:id" element={<Guard permKey="mlpolicies" element={<PathSelectionPolicyEditor />} />} />
+            <Route path="/qos" element={<Guard permKey="qospolicies" element={<QoS />} />} />
+            <Route path="/qos/:id" element={<Guard permKey="qospolicies" element={<QoSEditor />} />} />
+            <Route path="/link-monitors" element={<Guard permKey="linkmonitors" element={<LinkMonitors />} />} />
+            <Route path="/application-identification" element={<Guard permKey="appidentifications" element={<ApplicationIdentification />} />} />
+            <Route path="/ipsec-peering" element={<Guard permKey="peers" element={<IpsecPeering />} />} />
+            <Route path="/ipsec-peering/:id" element={<Guard permKey="peers" element={<IpsecPeeringEditor />} />} />
+            <Route path="/app-store" element={<Guard permKey="applications" element={<AppStore />} />} />
+            <Route path="/firewall-policies" element={<Guard permKey="firewallpolicies" element={<FirewallPolicies />} />} />
+            <Route path="/firewall-policies/:id" element={<Guard permKey="firewallpolicies" element={<FirewallPolicyEditor />} />} />
+            <Route path="/high-availability" element={<Guard permKey="vrrp" element={<HighAvailability />} />} />
+            <Route path="/high-availability/:id" element={<Guard permKey="vrrp" element={<HighAvailabilityEditor />} />} />
+            <Route path="/ai-network-healing" element={<Guard permKey="devices" element={<ComingSoon title="AI Network Healing" breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Security' }, { label: 'AI Network Healing' }]} />} />} />
+            <Route path="/dashboards/network" element={<NetworkConnectivity />} />
+            <Route path="/dashboards/world-map" element={<WorldMapDashboard />} />
+            <Route path="/dashboards/traffic" element={<TrafficDashboard />} />
+            <Route path="/device-upgrade" element={<Guard permKey="devices" element={<DeviceUpgrade />} />} />
             <Route path="/about" element={<About />} />
           </Routes>
         </div>

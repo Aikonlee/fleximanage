@@ -5,32 +5,37 @@ import { Nav } from 'react-bootstrap';
 import {
   FaHome,
   FaServer,
-  FaRoute,
   FaCog,
   FaChevronDown,
   FaUsers,
-  FaInfoCircle
+  FaInfoCircle,
+  FaExchangeAlt,
+  FaStore,
+  FaShieldAlt,
+  FaChartBar,
+  FaWrench
 } from 'react-icons/fa';
 import { decodeJwtPayload, extractPerms, hasViewPermission } from '../auth/permissions';
 import './Sidebar.css';
 
 const Sidebar = ({ collapsed }) => {
-  // Default: Account group collapsed
-  const [openSections, setOpenSections] = useState({ account: false, inventory: false });
+  // Default: all groups collapsed
+  const [openSections, setOpenSections] = useState({
+    account: false, inventory: false, traffic: false, security: false,
+    dashboards: false, troubleshoot: false
+  });
 
   // Get current user permissions
   const token = localStorage.getItem('token');
   const perms = token ? extractPerms(decodeJwtPayload(token)) : {};
-  
-  // Debug logging
-  console.log('Sidebar rendering - Token exists:', !!token);
-  console.log('Sidebar rendering - Permissions:', perms);
-  console.log('Sidebar rendering - Has accesstokens permission:', hasViewPermission(perms, 'accesstokens'));
+  const orgName = token ? (decodeJwtPayload(token)?.orgName || decodeJwtPayload(token)?.org_name) : null;
 
   const toggleSection = (key) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Menu taxonomy mirrors flexiWAN 6.5.1's own sidebar groups: Home / Account /
+  // Users / Inventory / Traffic Optimization / App Store / Security / Dashboards / Troubleshoot / About
   const menuItems = [
     { type: 'item', path: '/home', icon: <FaHome />, label: 'Home' },
     {
@@ -39,23 +44,71 @@ const Sidebar = ({ collapsed }) => {
       icon: <FaCog />,
       label: 'Account',
       children: [
-        { path: '/account/profile', label: 'Profile' },
-        { path: '/organizations', label: 'Organizations' },
-        { path: '/account/access-keys', label: 'Access Keys' },
+        { path: '/account/profile', label: 'Profile', permKey: 'accounts' },
+        { path: '/organizations', label: 'Organizations', permKey: 'organizations' },
+        { path: '/account/access-keys', label: 'Access Keys', permKey: 'accesstokens' },
+        { path: '/account/notifications', label: 'Notifications', permKey: 'notifications' },
+        { path: '/account/billing', label: 'Billing', permKey: 'billing' },
       ]
     },
-    { type: 'item', path: '/users', icon: <FaUsers />, label: 'Users' },
+    { type: 'item', path: '/users', icon: <FaUsers />, label: 'Users', permKey: 'members' },
     {
       type: 'group',
       key: 'inventory',
-      icon: <FaServer />, // reuse server icon; could swap for a different one later
+      icon: <FaServer />,
       label: 'Inventory',
       children: [
-        { path: '/devices', label: 'Devices' },
-        { path: '/tokens', label: 'Tokens' }
+        { path: '/devices', label: 'Devices', permKey: 'devices' },
+        { path: '/tokens', label: 'Tokens', permKey: 'accesstokens' }
       ]
     },
-    { type: 'item', path: '/tunnels', icon: <FaRoute />, label: 'Tunnels' },
+    {
+      type: 'group',
+      key: 'traffic',
+      icon: <FaExchangeAlt />,
+      label: 'Traffic Optimization',
+      children: [
+        { path: '/tunnels', label: 'Tunnels', permKey: 'tunnels' },
+        { path: '/path-labels', label: 'Path Labels', permKey: 'pathlabels' },
+        { path: '/path-selection-policy', label: 'Path Selection Policy', permKey: 'mlpolicies' },
+        { path: '/qos', label: 'Quality of Service', permKey: 'qospolicies' },
+        { path: '/link-monitors', label: 'Link Monitors', permKey: 'linkmonitors' },
+        { path: '/application-identification', label: 'Application Identification', permKey: 'appidentifications' },
+        { path: '/ipsec-peering', label: 'IPsec Peering', permKey: 'peers' },
+      ]
+    },
+    { type: 'item', path: '/app-store', icon: <FaStore />, label: 'App Store', permKey: 'applications' },
+    {
+      type: 'group',
+      key: 'security',
+      icon: <FaShieldAlt />,
+      label: 'Security',
+      children: [
+        { path: '/firewall-policies', label: 'Firewall Policies', permKey: 'firewallpolicies' },
+        { path: '/high-availability', label: 'High Availability', permKey: 'vrrp' },
+        { path: '/ai-network-healing', label: 'AI Network Healing', permKey: 'devices' },
+      ]
+    },
+    {
+      type: 'group',
+      key: 'dashboards',
+      icon: <FaChartBar />,
+      label: 'Dashboards',
+      children: [
+        { path: '/dashboards/network', label: 'Network Connectivity' },
+        { path: '/dashboards/world-map', label: 'World Map' },
+        { path: '/dashboards/traffic', label: 'Traffic PPS/BPS' },
+      ]
+    },
+    {
+      type: 'group',
+      key: 'troubleshoot',
+      icon: <FaWrench />,
+      label: 'Troubleshoot',
+      children: [
+        { path: '/device-upgrade', label: 'Device Upgrade' },
+      ]
+    },
     { type: 'item', path: '/about', icon: <FaInfoCircle />, label: 'About' },
   ];
 
@@ -64,8 +117,23 @@ const Sidebar = ({ collapsed }) => {
       <div className="sidebar-header">
   <h3 className="brand">{BRAND_NAME}</h3>
       </div>
+      {!collapsed && (
+        <div className="sidebar-org-band">
+          <span className="sidebar-org-label">Organization:</span>
+          <span className="sidebar-org-name">{orgName || '—'}</span>
+        </div>
+      )}
       <Nav className="flex-column sidebar-nav">
-        {menuItems.map(item => {
+        {menuItems
+          .filter(item => !item.permKey || hasViewPermission(perms, item.permKey))
+          .map(item => {
+          if (item.type === 'group') {
+            const visibleChildren = item.children.filter(
+              child => !child.permKey || hasViewPermission(perms, child.permKey)
+            );
+            if (visibleChildren.length === 0) return null;
+            item = { ...item, children: visibleChildren };
+          }
           if (item.type === 'item') {
             return (
               <NavLink

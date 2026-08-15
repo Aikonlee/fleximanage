@@ -2,13 +2,24 @@ import { en } from './en';
 import { zh } from './zh';
 
 const dictionaries = { en, zh };
+const LOCALE_STORAGE_KEY = 'locale';
 
 export function getLocale() {
+  if (typeof localStorage !== 'undefined') {
+    const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (stored && dictionaries[stored]) return stored;
+  }
   if (typeof navigator !== 'undefined') {
     const lang = (navigator.language || 'en').toLowerCase();
     if (lang.startsWith('zh')) return 'zh';
   }
   return 'en';
+}
+
+export function setLocale(locale) {
+  if (typeof localStorage !== 'undefined' && dictionaries[locale]) {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  }
 }
 
 export function t(path, ...args) {

@@ -60,6 +60,12 @@ const genToken = function (data) {
 
 // Express middleware for /register API
 const checkDeviceVersion = async (req, res, next) => {
+  // Newer fwagent builds send the field as agent_version instead of
+  // fwagent_version - accept either and normalize onto req.body so the
+  // rest of the registration flow (which reads fwagent_version) still works
+  if (!req.body.fwagent_version && req.body.agent_version) {
+    req.body.fwagent_version = req.body.agent_version;
+  }
   const agentVer = req.body.fwagent_version;
   const { valid, statusCode, err } = verifyAgentVersion(agentVer);
   if (!valid) {

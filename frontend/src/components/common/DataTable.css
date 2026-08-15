@@ -1,0 +1,123 @@
+.datatable-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.datatable-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.datatable-filter-bar {
+  flex: 1;
+  min-width: 220px;
+}
+
+.datatable-filter-input {
+  border-radius: var(--radius-pill);
+  background: var(--card-bg);
+}
+
+.datatable-container {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.datatable-table {
+  margin-bottom: 0;
+}
+
+.datatable-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.datatable-sortable:hover {
+  background: #eef2f1 !important;
+}
+
+.datatable-sort-arrow {
+  font-size: 0.65rem;
+  color: var(--primary-color);
+}
+
+.datatable-checkbox-col {
+  width: 2.5rem;
+  text-align: center;
+}
+
+.datatable-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+}
+
+.datatable-row-selected {
+  background-color: var(--primary-lighter);
+}
+
+.datatable-footer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.datatable-pagesize {
+  width: auto;
+  border-radius: var(--radius-md);
+  padding: 0.35rem 1.75rem 0.35rem 0.6rem;
+}
+
+.datatable-summary {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.datatable-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.datatable-pagination button {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.7rem;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.datatable-pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.datatable-pagination button:not(:disabled):hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.datatable-pagecount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.4rem;
+  background: var(--brand-teal);
+  color: #fff;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}

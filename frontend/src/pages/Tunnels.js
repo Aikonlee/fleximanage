@@ -110,10 +110,22 @@ const Tunnels = () => {
     return iface ? (iface.name || iface.devId || 'N/A') : 'N/A';
   };
 
-  const getStatusBadge = (isActive) => {
+  const getStatusBadge = (tunnel) => {
+    const status = tunnel.tunnelStatus;
+    if (status === 'Connected') return <Badge bg="success">Connected</Badge>;
+    if (status === 'Not Connected') return <Badge bg="secondary">Not Connected</Badge>;
+    if (status === 'Pending') {
+      return (
+        <Badge bg="warning" text="dark" title={tunnel.pendingReason || 'AI-based network healing detected a connectivity issue'}>
+          Pending
+        </Badge>
+      );
+    }
+    if (status === 'N/A') return <Badge bg="light" text="dark">N/A</Badge>;
+    // Fallback for API responses that don't include tunnelStatus
     return (
-      <Badge bg={isActive ? 'success' : 'secondary'}>
-        {isActive ? 'Connected' : 'Inactive'}
+      <Badge bg={tunnel.isActive ? 'success' : 'secondary'}>
+        {tunnel.isActive ? 'Connected' : 'Inactive'}
       </Badge>
     );
   };
@@ -148,6 +160,34 @@ const Tunnels = () => {
       console.error('Error deleting tunnel:', error);
       const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message || 'Unknown error';
       alert('Failed to delete tunnel: ' + errorMsg);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedTunnels.size === 0) {
+      alert('Please select at least one tunnel to delete first');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete ${selectedTunnels.size} selected tunnel(s)?`)) {
+      return;
+    }
+    try {
+      const tunnelsMap = {};
+      selectedTunnels.forEach((id) => { tunnelsMap[id] = true; });
+      const response = await api.post('/devices/apply', {
+        method: 'deltunnels',
+        tunnels: tunnelsMap
+      });
+      if (response.data) {
+        const { message, ids } = response.data;
+        alert(`Tunnel deletion initiated: ${message}\nJob IDs: ${ids.join(', ')}`);
+      }
+      setSelectedTunnels(new Set());
+      fetchTunnelsAndDevices();
+    } catch (error) {
+      console.error('Error batch deleting tunnels:', error);
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message || 'Unknown error';
+      alert('Failed to delete tunnels: ' + errorMsg);
     }
   };
 
@@ -305,15 +345,25 @@ const Tunnels = () => {
         actions={(
           <div className="d-flex gap-2">
             {selectedTunnels.size > 0 && (
-              <Button
-                variant="success"
-                onClick={handleBatchOspf}
-                disabled={batchOspfLoading}
-                className="d-flex align-items-center shadow-sm"
-              >
-                <FaNetworkWired className="me-2" />
-                {batchOspfLoading ? 'Configuring...' : `Batch OSPF (${selectedTunnels.size})`}
-              </Button>
+              <>
+                <Button
+                  variant="danger"
+                  onClick={handleBatchDelete}
+                  className="d-flex align-items-center shadow-sm"
+                >
+                  <FaTrash className="me-2" />
+                  {`Delete tunnels (${selectedTunnels.size})`}
+                </Button>
+                <Button
+                  variant="success"
+                  onClick={handleBatchOspf}
+                  disabled={batchOspfLoading}
+                  className="d-flex align-items-center shadow-sm"
+                >
+                  <FaNetworkWired className="me-2" />
+                  {batchOspfLoading ? 'Configuring...' : `Batch OSPF (${selectedTunnels.size})`}
+                </Button>
+              </>
             )}
             <Button
               variant="primary"
@@ -479,7 +529,7 @@ const Tunnels = () => {
                         {getEncryptionBadge(tunnel.encryptionMethod || 'psk')}
                       </td>
                       <td>
-                        {getStatusBadge(tunnel.isActive)}
+                        {getStatusBadge(tunnel)}
                       </td>
                       <td>
                         <Button

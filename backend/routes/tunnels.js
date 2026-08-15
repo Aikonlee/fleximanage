@@ -35,6 +35,9 @@ tunnelsRouter
 // When options message received, reply origin based on whitelist
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .get(cors.corsWithOptions, verifyPermission('tunnels', 'get'), (req, res, next) => {
+    if (!req.user.defaultOrg) {
+      return next(createError(400, 'User has no default organization selected'));
+    }
     tunnels
       .find({ org: req.user.defaultOrg._id, isActive: true })
       .populate('deviceA')
@@ -92,6 +95,9 @@ tunnelsRouter
 // When options message received, reply origin based on whitelist
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .delete(cors.corsWithOptions, verifyPermission('tunnels', 'del'), (req, res, next) => {
+    if (!req.user.defaultOrg) {
+      return next(createError(400, 'User has no default organization selected'));
+    }
     const tunnelId = req.params.tunnelId;
     const orgId = req.user.defaultOrg._id;
     

@@ -59,7 +59,7 @@ const Tunnels = () => {
       setLoading(false);
     } catch (error) {
       console.error('TUNNELS: Error fetching data:', error);
-      setError(error.message || 'Failed to fetch tunnels');
+      setError(error.response?.data?.error || error.message || 'Failed to fetch tunnels');
       setLoading(false);
       
       if (error.response?.status === 401) {

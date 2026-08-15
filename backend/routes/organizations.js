@@ -349,6 +349,9 @@ organizationsRouter.route('/:orgId')
   })
 // deletes organization
   .delete(cors.corsWithOptions, verifyPermission('organizations', 'del'), (req, res, next) => {
+    if (!req.user.defaultOrg) {
+      return next(createError(400, 'User has no default organization selected'));
+    }
     let session = null;
     mongoConns.getMainDB().startSession()
       .then((_session) => {
@@ -446,6 +449,9 @@ organizationsRouter.route('/:orgId')
       });
   })
   .put(cors.corsWithOptions, verifyPermission('organizations', 'put'), async (req, res, next) => {
+    if (!req.user.defaultOrg) {
+      return next(createError(400, 'User has no default organization selected'));
+    }
     try {
       // Only allow to update current default org, this is required to make sure the API permissions
       // are set properly for updating this organization

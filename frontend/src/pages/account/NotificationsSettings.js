@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button, Alert, Form } from 'react-bootstrap';
 import api from '../../services/api';
 import PageHeader from '../../components/common/PageHeader';
@@ -30,6 +31,11 @@ const NotificationsSettings = () => {
   const [message, setMessage] = useState(null);
 
   const fetchAll = useCallback(async () => {
+    // Notification rules are per-organization; a brand new account has none yet
+    if (!org) {
+      setLoading(false);
+      return;
+    }
     try {
       const [rulesRes, emailsRes, webhookRes] = await Promise.all([
         api.get('/notificationsConf', { params: { org } }),
@@ -125,6 +131,21 @@ const NotificationsSettings = () => {
   };
 
   if (loading) return <div className="page-container"><p className="text-muted">Loading...</p></div>;
+
+  if (!org) {
+    return (
+      <div className="page-container">
+        <PageHeader
+          breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Account' }, { label: 'Notifications' }]}
+          title="Notifications"
+        />
+        <p className="text-muted">
+          Notification rules are configured per organization. <Link to="/organizations">Create an organization</Link> first
+          to set them up.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">

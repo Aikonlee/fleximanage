@@ -90,6 +90,9 @@ deviceStatsRouter.route('/')
 // When options message received, reply origin based on whitelist
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .get(cors.corsWithOptions, verifyPermission('devices', 'get'), (req, res, next) => {
+    if (!req.user.defaultOrg) {
+      return next(createError(400, 'User has no default organization selected'));
+    }
     queryDeviceStats(
       req,
       res,
@@ -107,6 +110,9 @@ deviceStatsRouter.route('/:deviceId')
 // When options message received, reply origin based on whitelist
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .get(cors.corsWithOptions, verifyPermission('devices', 'get'), (req, res, next) => {
+    if (!req.user.defaultOrg) {
+      return next(createError(400, 'User has no default organization selected'));
+    }
     queryDeviceStats(
       req,
       res,

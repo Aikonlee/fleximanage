@@ -412,6 +412,31 @@ const configEnv = {
   }
 };
 
+// Config keys whose value must never be printed in full (secrets, keys, passwords)
+const SENSITIVE_CONFIG_KEYS = [
+  'userTokenSecretKey', 'deviceTokenSecretKey', 'captchaKey', 'billingApiKey',
+  'mailerPassword', 'wecomCorpSecret', 'webHookAddUserSecret',
+  'webHookRegisterDeviceSecret', 'ticketingSystemToken'
+];
+// Config keys holding connection URLs that may embed a "user:pass@" credential
+const SENSITIVE_URL_CONFIG_KEYS = [
+  'mongoUrl', 'mongoAnalyticsUrl', 'mongoBillingUrl', 'mongoVpnUrl', 'redisUrl'
+];
+
+// Returns a copy of config with secrets masked, safe to print to logs
+function redactConfigForLogging (config) {
+  const redacted = { ...config };
+  SENSITIVE_CONFIG_KEYS.forEach(key => {
+    if (redacted[key]) redacted[key] = '***REDACTED***';
+  });
+  SENSITIVE_URL_CONFIG_KEYS.forEach(key => {
+    if (typeof redacted[key] === 'string') {
+      redacted[key] = redacted[key].replace(/\/\/([^/@]+)@/, '//***:***@');
+    }
+  });
+  return redacted;
+}
+
 class Configs {
   constructor (env) {
     const environment = env || this.getEnv();
@@ -463,7 +488,7 @@ class Configs {
 
     this.config_values.nodeVersion = process.version;
 
-    console.log('Configuration used:\n' + JSON.stringify(this.config_values, null, 2));
+    console.log('Configuration used:\n' + JSON.stringify(redactConfigForLogging(this.config_values), null, 2));
   }
 
   getEnv () {

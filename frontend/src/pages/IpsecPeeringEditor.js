@@ -16,10 +16,21 @@ const DEFAULTS = {
   remoteIpRangeStart: '0.0.0.0', remoteIpRangeEnd: '255.255.255.255', remotePortRangeStart: '0', remotePortRangeEnd: '65535', remoteProtocol: 'any',
 };
 
-const DH_GROUPS = ['modp-1024', 'modp-2048', 'modp-3072', 'modp-4096', 'ecp-256', 'ecp-384'];
-const CRYPTO_ALGS = ['aes-cbc', 'aes-gcm-16', 'aes-ctr', '3des'];
+const DH_GROUPS = [
+  'none', 'modp-768', 'modp-1024', 'modp-1536', 'modp-2048', 'modp-3072', 'modp-4096',
+  'modp-6144', 'modp-8192', 'ecp-192', 'ecp-256', 'ecp-384', 'ecp-521',
+  'modp-1024-160', 'modp-2048-224', 'modp-2048-256'
+];
+const CRYPTO_ALGS = [
+  'aes-cbc', 'aes-ctr', 'aes-gcm-16', '3des', 'des', 'des-iv32', 'des-iv64',
+  'rc5', 'idea', '3idea', 'cast', 'blowfish', 'null'
+];
 const KEY_SIZES = ['128', '256'];
-const INTEG_ALGS = ['hmac-sha2-256-128', 'hmac-sha2-384-192', 'sha1-96', 'none'];
+const INTEG_ALGS = [
+  'none', 'hmac-sha2-256-128', 'hmac-sha2-384-192', 'hmac-sha2-512-256', 'sha1-96',
+  'sha1-160', 'md5-96', 'md5-128', 'des-mac', 'kpdk-md5', 'aes-xcbc-96', 'cmac-96',
+  'aes-128-gmac', 'aes-192-gmac', 'aes-256-gmac'
+];
 const PROTOCOLS = ['any', 'tcp', 'udp', 'icmp'];
 
 const IpsecPeeringEditor = () => {

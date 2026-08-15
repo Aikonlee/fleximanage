@@ -15,6 +15,11 @@ const TrafficDashboard = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [hiddenSeries, setHiddenSeries] = useState({});
+
+  const toggleSeries = (entry) => {
+    setHiddenSeries((prev) => ({ ...prev, [entry.dataKey]: !prev[entry.dataKey] }));
+  };
 
   const fetchStats = useCallback(async () => {
     try {
@@ -67,9 +72,9 @@ const TrafficDashboard = () => {
               <YAxis yAxisId="bps" orientation="left" tick={{ fontSize: 12 }} label={{ value: 'Mbps', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }} />
               <YAxis yAxisId="pps" orientation="right" tick={{ fontSize: 12 }} label={{ value: 'PPS', angle: 90, position: 'insideRight', style: { fontSize: 12 } }} />
               <Tooltip />
-              <Legend />
-              <Line yAxisId="bps" type="monotone" dataKey="bps" name="Total BPS (Mbps)" stroke="var(--primary-color)" strokeWidth={2} dot={false} />
-              <Line yAxisId="pps" type="monotone" dataKey="pps" name="Total PPS" stroke="var(--brand-teal)" strokeWidth={2} dot={false} />
+              <Legend onClick={toggleSeries} wrapperStyle={{ cursor: 'pointer' }} />
+              <Line yAxisId="bps" type="monotone" dataKey="bps" name="Total BPS (Mbps)" stroke="var(--primary-color)" strokeWidth={2} dot={false} hide={Boolean(hiddenSeries.bps)} />
+              <Line yAxisId="pps" type="monotone" dataKey="pps" name="Total PPS" stroke="var(--brand-teal)" strokeWidth={2} dot={false} hide={Boolean(hiddenSeries.pps)} />
             </ComposedChart>
           </ResponsiveContainer>
         )}

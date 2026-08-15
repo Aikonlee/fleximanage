@@ -149,9 +149,10 @@ const Register = () => {
         body.captcha = captchaToken;
       }
       
-      const resp = await api.post('/users/register', body);
-      const fast = resp.data?.fastVerified ? 1 : 0;
-      navigate(`/login?registered=1&fast=${fast}`);
+      await api.post('/users/register', body);
+      // Registration only creates the account - it isn't usable until the user
+      // clicks the verification link emailed to them, so don't imply otherwise.
+      navigate('/login?registered=1');
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('Registration error - Full Details:', err);
@@ -280,14 +281,19 @@ const Register = () => {
                 <Form.Group className="mb-2">
                   <Row className="align-items-center">
                     <Col sm={4}>
-                      <Form.Label className="small mb-0">Job Title</Form.Label>
+                      <Form.Label className="small mb-0">Job Title *</Form.Label>
                     </Col>
                     <Col sm={8}>
-                      <Form.Control 
+                      <Form.Control
                         size="sm"
-                        name="userJobTitle" 
-                        value={form.userJobTitle} 
-                        onChange={handleChange} 
+                        name="userJobTitle"
+                        value={form.userJobTitle}
+                        onChange={handleChange}
+                        required
+                        minLength={2}
+                        maxLength={30}
+                        pattern="[a-zA-Z0-9 -]{2,30}"
+                        title="2-30 characters: letters, digits, spaces or dashes"
                         placeholder="Your job title"
                       />
                     </Col>

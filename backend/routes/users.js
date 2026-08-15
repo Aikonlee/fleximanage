@@ -360,9 +360,17 @@ router.route('/verify-account')
       // Options
       { upsert: false, new: false }
     )
-      .then((resp) => {
-        if (!resp) return next(createError(500, 'Verification Error'));
-        return res.status(200).json({ status: 'account verified' });
+      .then(async (resp) => {
+        if (resp) return res.status(200).json({ status: 'account verified' });
+        // No match on id+token - the link may have already been used to verify
+        // this same account (emailTokens.verify is cleared on first use), so
+        // check that case separately to give an accurate response instead of
+        // treating a legitimate repeat click as an error.
+        const existing = await User.findById(req.body.id);
+        if (existing && existing.state === 'verified') {
+          return res.status(200).json({ status: 'account already verified' });
+        }
+        return next(createError(500, 'Verification Error'));
       })
       .catch((err) => {
         logger.error('Verification Error', { params: { reason: err.message } });

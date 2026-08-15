@@ -31,7 +31,7 @@ const configEnv = {
     // URL of the agent broker server
     agentBroker: (process.env.AGENT_BROKER_URL || 'manage.miwide.com:3443').split(','),
     // URL of the UI server
-    uiServerUrl: (process.env.UI_SERVER_URL || 'http://manage.miwide.com:3000').split(','),
+    uiServerUrl: (process.env.UI_SERVER_URL || 'https://manage.miwide.com:3443').split(','),
     // Key used for users tokens, override default with environment variable USER_SECRET_KEY
     userTokenSecretKey: process.env.USER_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION',
     // Whether to validate open API response. True for testing and dev, False for production,
@@ -145,16 +145,35 @@ const configEnv = {
     reqLogFilePath: process.env.REQ_LOG_FILE_PATH || './logs/req.log',
     // Logging default level
     logLevel: process.env.LOG_LEVEL || 'verbose',
-    // Hostname of SMTP server - for sending mails
+    // Mailer provider: 'smtp' (default, direct SMTP via nodemailer) or 'wecom'
+    // (WeCom/企业微信 Exmail HTTP API, see https://developer.work.weixin.qq.com/document/path/97445)
+    mailerProvider: process.env.MAILER_PROVIDER || 'smtp',
+    // Hostname of SMTP server - for sending mails (mailerProvider = 'smtp')
+    // Ignored when mailerService is set
     mailerHost: process.env.MAILER_HOST || '127.0.0.1',
-    // Port of SMTP server
+    // Port of SMTP server. Ignored when mailerService is set
     mailerPort: parseInt(process.env.MAILER_PORT || '25', 10),
+    // Nodemailer well-known service shorthand, e.g. 'gmail' - when set, this replaces
+    // mailerHost/mailerPort with nodemailer's built-in host/port/secure settings for
+    // that provider (https://nodemailer.com/smtp/well-known/)
+    mailerService: process.env.MAILER_SERVICE || '',
+    // SMTP auth credentials. Required by providers that don't allow anonymous relay
+    // (e.g. Gmail). For Gmail: enable 2-Step Verification on the account, then create
+    // an "App Password" at https://myaccount.google.com/apppasswords and use it here -
+    // never the account's normal login password.
+    mailerUser: process.env.MAILER_USER || '',
+    mailerPassword: process.env.MAILER_PASSWORD || '',
     // Bypass mailer certificate validation
     mailerBypassCert: process.env.MAILER_BYPASS_CERT === 'true',
     // From address used when sending emails
-    mailerFromAddress: process.env.MAILER_FROM_ADDRESS || 'noreply@flexiwan.com',
+    mailerFromAddress: process.env.MAILER_FROM_ADDRESS || 'noreply@miwide.com',
     // Mail envelop from address
-    mailerEnvelopeFromAddress: process.env.MAILER_ENVELOPE_FROM_ADDRESS || 'flexiWAN <noreply@flexiwan.com>',
+    mailerEnvelopeFromAddress: process.env.MAILER_ENVELOPE_FROM_ADDRESS || 'miwide <noreply@miwide.com>',
+    // WeCom (企业微信) self-built app credentials, required when mailerProvider = 'wecom'
+    // The app's public server IP must be added to the app's trusted IP list in the WeCom admin console
+    wecomCorpId: process.env.WECOM_CORPID || '',
+    wecomCorpSecret: process.env.WECOM_CORPSECRET || '',
+    wecomAgentId: process.env.WECOM_AGENTID || '',
     // Allow users registration, otherwise by invitation only
     allowUsersRegistration: true,
     // Software version query link

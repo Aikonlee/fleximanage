@@ -14,6 +14,8 @@ const Login = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendState, setResendState] = useState('idle'); // idle | sending | sent
   const [captchaToken, setCaptchaToken] = useState('');
   const [captchaWidgetId, setCaptchaWidgetId] = useState(null);
   const captchaRenderedRef = useRef(false);
@@ -123,10 +125,20 @@ const Login = ({ onLogin }) => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('registered')) {
-      const fast = params.get('fast') === '1';
-      setInfo(`Registration successful${fast ? ' (auto-verified)' : ''}. You can now sign in.`);
+      setInfo('Registration submitted! Check your email for a verification link before signing in.');
     }
   }, [location.search]);
+
+  const handleResendVerification = async () => {
+    setResendState('sending');
+    try {
+      await api.post('/users/reverify-account', { email: credentials.username });
+    } finally {
+      // Backend always returns OK here regardless of whether the email exists,
+      // to avoid leaking which emails are registered - so just confirm we tried.
+      setResendState('sent');
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -137,6 +149,8 @@ const Login = ({ onLogin }) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setNeedsVerification(false);
+    setResendState('idle');
 
     try {
       if (TURNSTILE_SITE_KEY && captchaEnforced && !captchaToken) {
@@ -170,8 +184,10 @@ const Login = ({ onLogin }) => {
         setError('Login failed: No token received');
       }
     } catch (err) {
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
+      const apiError = err.response?.data?.error;
+      if (apiError) {
+        setError(apiError);
+        if (/not verified/i.test(apiError)) setNeedsVerification(true);
       } else if (err.response?.status === 401) {
         setError('Invalid username or password');
       } else if (!err.response) {
@@ -196,7 +212,26 @@ const Login = ({ onLogin }) => {
                 <p className="text-muted">Open SD-WAN Management Platform</p>
               </div>
 
-              {error && <Alert variant="danger" className="mb-4">{error}</Alert>}
+              {error && (
+                <Alert variant="danger" className="mb-4">
+                  {error}
+                  {needsVerification && (
+                    <div className="mt-2">
+                      {resendState === 'sent' ? (
+                        <span className="small">Verification email sent (if that address is registered) - check your inbox.</span>
+                      ) : (
+                        <Button
+                          variant="link" size="sm" className="p-0"
+                          disabled={resendState === 'sending' || !credentials.username}
+                          onClick={handleResendVerification}
+                        >
+                          {resendState === 'sending' ? 'Sending...' : 'Resend verification email'}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </Alert>
+              )}
               {info && <Alert variant="success" className="mb-4">{info}</Alert>}
 
               <Form onSubmit={handleSubmit}>

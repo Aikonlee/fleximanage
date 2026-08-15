@@ -240,7 +240,7 @@ organizationsRouter.route('/summary')
                 latestCreated: { $first: '$createdAt' }
               }
             }
-          ]).toArray();
+          ]);
 
           logger.debug('Traffic - Retrieved device stats', {
             params: { orgId, deviceCount: deviceIds.length, statsCount: latestStats.length, stats: JSON.stringify(latestStats).substring(0, 500) }

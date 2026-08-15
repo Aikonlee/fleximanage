@@ -6864,6 +6864,341 @@ paths:
       x-openapi-router-controller: PathLabelsController
       x-openapi-router-service: PathLabelsService
 
+  /linkmonitors:
+    get:
+      operationId: linkmonitorsGET
+      parameters:
+      - description: The number of items to skip before starting to collect the result
+          set
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          type: integer
+        style: form
+      - description: The numbers of items to return
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+        style: form
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LinkMonitor'
+                type: array
+                x-content-type: application/json
+          description: Successfull operation
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Get all Link Monitors
+      tags:
+      - Link Monitors
+      x-swagger-router-controller: LinkMonitors
+      x-openapi-router-controller: LinkMonitorsController
+      x-openapi-router-service: LinkMonitorsService
+    post:
+      operationId: linkmonitorsPOST
+      parameters:
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkMonitorRequest'
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkMonitor'
+          description: Link monitor created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Add a new Link Monitor
+      tags:
+      - Link Monitors
+      x-swagger-router-controller: LinkMonitors
+      x-openapi-router-controller: LinkMonitorsController
+      x-openapi-router-service: LinkMonitorsService
+  /linkmonitors/{id}:
+    get:
+      operationId: linkmonitorsIdGET
+      parameters:
+      - description: Numeric ID of the Link Monitor to retrieve
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkMonitor'
+          description: Successfull operation
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: The specified resource was not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Get a Link Monitor by id
+      tags:
+      - Link Monitors
+      x-swagger-router-controller: LinkMonitors
+      x-openapi-router-controller: LinkMonitorsController
+      x-openapi-router-service: LinkMonitorsService
+    put:
+      operationId: linkmonitorsIdPUT
+      parameters:
+      - description: Numeric ID of the Link Monitor to modify
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkMonitorRequest'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkMonitor'
+          description: Successfull operation
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: The specified resource was not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Modify a Link Monitor
+      tags:
+      - Link Monitors
+      x-swagger-router-controller: LinkMonitors
+      x-openapi-router-controller: LinkMonitorsController
+      x-openapi-router-service: LinkMonitorsService
+    delete:
+      operationId: linkmonitorsIdDELETE
+      parameters:
+      - description: Numeric ID of the Link Monitor to delete
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Successful operation
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: The specified resource was not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Delete a Link Monitor
+      tags:
+      - Link Monitors
+      x-swagger-router-controller: LinkMonitors
+      x-openapi-router-controller: LinkMonitorsController
+      x-openapi-router-service: LinkMonitorsService
+
   /mlpolicies:
     get:
       operationId: mlpoliciesGET
@@ -11498,8 +11833,10 @@ components:
           type: string
         devId:
           type: string
+          nullable: true
         parentDevId:
           type: string
+          nullable: true
         vlanTag:
           type: string
         driver:
@@ -13050,6 +13387,81 @@ components:
         - description
         - color
         - type
+      type: object
+    LinkMonitor:
+      example:
+        _id: id
+        name: name
+        type: icmp
+        servers: [1.1.1.1, 8.8.8.8]
+        urls: []
+        timeout: 2000
+        threshold: 60
+        attempts: 3
+      properties:
+        _id:
+          maxLength: 24
+          minLength: 24
+          type: string
+        name:
+          type: string
+        type:
+          enum:
+          - icmp
+          - http
+          type: string
+        servers:
+          items:
+            type: string
+          type: array
+        urls:
+          items:
+            type: string
+          type: array
+        timeout:
+          type: number
+        threshold:
+          type: number
+        attempts:
+          type: number
+      required:
+      - name
+      - type
+      type: object
+    LinkMonitorRequest:
+      example:
+        name: name
+        type: icmp
+        servers: [1.1.1.1, 8.8.8.8]
+        urls: []
+        timeout: 2000
+        threshold: 60
+        attempts: 3
+      properties:
+        name:
+          type: string
+        type:
+          enum:
+          - icmp
+          - http
+          type: string
+        servers:
+          items:
+            type: string
+          type: array
+        urls:
+          items:
+            type: string
+          type: array
+        timeout:
+          type: number
+        threshold:
+          type: number
+        attempts:
+          type: number
+      required:
+      - name
+      - type
       type: object
     MLPolicy:
       example:

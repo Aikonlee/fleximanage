@@ -37,9 +37,7 @@ const DeviceUpgrade = () => {
   const applyUpgradeSchedule = async (isoTime) => {
     setApplying(true);
     try {
-      await Promise.all(selected.map((deviceId) =>
-        api.put(`/devices/${deviceId}`, { upgradeSchedule: { time: isoTime } })
-      ));
+      await api.post('/devices/upgdSched', { devices: selected, date: isoTime });
       setSelected([]);
       setShowScheduleModal(false);
       await fetchData();

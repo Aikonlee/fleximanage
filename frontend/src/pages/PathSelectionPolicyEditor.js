@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Form, Row, Col, Alert, Modal } from 'react-bootstrap';
-import { FaArrowLeft, FaCog, FaTrash } from 'react-icons/fa';
+import { FaArrowLeft, FaCog, FaTrash, FaArrowUp, FaArrowDown } from 'react-icons/fa';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import './PathSelectionPolicyEditor.css';
@@ -59,8 +59,11 @@ const PathSelectionPolicyEditor = () => {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [applyOnWan, setApplyOnWan] = useState(false);
+  const [overrideDefaultRoute, setOverrideDefaultRoute] = useState(true);
   const [rules, setRules] = useState([]);
   const [pathLabels, setPathLabels] = useState([]);
+  const [appIdentifications, setAppIdentifications] = useState([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -77,12 +80,23 @@ const PathSelectionPolicyEditor = () => {
     }
   }, []);
 
+  const fetchAppIdentifications = useCallback(async () => {
+    try {
+      const res = await api.get('/appidentifications');
+      setAppIdentifications(res.data?.appIdentifications || []);
+    } catch (err) {
+      // Non-fatal - the Application classification just won't have options
+    }
+  }, []);
+
   const fetchPolicy = useCallback(async () => {
     if (isNew) return;
     try {
       const res = await api.get(`/mlpolicies/${id}`);
       setName(res.data.name || '');
       setDescription(res.data.description || '');
+      setApplyOnWan(Boolean(res.data.applyOnWan));
+      setOverrideDefaultRoute(res.data.overrideDefaultRoute !== false);
       setRules((res.data.rules || []).map(toRuleForm));
       setError(null);
     } catch (err) {
@@ -93,12 +107,13 @@ const PathSelectionPolicyEditor = () => {
   }, [id, isNew]);
 
   useEffect(() => { fetchPathLabels(); }, [fetchPathLabels]);
+  useEffect(() => { fetchAppIdentifications(); }, [fetchAppIdentifications]);
   useEffect(() => { fetchPolicy(); }, [fetchPolicy]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = { name, description, rules: rules.map(toRuleRequest) };
+      const payload = { name, description, applyOnWan, overrideDefaultRoute, rules: rules.map(toRuleRequest) };
       if (isNew) await api.post('/mlpolicies', payload);
       else await api.put(`/mlpolicies/${id}`, payload);
       navigate('/path-selection-policy');
@@ -127,6 +142,20 @@ const PathSelectionPolicyEditor = () => {
     setShowRuleModal(false);
   };
   const handleDeleteRule = (idx) => setRules(rules.filter((_, i) => i !== idx));
+
+  const handleMoveRule = (idx, dir) => {
+    const sorted = rules.map((r, i) => ({ ...r, _idx: i })).sort((a, b) => a.priority - b.priority);
+    const pos = sorted.findIndex((r) => r._idx === idx);
+    const swapPos = dir === 'up' ? pos - 1 : pos + 1;
+    if (swapPos < 0 || swapPos >= sorted.length) return;
+    const next = [...rules];
+    const a = sorted[pos]._idx;
+    const b = sorted[swapPos]._idx;
+    const tmp = next[a].priority;
+    next[a] = { ...next[a], priority: next[b].priority };
+    next[b] = { ...next[b], priority: tmp };
+    setRules(next);
+  };
 
   const updateLinkGroup = (idx, changes) => {
     const links = [...ruleForm.action.links];
@@ -171,6 +200,26 @@ const PathSelectionPolicyEditor = () => {
             </Form.Group>
           </Col>
         </Row>
+        <Row className="mt-3">
+          <Col md={6}>
+            <Form.Check
+              type="switch"
+              id="mlpolicy-apply-on-wan"
+              label="Apply on WAN Rx (also apply this policy to traffic arriving on the WAN interface)"
+              checked={applyOnWan}
+              onChange={(e) => setApplyOnWan(e.target.checked)}
+            />
+          </Col>
+          <Col md={6}>
+            <Form.Check
+              type="switch"
+              id="mlpolicy-override-default-route"
+              label="Override default route (takes precedence over the device's routing table)"
+              checked={overrideDefaultRoute}
+              onChange={(e) => setOverrideDefaultRoute(e.target.checked)}
+            />
+          </Col>
+        </Row>
       </div>
 
       <div className="d-flex justify-content-between align-items-center mb-2">
@@ -183,25 +232,30 @@ const PathSelectionPolicyEditor = () => {
             <tr><th>Priority</th><th>Name</th><th>Classification</th><th>Path Labels</th><th>Order</th><th>Enabled</th><th>Actions</th></tr>
           </thead>
           <tbody>
-            {rules.length > 0 ? rules.slice().sort((a, b) => a.priority - b.priority).map((rule) => {
+            {rules.length > 0 ? rules.slice().sort((a, b) => a.priority - b.priority).map((rule, i, sortedRules) => {
               const idx = rules.indexOf(rule);
               const labelNames = (rule.action.links || [])
                 .flatMap((l) => l.pathlabels)
                 .map((id) => pathLabels.find((p) => p._id === id)?.name || id)
                 .join(', ');
+              const appName = rule.classificationType === 'application'
+                ? (appIdentifications.find((a) => (a._id || a.id) === rule.application.appId)?.name || rule.application.appId)
+                : null;
               return (
                 <tr key={idx}>
                   <td>{rule.priority}</td>
                   <td className="fw-bold">{rule.name}</td>
                   <td>
                     {rule.classificationType === 'prefix' && `IP: ${rule.prefix.ip || 'Any'}`}
-                    {rule.classificationType === 'application' && `App: ${rule.application.appId}`}
+                    {rule.classificationType === 'application' && `App: ${appName || 'Any'}`}
                     {rule.classificationType === 'category' && `Category: ${rule.category.category}`}
                   </td>
                   <td>{labelNames || '-'}</td>
                   <td>{rule.action.order}</td>
                   <td>{rule.enabled ? 'Yes' : 'No'}</td>
                   <td>
+                    <button className="btn-icon-teal" onClick={() => handleMoveRule(idx, 'up')} disabled={i === 0} title="Move up"><FaArrowUp /></button>
+                    <button className="btn-icon-teal" onClick={() => handleMoveRule(idx, 'down')} disabled={i === sortedRules.length - 1} title="Move down"><FaArrowDown /></button>
                     <button className="btn-icon-yellow" onClick={() => openEditRule(idx)}><FaCog /></button>
                     <button className="btn-icon-red" onClick={() => handleDeleteRule(idx)}><FaTrash /></button>
                   </td>
@@ -249,7 +303,13 @@ const PathSelectionPolicyEditor = () => {
               </Row>
             )}
             {ruleForm.classificationType === 'application' && (
-              <Form.Group className="mb-3"><Form.Label>Application ID</Form.Label><Form.Control value={ruleForm.application.appId} onChange={(e) => setRuleForm({ ...ruleForm, application: { appId: e.target.value } })} /></Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Application</Form.Label>
+                <Form.Select value={ruleForm.application.appId} onChange={(e) => setRuleForm({ ...ruleForm, application: { appId: e.target.value } })}>
+                  <option value="">Select application/traffic identification</option>
+                  {appIdentifications.map((app) => <option key={app._id || app.id} value={app._id || app.id}>{app.name}</option>)}
+                </Form.Select>
+              </Form.Group>
             )}
             {ruleForm.classificationType === 'category' && (
               <Row>
@@ -273,7 +333,7 @@ const PathSelectionPolicyEditor = () => {
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Selection Order</Form.Label>
+                  <Form.Label>Order Between Groups</Form.Label>
                   <Form.Select value={ruleForm.action.order} onChange={(e) => setRuleForm({ ...ruleForm, action: { ...ruleForm.action, order: e.target.value } })}>
                     <option value="priority">Priority</option>
                     <option value="load-balancing">Load Balancing</option>
@@ -295,6 +355,12 @@ const PathSelectionPolicyEditor = () => {
               <Form.Label className="mb-0">Link Groups (tried in order)</Form.Label>
               <Button size="sm" variant="outline-primary" onClick={addLinkGroup}>Add Group</Button>
             </div>
+            {ruleForm.action.links.length > 0 && (
+              <Row className="mb-1 d-none d-md-flex">
+                <Col md={7}><Form.Label className="mb-0 small text-muted">Path Labels</Form.Label></Col>
+                <Col md={4}><Form.Label className="mb-0 small text-muted">Selection Order</Form.Label></Col>
+              </Row>
+            )}
             {ruleForm.action.links.map((group, idx) => (
               <Row key={idx} className="align-items-center mb-2">
                 <Col md={7}>

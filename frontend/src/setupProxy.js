@@ -1,10 +1,11 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = function(app) {
-  // Determine backend target based on environment
-  const backendTarget = process.env.NODE_ENV === 'production' 
-    ? 'http://backend:8000'  // Production-dev mode: use service name
-    : process.env.REACT_APP_API_TARGET || 'http://backend:8000'; // Development: use internal service name for proxy
+  // Determine backend target based on environment. REACT_APP_API_TARGET lets
+  // docker-compose setups point this at the 'backend' service by name; outside
+  // of that (bare-metal/local dev) it must fall back to the real backend port,
+  // not the docker-only hostname, or every relative /api/* request 500s.
+  const backendTarget = process.env.REACT_APP_API_TARGET || 'https://localhost:3443';
 
   console.log('Frontend proxy target:', backendTarget);
 

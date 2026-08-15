@@ -462,7 +462,11 @@ class Connections {
    * @return {void}
    */
   async verifyDevice (info, done) {
-    const connectionURL = new URL(`${info.req.headers.origin}${info.req.url}`);
+    // Non-browser WebSocket clients (e.g. the Python fwagent) don't send an
+    // Origin header, so building the URL from it can produce "undefined/..."
+    // and throw ERR_INVALID_URL. Only req.url's path/query matter here, so
+    // parse it against an arbitrary base instead of relying on Origin.
+    const connectionURL = new URL(info.req.url, 'http://device-connection');
     const ip = info.req.headers['x-forwarded-for'] || info.req.connection.remoteAddress;
     // Enhanced logging for connection debugging
     const deviceId = connectionURL ? connectionURL.pathname.replace(/^\/+/, '') : '';
@@ -498,7 +502,7 @@ class Connections {
 
     if (!deviceId) {
       logger.warn('Device connection rejected - missing device ID', { ip });
-      return;
+      return done(false, 400);
     }
     
     // Handshake token debug logging is handled later in the connection flow

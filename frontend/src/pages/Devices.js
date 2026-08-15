@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Form, OverlayTrigger, Tooltip, Modal, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { 
-  FaPlay, FaStop, FaSyncAlt, FaTrashAlt, 
-  FaSearch, FaTimes, FaCaretDown, 
+  FaPlay, FaStop, FaSyncAlt, FaTrashAlt,
+  FaSearch, FaCaretDown,
   FaThLarge, FaList, FaFileCsv, FaCheck
 } from 'react-icons/fa';
 import api from '../services/api';
@@ -236,13 +236,9 @@ const Devices = () => {
         </div>
 
         <div className="search-wrapper-template">
-          <div className="filter-tag-template">
-            <strong>Device Status</strong> == running
-            <button><FaTimes /></button>
-          </div>
-          <input 
-            type="text" 
-            placeholder="Add filter" 
+          <input
+            type="text"
+            placeholder="Search by name or hostname"
             className="search-input-template"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

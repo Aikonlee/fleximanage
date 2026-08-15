@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { FaKey, FaSync, FaPlus, FaCopy, FaTrash } from 'react-icons/fa';
 import api from '../services/api';
+import PageHeader from '../components/common/PageHeader';
 import '../styles/unified-table.css';
 
 // Tokens page (Inventory > Tokens)
@@ -162,33 +163,32 @@ const Tokens = () => {
 
   return (
     <div className="tokens-page p-3 p-md-4">
-      {/* Unified Page Header */}
-      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-        <div>
-          <h1 className="h2 mb-0 text-primary fw-bold">Tokens</h1>
-          <p className="text-muted mb-0 mt-1 small">Manage API access tokens</p>
-        </div>
-        <div className="d-flex gap-2">
-          <button
-            type="button"
-            className="btn btn-sm btn-primary d-flex align-items-center"
-            onClick={() => { setFormOpen(o => !o); resetForm(); }}
-            disabled={creating}
-          >
-            <FaPlus className="me-2" />
-            {formOpen ? 'Close Form' : 'New Token'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-secondary d-flex align-items-center"
-            onClick={() => loadTokens()}
-            disabled={loading || creating}
-          >
-            <FaSync className={`me-2 ${loading ? 'fa-spin' : ''}`} />
-            Refresh
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Inventory' }, { label: 'Tokens' }]}
+        title="Tokens"
+        actions={(
+          <div className="d-flex gap-2">
+            <button
+              type="button"
+              className="btn btn-sm btn-primary d-flex align-items-center"
+              onClick={() => { setFormOpen(o => !o); resetForm(); }}
+              disabled={creating}
+            >
+              <FaPlus className="me-2" />
+              {formOpen ? 'Close Form' : 'New Token'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary d-flex align-items-center"
+              onClick={() => loadTokens()}
+              disabled={loading || creating}
+            >
+              <FaSync className={`me-2 ${loading ? 'fa-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+        )}
+      />
 
       {formOpen && (
         <form className="card border-0 shadow-sm p-4 mb-4 bg-white" onSubmit={handleCreate}>

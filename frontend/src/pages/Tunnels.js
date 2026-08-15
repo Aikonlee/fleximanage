@@ -3,6 +3,7 @@ import { Card, Table, Badge, Button, Alert, Form } from 'react-bootstrap';
 import { FaRoute, FaTrash, FaSync, FaNetworkWired, FaExclamationTriangle } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import PageHeader from '../components/common/PageHeader';
 import './Tunnels.css';
 import '../styles/unified-table.css';
 
@@ -298,34 +299,34 @@ const Tunnels = () => {
 
   return (
     <div className="tunnels-page p-3 p-md-4">
-      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-        <div>
-          <h1 className="h2 mb-0 text-primary fw-bold">Tunnels</h1>
-          <p className="text-muted mb-0 mt-1 small">Manage and monitor network tunnels</p>
-        </div>
-        <div className="d-flex gap-2">
-          {selectedTunnels.size > 0 && (
-            <Button 
-              variant="success" 
-              onClick={handleBatchOspf}
-              disabled={batchOspfLoading}
+      <PageHeader
+        breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Traffic Optimization' }, { label: 'Tunnels' }]}
+        title="Tunnels"
+        actions={(
+          <div className="d-flex gap-2">
+            {selectedTunnels.size > 0 && (
+              <Button
+                variant="success"
+                onClick={handleBatchOspf}
+                disabled={batchOspfLoading}
+                className="d-flex align-items-center shadow-sm"
+              >
+                <FaNetworkWired className="me-2" />
+                {batchOspfLoading ? 'Configuring...' : `Batch OSPF (${selectedTunnels.size})`}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              onClick={handleRefresh}
+              disabled={loading}
               className="d-flex align-items-center shadow-sm"
             >
-              <FaNetworkWired className="me-2" />
-              {batchOspfLoading ? 'Configuring...' : `Batch OSPF (${selectedTunnels.size})`}
+              <FaSync className={`me-2 ${loading ? 'fa-spin' : ''}`} />
+              Refresh
             </Button>
-          )}
-          <Button 
-            variant="primary" 
-            onClick={handleRefresh} 
-            disabled={loading}
-            className="d-flex align-items-center shadow-sm"
-          >
-            <FaSync className={`me-2 ${loading ? 'fa-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
+          </div>
+        )}
+      />
 
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError(null)} className="shadow-sm">

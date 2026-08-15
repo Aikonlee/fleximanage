@@ -29,7 +29,6 @@ const notificationsConf = require('../models/notificationsConf');
 const { membership } = require('../models/membership');
 const Organizations = require('../models/organizations');
 const users = require('../models/users');
-const { ObjectId } = require('mongodb');
 const { apply } = require('../deviceLogic/deviceNotifications');
 const keyBy = require('lodash/keyBy');
 const notificationsMgr = require('../notifications/notifications')();
@@ -425,7 +424,7 @@ class NotificationsService {
     try {
       await NotificationsService.validateParams(user, org, account, group);
       const orgIds = await NotificationsService.fetchOrgList(user, org, account, group, true);
-      const response = await notificationsConf.find({ org: { $in: orgIds.map(orgId => new ObjectId(orgId)) } }).lean();
+      const response = await notificationsConf.find({ org: { $in: orgIds.map(orgId => new mongoose.Types.ObjectId(orgId)) } }).lean();
       if (org) {
         const sortedRules = Object.fromEntries(
           Object.entries(response[0].rules).sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
@@ -906,7 +905,7 @@ class NotificationsService {
     try {
       await NotificationsService.validateParams(user, org, account, group);
       const orgIds = await NotificationsService.fetchOrgList(user, org, account, group, true);
-      const response = await notificationsConf.find({ org: { $in: orgIds.map(orgId => new ObjectId(orgId)) } }, { webHookSettings: 1, _id: 0 }).lean();
+      const response = await notificationsConf.find({ org: { $in: orgIds.map(orgId => new mongoose.Types.ObjectId(orgId)) } }, { webHookSettings: 1, _id: 0 }).lean();
       if (org) {
         const webHookSettings = { ...response[0].webHookSettings };
         return Service.successResponse(webHookSettings);

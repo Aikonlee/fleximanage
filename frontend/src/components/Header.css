@@ -151,6 +151,25 @@
 .notification-item-title {
   font-weight: 600;
   font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notification-item-severity {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.notification-item-severity.critical {
+  background-color: #dc3545;
+}
+
+.notification-item-severity.warning {
+  background-color: #f0ad4e;
 }
 
 .notification-item-details {

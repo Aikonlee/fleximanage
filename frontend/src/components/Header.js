@@ -150,7 +150,10 @@ const Header = ({ onLogout }) => {
                   onClick={() => markNotificationRead(n._id)}
                   title="Mark as read"
                 >
-                  <div className="notification-item-title">{n.title}</div>
+                  <div className="notification-item-title">
+                    {n.severity && <span className={`notification-item-severity ${n.severity}`} />}
+                    {n.title}
+                  </div>
                   {n.details && <div className="notification-item-details">{n.details}</div>}
                   <div className="notification-item-time">{formatNotificationTime(n.time)}</div>
                 </button>

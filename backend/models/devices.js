@@ -748,6 +748,26 @@ const deviceRoutingFiltersSchema = new Schema({
 });
 
 /**
+ * Edge Loopback schema - an always-available local IP for the device,
+ * independent of LAN/WAN interface status, routable via OSPF.
+ */
+const edgeLoopbackSchema = new Schema({
+  name: {
+    type: String,
+    required: true,
+    maxlength: [50, 'Name length must be at most 50']
+  },
+  ip: {
+    type: String,
+    required: true,
+    validate: {
+      validator: validators.validateIPv4,
+      message: props => `${props.value} should be a valid ip address`
+    }
+  }
+});
+
+/**
  * Device policy schema
  */
 const devicePolicySchema = (ref) => new Schema({
@@ -1179,6 +1199,12 @@ const deviceSchema = new Schema({
   },
   routingFilters: {
     type: [deviceRoutingFiltersSchema]
+  },
+  // Edge Loopback: an always-available local IP for the device, independent of
+  // LAN/WAN interface status, routable via OSPF. Management-side only - see
+  // deviceLogic/edgeLoopback.js for the same caveat noted there.
+  edgeLoopbacks: {
+    type: [edgeLoopbackSchema]
   },
   applications: [deviceApplicationSchema],
   cpuInfo: {

@@ -5,8 +5,14 @@ import {
   FaArrowLeft, FaCaretDown, FaColumns, 
   FaPlay, FaStop, FaSyncAlt, FaMicrochip, FaEdit, FaCheck, FaSave, FaTrash, FaInfoCircle, FaCog
 } from 'react-icons/fa';
-import api from '../services/api';
+import L from 'leaflet';
+import api, { inferBaseURL } from '../services/api';
+import StatusBadge from '../components/common/StatusBadge';
 import './DeviceInfo.css';
+
+// Absolute URL so tile requests hit the real backend directly, bypassing the
+// dev-server's /api proxy (which is only correctly configured inside docker-compose).
+const TILE_URL_TEMPLATE = `${inferBaseURL().replace(/\/+$/, '')}/public/tiles/{z}/{x}/{y}`;
 
 const DeviceInfo = () => {
   const { deviceId } = useParams();
@@ -62,6 +68,59 @@ const DeviceInfo = () => {
     interface: '', rangeStart: '', rangeEnd: '', dns: '', defaultLeaseTime: '', maxLeaseTime: ''
   });
 
+  // Edge Loopback State (device.edgeLoopbacks - always-available local IP,
+  // independent of LAN/WAN interface status; management-side only, see note
+  // on the Link Monitors page for why: the flexiEdge agent isn't in this repo)
+  const [edgeLoopbacks, setEdgeLoopbacks] = useState([]);
+  const [showEdgeLoopbackModal, setShowEdgeLoopbackModal] = useState(false);
+  const [edgeLoopbackForm, setEdgeLoopbackForm] = useState({ name: '', ip: '' });
+
+  // BGP State (device.bgp - see models/devices.js)
+  const [bgpConfig, setBgpConfig] = useState({
+    enable: false, routerId: '', localASN: '', keepaliveInterval: '30',
+    holdInterval: '90', redistributeOspf: true, custom: '', neighbors: []
+  });
+  const [showBgpNeighborModal, setShowBgpNeighborModal] = useState(false);
+  const [editingBgpNeighborIdx, setEditingBgpNeighborIdx] = useState(null);
+  const [bgpNeighborForm, setBgpNeighborForm] = useState({
+    ip: '', remoteASN: '', password: '', inboundFilter: '', outboundFilter: '', sendCommunity: 'all', multiHop: 1
+  });
+
+  // Firewall & NAT State (device.firewall.rules - see models/firewallRule.js)
+  const [firewallRules, setFirewallRules] = useState([]);
+  const [deviceSpecificRulesEnabled, setDeviceSpecificRulesEnabled] = useState(true);
+  const [showFirewallRuleModal, setShowFirewallRuleModal] = useState(false);
+  const [editingFirewallRuleIdx, setEditingFirewallRuleIdx] = useState(null);
+  const EMPTY_FIREWALL_RULE = {
+    description: '', direction: 'inbound', inbound: 'edgeAccess', internalIP: '', internalPortStart: '',
+    priority: 0, enabled: true, action: 'allow', interfaces: [],
+    classification: {
+      source: { ipPort: { ip: '', ports: '' }, lanNat: { interface: '', match: '', action: '' } },
+      destination: { ipProtoPort: { ip: '', ports: '', protocols: [] }, lanNat: { match: '', action: '' } }
+    }
+  };
+  const [firewallRuleForm, setFirewallRuleForm] = useState(EMPTY_FIREWALL_RULE);
+
+  // Routing Filters State (device.routingFilters - see models/devices.js)
+  const [routingFilters, setRoutingFilters] = useState([]);
+  const [showRoutingFilterModal, setShowRoutingFilterModal] = useState(false);
+  const [editingRoutingFilterIdx, setEditingRoutingFilterIdx] = useState(null);
+  const [routingFilterForm, setRoutingFilterForm] = useState({ name: '', description: '', rules: [] });
+
+  // Advanced Routing State (device.advancedRouting.custom - free-text FRR CLI passthrough)
+  const [advancedRoutingCli, setAdvancedRoutingCli] = useState('');
+
+  // Status tab data
+  const [bgpStatus, setBgpStatus] = useState(null);
+  const [routingTable, setRoutingTable] = useState(null);
+  const [statistics, setStatistics] = useState(null);
+  const [vrrpStatus, setVrrpStatus] = useState(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+
+  // Troubleshooting tab data
+  const [deviceLogs, setDeviceLogs] = useState(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+
   // Dropdown visibility state
   const [activeDropdown, setActiveDropdown] = useState(null);
 
@@ -70,34 +129,42 @@ const DeviceInfo = () => {
   const mapInstanceRef = useRef(null);
 
   useEffect(() => {
-    if (activeTab === 'general' && mapContainerRef.current && !mapInstanceRef.current && device) {
-      const L = window.L;
-      if (L) {
-        const lat = device.location?.lat || 51.505;
-        const lon = device.location?.lon || -0.09;
-        const zoom = device.location?.lat ? 13 : 13; // Default zoom
-
-        const map = L.map(mapContainerRef.current).setView([lat, lon], zoom);
-
-        // Create tile layer with proper configuration
-        const tileLayer = L.tileLayer('/api/public/tiles/{z}/{x}/{y}', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19,
-          crossOrigin: 'anonymous'
-        });
-
-        tileLayer.addTo(map);
-
-        L.marker([lat, lon]).addTo(map)
-            .bindPopup(device.name || 'Device')
-            .openPopup();
-
-        mapInstanceRef.current = map;
-      }
-    } else if (activeTab !== 'general' && mapInstanceRef.current) {
+    if (activeTab !== 'general' || !device) {
+      if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+      }
+      return undefined;
     }
+
+    if (mapInstanceRef.current || !mapContainerRef.current) return undefined;
+    const lat = device.location?.lat || 51.505;
+    const lon = device.location?.lon || -0.09;
+    const zoom = 13;
+
+    const map = L.map(mapContainerRef.current).setView([lat, lon], zoom);
+
+    const tileLayer = L.tileLayer(TILE_URL_TEMPLATE, {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+      crossOrigin: 'anonymous'
+    });
+
+    tileLayer.addTo(map);
+
+    const icon = L.divIcon({
+      className: 'custom-map-marker',
+      html: '<div style="background-color: #f7941d; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+      iconSize: [14, 14],
+      popupAnchor: [0, -7]
+    });
+
+    L.marker([lat, lon], { icon }).addTo(map)
+      .bindPopup(device.name || 'Device')
+      .openPopup();
+
+    mapInstanceRef.current = map;
+    return undefined;
   }, [activeTab, device]);
 
   // Cleanup map on unmount
@@ -160,6 +227,25 @@ const DeviceInfo = () => {
       setPowerSaving(Boolean(deviceData?.cpuInfo?.powerSaving));
       
       setDhcpServers(deviceData.dhcp || []);
+
+      if (deviceData.bgp) {
+        setBgpConfig({
+          enable: Boolean(deviceData.bgp.enable),
+          routerId: deviceData.bgp.routerId || '',
+          localASN: deviceData.bgp.localASN || '',
+          keepaliveInterval: deviceData.bgp.keepaliveInterval || '30',
+          holdInterval: deviceData.bgp.holdInterval || '90',
+          redistributeOspf: deviceData.bgp.redistributeOspf !== false,
+          custom: deviceData.bgp.custom || '',
+          neighbors: deviceData.bgp.neighbors || []
+        });
+      }
+
+      setFirewallRules(deviceData.firewall?.rules || []);
+      setDeviceSpecificRulesEnabled(deviceData.deviceSpecificRulesEnabled !== false);
+      setRoutingFilters(deviceData.routingFilters || []);
+      setAdvancedRoutingCli(deviceData.advancedRouting?.custom || '');
+      setEdgeLoopbacks(deviceData.edgeLoopbacks || []);
 
       setLoading(false);
     } catch (err) {
@@ -263,6 +349,203 @@ const DeviceInfo = () => {
       setLoading(false);
     }
   };
+
+  const handleSaveBGP = async () => {
+    try {
+      setLoading(true);
+      await apiCall(`/devices/${deviceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bgp: bgpConfig }) });
+      await fetchDeviceInfo(true);
+      alert('BGP configuration saved successfully');
+    } catch (err) {
+      alert('Failed to save BGP configuration: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveBgpNeighbor = () => {
+    const neighbors = [...bgpConfig.neighbors];
+    if (editingBgpNeighborIdx !== null) neighbors[editingBgpNeighborIdx] = bgpNeighborForm;
+    else neighbors.push(bgpNeighborForm);
+    setBgpConfig({ ...bgpConfig, neighbors });
+    setShowBgpNeighborModal(false);
+  };
+
+  const handleDeleteBgpNeighbor = (idx) => {
+    if (!window.confirm('Remove this BGP neighbor?')) return;
+    setBgpConfig({ ...bgpConfig, neighbors: bgpConfig.neighbors.filter((_, i) => i !== idx) });
+  };
+
+  const handleSaveFirewall = async () => {
+    try {
+      setLoading(true);
+      await apiCall(`/devices/${deviceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firewall: { rules: firewallRules }, deviceSpecificRulesEnabled })
+      });
+      await fetchDeviceInfo(true);
+      alert('Firewall & NAT rules saved successfully');
+    } catch (err) {
+      alert('Failed to save firewall rules: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveFirewallRule = () => {
+    const rules = [...firewallRules];
+    if (editingFirewallRuleIdx !== null) rules[editingFirewallRuleIdx] = firewallRuleForm;
+    else rules.push(firewallRuleForm);
+    setFirewallRules(rules);
+    setShowFirewallRuleModal(false);
+  };
+
+  const handleDeleteFirewallRule = (idx) => {
+    if (!window.confirm('Delete this rule?')) return;
+    setFirewallRules(firewallRules.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveRoutingFilters = async () => {
+    try {
+      setLoading(true);
+      await apiCall(`/devices/${deviceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routingFilters }) });
+      await fetchDeviceInfo(true);
+      alert('Routing filters saved successfully');
+    } catch (err) {
+      alert('Failed to save routing filters: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveRoutingFilter = () => {
+    const filters = [...routingFilters];
+    if (editingRoutingFilterIdx !== null) filters[editingRoutingFilterIdx] = routingFilterForm;
+    else filters.push(routingFilterForm);
+    setRoutingFilters(filters);
+    setShowRoutingFilterModal(false);
+  };
+
+  const handleDeleteRoutingFilter = (idx) => {
+    if (!window.confirm('Delete this routing filter?')) return;
+    setRoutingFilters(routingFilters.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveAdvancedRouting = async () => {
+    try {
+      setLoading(true);
+      await apiCall(`/devices/${deviceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ advancedRouting: { custom: advancedRoutingCli } }) });
+      await fetchDeviceInfo(true);
+      alert('Advanced routing CLI saved successfully');
+    } catch (err) {
+      alert('Failed to save advanced routing: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddEdgeLoopback = async () => {
+    const next = [...edgeLoopbacks, edgeLoopbackForm];
+    try {
+      setLoading(true);
+      await apiCall(`/devices/${deviceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edgeLoopbacks: next }) });
+      await fetchDeviceInfo(true);
+      setShowEdgeLoopbackModal(false);
+      setEdgeLoopbackForm({ name: '', ip: '' });
+    } catch (err) {
+      alert('Failed to add edge loopback: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteEdgeLoopback = async (idx) => {
+    if (!window.confirm('Remove this edge loopback?')) return;
+    const next = edgeLoopbacks.filter((_, i) => i !== idx);
+    try {
+      setLoading(true);
+      await apiCall(`/devices/${deviceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edgeLoopbacks: next }) });
+      await fetchDeviceInfo(true);
+    } catch (err) {
+      alert('Failed to remove edge loopback: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Status tab live data ---
+  const fetchBgpStatus = useCallback(async () => {
+    setStatusLoading(true);
+    try {
+      const response = await apiCall(`/devices/${deviceId}/bgp/status`);
+      if (response && response.ok) setBgpStatus(response.data);
+    } catch (err) {
+      console.error('Failed to fetch BGP status:', err);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [deviceId, apiCall]);
+
+  const fetchRoutingTable = useCallback(async () => {
+    setStatusLoading(true);
+    try {
+      const response = await apiCall(`/devices/${deviceId}/routes`);
+      if (response && response.ok) setRoutingTable(response.data);
+    } catch (err) {
+      console.error('Failed to fetch routing table:', err);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [deviceId, apiCall]);
+
+  const fetchStatistics = useCallback(async () => {
+    setStatusLoading(true);
+    try {
+      const response = await apiCall(`/devices/${deviceId}/statistics`);
+      if (response && response.ok) setStatistics(response.data);
+    } catch (err) {
+      console.error('Failed to fetch statistics:', err);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [deviceId, apiCall]);
+
+  const fetchVrrpStatus = useCallback(async () => {
+    setStatusLoading(true);
+    try {
+      const response = await apiCall(`/vrrp/status?device=${deviceId}`);
+      if (response && response.ok) setVrrpStatus(response.data);
+    } catch (err) {
+      console.error('Failed to fetch VRRP status:', err);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [deviceId, apiCall]);
+
+  const fetchDeviceLogs = useCallback(async () => {
+    setLogsLoading(true);
+    try {
+      const response = await apiCall(`/devices/${deviceId}/logs`);
+      if (response && response.ok) setDeviceLogs(response.data);
+    } catch (err) {
+      console.error('Failed to fetch device logs:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  }, [deviceId, apiCall]);
+
+  useEffect(() => {
+    if (activeTab !== 'status') return;
+    if (currentSubTab === 'bgp-neighbors') fetchBgpStatus();
+    else if (currentSubTab === 'routing-table') fetchRoutingTable();
+    else if (currentSubTab === 'statistics') fetchStatistics();
+    else if (currentSubTab === 'vrrp') fetchVrrpStatus();
+  }, [activeTab, currentSubTab, fetchBgpStatus, fetchRoutingTable, fetchStatistics, fetchVrrpStatus]);
+
+  useEffect(() => {
+    if (activeTab === 'troubleshooting' && currentSubTab === 'logs') fetchDeviceLogs();
+  }, [activeTab, currentSubTab, fetchDeviceLogs]);
 
   const performAction = async (action) => {
     try {
@@ -492,6 +775,7 @@ const DeviceInfo = () => {
         )}
 
         {activeTab === 'configuration' && currentSubTab === 'interfaces' && (
+          <>
           <div className="table-container-template">
             <table className="custom-table-template">
               <thead>
@@ -571,6 +855,29 @@ const DeviceInfo = () => {
               </tbody>
             </table>
           </div>
+
+          <div className="d-flex justify-content-between align-items-center mt-4 mb-2">
+            <h6 className="fw-bold mb-0">Edge Loopback</h6>
+            <Button variant="primary" size="sm" onClick={() => { setEdgeLoopbackForm({ name: '', ip: '' }); setShowEdgeLoopbackModal(true); }}>Add Edge Loopback</Button>
+          </div>
+          <p className="text-muted small">An always-available local IP for this device, independent of LAN/WAN interface status, routable via OSPF.</p>
+          <div className="table-container-template">
+            <table className="custom-table-template">
+              <thead><tr><th>Name</th><th>IP Address</th><th>Actions</th></tr></thead>
+              <tbody>
+                {edgeLoopbacks.length > 0 ? edgeLoopbacks.map((lb, idx) => (
+                  <tr key={idx}>
+                    <td className="fw-bold">{lb.name}</td>
+                    <td>{lb.ip}</td>
+                    <td><button className="btn-icon-red" onClick={() => handleDeleteEdgeLoopback(idx)}><FaTrash /></button></td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan="3" className="text-center text-muted py-4">No edge loopback configured.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          </>
         )}
 
         {activeTab === 'configuration' && currentSubTab === 'static-routes' && (
@@ -738,9 +1045,344 @@ const DeviceInfo = () => {
           </div>
         )}
 
-        {(activeTab === 'status' || activeTab === 'troubleshooting' || (activeTab === 'configuration' && !['interfaces', 'static-routes', 'ospf'].includes(currentSubTab))) && (
-          <div className="p-5 bg-white border border-gray-300 rounded shadow-sm text-center text-muted">
-            <p className="mb-0">Content for <strong>{currentSubTab || activeTab}</strong></p>
+        {activeTab === 'configuration' && currentSubTab === 'bgp' && (
+          <div className="bgp-container">
+            <h5 className="section-header">BGP Configuration</h5>
+            <div className="mb-4">
+              <button className="btn-template btn-save-gray" onClick={handleSaveBGP}>Save</button>
+            </div>
+            <div className="global-settings-card">
+              <Row>
+                <Col md={6}>
+                  <div className="settings-field">
+                    <label>Enable BGP</label>
+                    <div className="toggle-wrapper">
+                      <input type="checkbox" id="toggle-bgp-enable" className="toggle-checkbox" checked={bgpConfig.enable} onChange={(e) => setBgpConfig({ ...bgpConfig, enable: e.target.checked })} />
+                      <label htmlFor="toggle-bgp-enable" className={`toggle-label ${bgpConfig.enable ? 'checked' : ''}`} onClick={() => setBgpConfig({ ...bgpConfig, enable: !bgpConfig.enable })}></label>
+                    </div>
+                  </div>
+                  <div className="settings-field mt-3">
+                    <label>Router ID</label>
+                    <input type="text" className="input-template" placeholder="e.g. 192.168.1.1" value={bgpConfig.routerId} onChange={(e) => setBgpConfig({ ...bgpConfig, routerId: e.target.value })} />
+                  </div>
+                  <div className="settings-field mt-3">
+                    <label>Local ASN (64512-65535)</label>
+                    <input type="text" className="input-template" value={bgpConfig.localASN} onChange={(e) => setBgpConfig({ ...bgpConfig, localASN: e.target.value })} />
+                  </div>
+                  <div className="settings-field mt-3">
+                    <label>Redistribute OSPF Routes</label>
+                    <div className="toggle-wrapper">
+                      <input type="checkbox" id="toggle-bgp-redist" className="toggle-checkbox" checked={bgpConfig.redistributeOspf} onChange={(e) => setBgpConfig({ ...bgpConfig, redistributeOspf: e.target.checked })} />
+                      <label htmlFor="toggle-bgp-redist" className={`toggle-label ${bgpConfig.redistributeOspf ? 'checked' : ''}`} onClick={() => setBgpConfig({ ...bgpConfig, redistributeOspf: !bgpConfig.redistributeOspf })}></label>
+                    </div>
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <div className="settings-field">
+                    <label>Keepalive Interval (seconds)</label>
+                    <input type="number" className="input-template" value={bgpConfig.keepaliveInterval} onChange={(e) => setBgpConfig({ ...bgpConfig, keepaliveInterval: e.target.value })} />
+                  </div>
+                  <div className="settings-field mt-3">
+                    <label>Hold Interval (seconds)</label>
+                    <input type="number" className="input-template" value={bgpConfig.holdInterval} onChange={(e) => setBgpConfig({ ...bgpConfig, holdInterval: e.target.value })} />
+                  </div>
+                  <div className="settings-field mt-3">
+                    <label>Custom CLI (advanced)</label>
+                    <Form.Control as="textarea" rows={3} value={bgpConfig.custom} onChange={(e) => setBgpConfig({ ...bgpConfig, custom: e.target.value })} />
+                  </div>
+                </Col>
+              </Row>
+            </div>
+
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="section-header mb-0">Neighbors</h5>
+              <Button variant="primary" size="sm" onClick={() => { setEditingBgpNeighborIdx(null); setBgpNeighborForm({ ip: '', remoteASN: '', password: '', inboundFilter: '', outboundFilter: '', sendCommunity: 'all', multiHop: 1 }); setShowBgpNeighborModal(true); }}>Add Neighbor</Button>
+            </div>
+            <div className="table-container-template">
+              <table className="custom-table-template">
+                <thead>
+                  <tr><th>Remote IP</th><th>Remote ASN</th><th>Inbound Filter</th><th>Outbound Filter</th><th>Multi-hop</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {bgpConfig.neighbors.length > 0 ? bgpConfig.neighbors.map((n, idx) => (
+                    <tr key={idx}>
+                      <td>{n.ip}</td>
+                      <td>{n.remoteASN}</td>
+                      <td>{n.inboundFilter || '-'}</td>
+                      <td>{n.outboundFilter || '-'}</td>
+                      <td>{n.multiHop}</td>
+                      <td>
+                        <button className="btn-icon-yellow" onClick={() => { setEditingBgpNeighborIdx(idx); setBgpNeighborForm(n); setShowBgpNeighborModal(true); }}><FaCog /></button>
+                        <button className="btn-icon-red" onClick={() => handleDeleteBgpNeighbor(idx)}><FaTrash /></button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="6" className="text-center text-muted py-4">No BGP neighbors configured.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'configuration' && currentSubTab === 'firewall' && (
+          <div className="firewall-container">
+            <h5 className="section-header">Firewall & NAT</h5>
+            <div className="mb-4 d-flex align-items-center gap-3">
+              <button className="btn-template btn-save-gray" onClick={handleSaveFirewall}>Save</button>
+              <div className="settings-field d-flex align-items-center gap-2 mb-0">
+                <div className="toggle-wrapper">
+                  <input type="checkbox" id="toggle-device-fw" className="toggle-checkbox" checked={deviceSpecificRulesEnabled} onChange={(e) => setDeviceSpecificRulesEnabled(e.target.checked)} />
+                  <label htmlFor="toggle-device-fw" className={`toggle-label ${deviceSpecificRulesEnabled ? 'checked' : ''}`} onClick={() => setDeviceSpecificRulesEnabled(!deviceSpecificRulesEnabled)}></label>
+                </div>
+                <label className="mb-0">Enable device-specific rules</label>
+              </div>
+            </div>
+
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h6 className="fw-bold mb-0">Firewall Rules (Inbound / Outbound)</h6>
+              <Button variant="primary" size="sm" onClick={() => { setEditingFirewallRuleIdx(null); setFirewallRuleForm(EMPTY_FIREWALL_RULE); setShowFirewallRuleModal(true); }}>New Rule</Button>
+            </div>
+            <div className="table-container-template mb-4">
+              <table className="custom-table-template">
+                <thead>
+                  <tr><th>Description</th><th>Direction</th><th>Source</th><th>Destination</th><th>Action</th><th>Priority</th><th>Enabled</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {firewallRules.filter(r => r.direction !== 'lanNat').length > 0 ? firewallRules.map((rule, idx) => rule.direction !== 'lanNat' && (
+                    <tr key={idx}>
+                      <td>{rule.description || '-'}</td>
+                      <td>{rule.direction === 'inbound' ? rule.inbound : rule.direction}</td>
+                      <td>{rule.classification?.source?.ipPort?.ip || 'Any'}</td>
+                      <td>{rule.classification?.destination?.ipProtoPort?.ip || 'Any'}{rule.classification?.destination?.ipProtoPort?.ports ? `:${rule.classification.destination.ipProtoPort.ports}` : ''}</td>
+                      <td><span className={`badge ${rule.action === 'allow' ? 'badge-success' : 'badge-danger'}`}>{rule.action}</span></td>
+                      <td>{rule.priority}</td>
+                      <td>{rule.enabled ? 'Yes' : 'No'}</td>
+                      <td>
+                        <button className="btn-icon-yellow" onClick={() => { setEditingFirewallRuleIdx(idx); setFirewallRuleForm(rule); setShowFirewallRuleModal(true); }}><FaCog /></button>
+                        <button className="btn-icon-red" onClick={() => handleDeleteFirewallRule(idx)}><FaTrash /></button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="8" className="text-center text-muted py-4">No firewall rules configured. Default policy: outbound allowed, inbound denied.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h6 className="fw-bold mb-0">LAN NAT Rules</h6>
+              <Button variant="primary" size="sm" onClick={() => { setEditingFirewallRuleIdx(null); setFirewallRuleForm({ ...EMPTY_FIREWALL_RULE, direction: 'lanNat' }); setShowFirewallRuleModal(true); }}>New LAN NAT Rule</Button>
+            </div>
+            <div className="table-container-template">
+              <table className="custom-table-template">
+                <thead>
+                  <tr><th>Description</th><th>Source Match → Action</th><th>Destination Match → Action</th><th>Priority</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {firewallRules.filter(r => r.direction === 'lanNat').length > 0 ? firewallRules.map((rule, idx) => rule.direction === 'lanNat' && (
+                    <tr key={idx}>
+                      <td>{rule.description || '-'}</td>
+                      <td>{rule.classification?.source?.lanNat?.match ? `${rule.classification.source.lanNat.match} → ${rule.classification.source.lanNat.action}` : '-'}</td>
+                      <td>{rule.classification?.destination?.lanNat?.match ? `${rule.classification.destination.lanNat.match} → ${rule.classification.destination.lanNat.action}` : '-'}</td>
+                      <td>{rule.priority}</td>
+                      <td>
+                        <button className="btn-icon-yellow" onClick={() => { setEditingFirewallRuleIdx(idx); setFirewallRuleForm(rule); setShowFirewallRuleModal(true); }}><FaCog /></button>
+                        <button className="btn-icon-red" onClick={() => handleDeleteFirewallRule(idx)}><FaTrash /></button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="5" className="text-center text-muted py-4">No LAN NAT rules configured.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'configuration' && currentSubTab === 'routing-filters' && (
+          <div className="routing-filters-container">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="section-header mb-0">Routing Filters</h5>
+              <Button variant="primary" size="sm" onClick={() => { setEditingRoutingFilterIdx(null); setRoutingFilterForm({ name: '', description: '', rules: [] }); setShowRoutingFilterModal(true); }}>New Filter</Button>
+            </div>
+            <p className="text-muted small">Referenced by BGP neighbors via Inbound/Outbound Filter (matched by name).</p>
+            <div className="mb-3">
+              <button className="btn-template btn-save-gray" onClick={handleSaveRoutingFilters}>Save</button>
+            </div>
+            <div className="table-container-template">
+              <table className="custom-table-template">
+                <thead><tr><th>Name</th><th>Description</th><th>Rules</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {routingFilters.length > 0 ? routingFilters.map((filter, idx) => (
+                    <tr key={idx}>
+                      <td className="fw-bold">{filter.name}</td>
+                      <td>{filter.description}</td>
+                      <td>{(filter.rules || []).length} rule(s)</td>
+                      <td>
+                        <button className="btn-icon-yellow" onClick={() => { setEditingRoutingFilterIdx(idx); setRoutingFilterForm(filter); setShowRoutingFilterModal(true); }}><FaCog /></button>
+                        <button className="btn-icon-red" onClick={() => handleDeleteRoutingFilter(idx)}><FaTrash /></button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="4" className="text-center text-muted py-4">No routing filters configured.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'configuration' && currentSubTab === 'advanced-routing' && (
+          <div className="advanced-routing-container">
+            <h5 className="section-header">Advanced Routing</h5>
+            <p className="text-muted small">Raw FRR CLI commands applied on top of the generated routing configuration. For advanced users only.</p>
+            <div className="global-settings-card">
+              <Form.Control as="textarea" rows={10} className="font-monospace" value={advancedRoutingCli} onChange={(e) => setAdvancedRoutingCli(e.target.value)} placeholder="e.g. router bgp 65000&#10; neighbor 10.0.0.1 route-map MYMAP in" />
+            </div>
+            <button className="btn-template btn-save-gray" onClick={handleSaveAdvancedRouting}>Save</button>
+          </div>
+        )}
+
+        {activeTab === 'status' && currentSubTab === 'apps' && (
+          <div className="table-container-template">
+            <table className="custom-table-template">
+              <thead><tr><th>Identifier</th><th>Status</th></tr></thead>
+              <tbody>
+                {(device.applications || []).length > 0 ? device.applications.map((app, idx) => (
+                  <tr key={idx}><td>{app.identifier}</td><td><StatusBadge status={app.status || 'pending'} /></td></tr>
+                )) : (
+                  <tr><td colSpan="2" className="text-center text-muted py-4">No applications installed on this device.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'status' && currentSubTab === 'bgp-neighbors' && (
+          <div>
+            {statusLoading ? <Spinner animation="border" size="sm" /> : (
+              bgpStatus?.status?.neighbors?.length > 0 ? (
+                <div className="table-container-template">
+                  <table className="custom-table-template">
+                    <thead><tr><th>#</th><th>Neighbor</th></tr></thead>
+                    <tbody>
+                      {bgpStatus.status.neighbors.map((n, idx) => <tr key={idx}><td>{idx + 1}</td><td>{n}</td></tr>)}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <div className="global-settings-card text-muted">No live BGP neighbor data available{bgpStatus?.deviceStatus ? ` (device status: ${bgpStatus.deviceStatus})` : ''}.</div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'status' && currentSubTab === 'policies' && (
+          <div className="status-kv-grid">
+            {['multilink', 'firewall', 'qos'].map((key) => (
+              <div className="status-kv-item" key={key}>
+                <span className="status-kv-label">{key === 'multilink' ? 'Path Selection Policy' : key === 'firewall' ? 'Firewall Policy' : 'QoS Policy'}</span>
+                <span className="status-kv-value"><StatusBadge status={device.policies?.[key]?.status || 'none'} /></span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'status' && currentSubTab === 'routing-table' && (
+          <div>
+            {statusLoading ? <Spinner animation="border" size="sm" /> : (
+              <div className="table-container-template">
+                <table className="custom-table-template">
+                  <thead><tr><th>Destination</th><th>Gateway</th><th>Interface</th><th>Protocol</th></tr></thead>
+                  <tbody>
+                    {(routingTable?.osRoutes || []).length > 0 ? routingTable.osRoutes.map((r, idx) => (
+                      <tr key={idx}><td>{r.destination || r.route}</td><td>{r.gateway || r.via}</td><td>{r.iface || r.dev}</td><td>{r.protocol || '-'}</td></tr>
+                    )) : (
+                      <tr><td colSpan="4" className="text-center text-muted py-4">No routing table data available.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'status' && currentSubTab === 'statistics' && (
+          <div>
+            {statusLoading ? <Spinner animation="border" size="sm" /> : (
+              statistics ? (
+                <div className="status-kv-grid">
+                  {Object.entries(statistics).filter(([, v]) => typeof v !== 'object').map(([k, v]) => (
+                    <div className="status-kv-item" key={k}>
+                      <span className="status-kv-label">{k}</span>
+                      <span className="status-kv-value">{String(v)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="global-settings-card text-muted">No statistics available.</div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'status' && currentSubTab === 'vrrp' && (
+          <div>
+            {statusLoading ? <Spinner animation="border" size="sm" /> : (
+              Array.isArray(vrrpStatus) && vrrpStatus.length > 0 ? (
+                <div className="table-container-template">
+                  <table className="custom-table-template">
+                    <thead><tr><th>Group</th><th>VRID</th><th>State</th><th>Priority</th></tr></thead>
+                    <tbody>
+                      {vrrpStatus.map((v, idx) => (
+                        <tr key={idx}><td>{v.name}</td><td>{v.virtualRouterId}</td><td><StatusBadge status={v.state} /></td><td>{v.priority}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <div className="global-settings-card text-muted">No VRRP groups configured for this device.</div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'troubleshooting' && currentSubTab === 'command' && (
+          <div className="global-settings-card">
+            <h6 className="fw-bold mb-3">Device Commands</h6>
+            <div className="d-flex gap-2 flex-wrap">
+              <button className="btn-template btn-gray" onClick={() => performAction('sync')} disabled={syncing}>Sync Device</button>
+              <button className="btn-template btn-gray" onClick={() => performAction('reset')} disabled={syncing}>Reset Device</button>
+            </div>
+            <p className="text-muted small mt-3 mb-0">Commands are queued as device jobs and applied over the device's websocket connection.</p>
+          </div>
+        )}
+
+        {activeTab === 'troubleshooting' && currentSubTab === 'edge-setting' && (
+          <div className="global-settings-card">
+            <h6 className="fw-bold mb-3">flexiEdge Local UI</h6>
+            <p className="text-muted">Access the device's local troubleshooting UI directly, if reachable on its management IP.</p>
+          </div>
+        )}
+
+        {activeTab === 'troubleshooting' && currentSubTab === 'logs' && (
+          <div className="global-settings-card">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h6 className="fw-bold mb-0">Device Logs</h6>
+              <button className="btn-template btn-save-gray" onClick={fetchDeviceLogs} disabled={logsLoading}>{logsLoading ? 'Loading...' : 'Refresh'}</button>
+            </div>
+            <pre className="device-logs-view">
+              {Array.isArray(deviceLogs?.logs) ? deviceLogs.logs.join('\n') : (deviceLogs ? JSON.stringify(deviceLogs, null, 2) : 'No logs loaded yet.')}
+            </pre>
+          </div>
+        )}
+
+        {activeTab === 'troubleshooting' && currentSubTab === 'packet-traces' && (
+          <div className="global-settings-card text-muted">
+            Packet trace capture is not implemented in this build yet.
+          </div>
+        )}
+
+        {activeTab === 'troubleshooting' && currentSubTab === 'recovery-info' && (
+          <div className="status-kv-grid">
+            <div className="status-kv-item"><span className="status-kv-label">Sync State</span><span className="status-kv-value">{device.sync?.state || 'unknown'}</span></div>
+            <div className="status-kv-item"><span className="status-kv-label">Last Sync Hash</span><span className="status-kv-value">{device.sync?.hash || '-'}</span></div>
+            <div className="status-kv-item"><span className="status-kv-label">Sync Trials</span><span className="status-kv-value">{device.sync?.trials ?? '-'}</span></div>
           </div>
         )}
       </div>
@@ -910,6 +1552,190 @@ const DeviceInfo = () => {
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowDhcpModal(false)}>Cancel</Button>
           <Button variant="primary" onClick={handleSaveDHCP}><FaSave className="me-2"/>Save DHCP Server</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showBgpNeighborModal} onHide={() => setShowBgpNeighborModal(false)} centered size="lg">
+        <Modal.Header closeButton><Modal.Title>{editingBgpNeighborIdx !== null ? 'Edit BGP Neighbor' : 'Add BGP Neighbor'}</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Row>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Remote IP</Form.Label><Form.Control value={bgpNeighborForm.ip} onChange={e => setBgpNeighborForm({ ...bgpNeighborForm, ip: e.target.value })} placeholder="10.0.0.1" /></Form.Group></Col>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Remote ASN</Form.Label><Form.Control value={bgpNeighborForm.remoteASN} onChange={e => setBgpNeighborForm({ ...bgpNeighborForm, remoteASN: e.target.value })} /></Form.Group></Col>
+            </Row>
+            <Form.Group className="mb-3"><Form.Label>MD5 Key (optional)</Form.Label><Form.Control type="password" value={bgpNeighborForm.password} onChange={e => setBgpNeighborForm({ ...bgpNeighborForm, password: e.target.value })} /></Form.Group>
+            <Row>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Inbound Filter (by name)</Form.Label><Form.Select value={bgpNeighborForm.inboundFilter} onChange={e => setBgpNeighborForm({ ...bgpNeighborForm, inboundFilter: e.target.value })}><option value="">None</option>{routingFilters.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</Form.Select></Form.Group></Col>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Outbound Filter (by name)</Form.Label><Form.Select value={bgpNeighborForm.outboundFilter} onChange={e => setBgpNeighborForm({ ...bgpNeighborForm, outboundFilter: e.target.value })}><option value="">None</option>{routingFilters.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}</Form.Select></Form.Group></Col>
+            </Row>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Send Community</Form.Label>
+                  <Form.Select value={bgpNeighborForm.sendCommunity} onChange={e => setBgpNeighborForm({ ...bgpNeighborForm, sendCommunity: e.target.value })}>
+                    {['all', 'both', 'extended', 'large', 'standard', ''].map(v => <option key={v} value={v}>{v || '(none)'}</option>)}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Multi-hop (1-255)</Form.Label><Form.Control type="number" min={1} max={255} value={bgpNeighborForm.multiHop} onChange={e => setBgpNeighborForm({ ...bgpNeighborForm, multiHop: e.target.value })} /></Form.Group></Col>
+            </Row>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowBgpNeighborModal(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSaveBgpNeighbor} disabled={!bgpNeighborForm.ip || !bgpNeighborForm.remoteASN}>Save Neighbor</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showFirewallRuleModal} onHide={() => setShowFirewallRuleModal(false)} centered size="lg">
+        <Modal.Header closeButton><Modal.Title>{editingFirewallRuleIdx !== null ? 'Edit Rule' : 'New Rule'}{firewallRuleForm.direction === 'lanNat' ? ' (LAN NAT)' : ''}</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-3"><Form.Label>Description</Form.Label><Form.Control value={firewallRuleForm.description} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, description: e.target.value })} /></Form.Group>
+
+            {firewallRuleForm.direction !== 'lanNat' && (
+              <>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Direction</Form.Label>
+                      <Form.Select value={firewallRuleForm.direction} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, direction: e.target.value })}>
+                        <option value="outbound">Outbound</option>
+                        <option value="inbound">Inbound</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Action</Form.Label>
+                      <Form.Select value={firewallRuleForm.action} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, action: e.target.value })}>
+                        <option value="allow">Allow</option>
+                        <option value="deny">Deny</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+                {firewallRuleForm.direction === 'inbound' && (
+                  <Row>
+                    <Col md={4}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Inbound Type</Form.Label>
+                        <Form.Select value={firewallRuleForm.inbound} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, inbound: e.target.value })}>
+                          <option value="edgeAccess">flexiEdge access</option>
+                          <option value="portForward">Port Forward</option>
+                          <option value="nat1to1">1:1 NAT</option>
+                        </Form.Select>
+                      </Form.Group>
+                    </Col>
+                    {firewallRuleForm.inbound !== 'edgeAccess' && (
+                      <>
+                        <Col md={4}><Form.Group className="mb-3"><Form.Label>Internal IP</Form.Label><Form.Control value={firewallRuleForm.internalIP} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, internalIP: e.target.value })} /></Form.Group></Col>
+                        <Col md={4}><Form.Group className="mb-3"><Form.Label>Internal Port</Form.Label><Form.Control value={firewallRuleForm.internalPortStart} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, internalPortStart: e.target.value })} /></Form.Group></Col>
+                      </>
+                    )}
+                  </Row>
+                )}
+                <h6 className="fw-bold mt-3">Source</h6>
+                <Row>
+                  <Col md={6}><Form.Group className="mb-3"><Form.Label>Source IP/Mask (blank = Any)</Form.Label><Form.Control value={firewallRuleForm.classification.source.ipPort.ip} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, source: { ...firewallRuleForm.classification.source, ipPort: { ...firewallRuleForm.classification.source.ipPort, ip: e.target.value } } } })} /></Form.Group></Col>
+                  <Col md={6}><Form.Group className="mb-3"><Form.Label>Source Ports</Form.Label><Form.Control value={firewallRuleForm.classification.source.ipPort.ports} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, source: { ...firewallRuleForm.classification.source, ipPort: { ...firewallRuleForm.classification.source.ipPort, ports: e.target.value } } } })} /></Form.Group></Col>
+                </Row>
+                <h6 className="fw-bold">Destination</h6>
+                <Row>
+                  <Col md={4}><Form.Group className="mb-3"><Form.Label>Destination IP/Mask</Form.Label><Form.Control value={firewallRuleForm.classification.destination.ipProtoPort.ip} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, destination: { ...firewallRuleForm.classification.destination, ipProtoPort: { ...firewallRuleForm.classification.destination.ipProtoPort, ip: e.target.value } } } })} /></Form.Group></Col>
+                  <Col md={4}><Form.Group className="mb-3"><Form.Label>Destination Ports</Form.Label><Form.Control value={firewallRuleForm.classification.destination.ipProtoPort.ports} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, destination: { ...firewallRuleForm.classification.destination, ipProtoPort: { ...firewallRuleForm.classification.destination.ipProtoPort, ports: e.target.value } } } })} /></Form.Group></Col>
+                  <Col md={4}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Protocol</Form.Label>
+                      <Form.Select value={firewallRuleForm.classification.destination.ipProtoPort.protocols?.[0] || ''} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, destination: { ...firewallRuleForm.classification.destination, ipProtoPort: { ...firewallRuleForm.classification.destination.ipProtoPort, protocols: e.target.value ? [e.target.value] : [] } } } })}>
+                        <option value="">Any</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                        <option value="icmp">ICMP</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Row>
+                  <Col md={6}><Form.Group className="mb-3"><Form.Label>Priority</Form.Label><Form.Control type="number" value={firewallRuleForm.priority} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, priority: Number(e.target.value) })} /></Form.Group></Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3 d-flex align-items-center gap-2">
+                      <Form.Check type="switch" id="fw-rule-enabled" checked={firewallRuleForm.enabled} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, enabled: e.target.checked })} label="Enabled" />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </>
+            )}
+
+            {firewallRuleForm.direction === 'lanNat' && (
+              <>
+                <h6 className="fw-bold mt-2">Source</h6>
+                <Row>
+                  <Col md={4}><Form.Group className="mb-3"><Form.Label>LAN Interface</Form.Label><Form.Select value={firewallRuleForm.classification.source.lanNat.interface} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, source: { ...firewallRuleForm.classification.source, lanNat: { ...firewallRuleForm.classification.source.lanNat, interface: e.target.value } } } })}><option value="">Select interface</option>{(device.interfaces || []).filter(i => i.type === 'LAN').map(i => <option key={i._id} value={i.devId || ''} disabled={!i.devId}>{i.name}{!i.devId ? ' (bus address not yet reported by device)' : ''}</option>)}</Form.Select></Form.Group></Col>
+                  <Col md={4}><Form.Group className="mb-3"><Form.Label>Match IP/Mask</Form.Label><Form.Control value={firewallRuleForm.classification.source.lanNat.match} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, source: { ...firewallRuleForm.classification.source, lanNat: { ...firewallRuleForm.classification.source.lanNat, match: e.target.value } } } })} /></Form.Group></Col>
+                  <Col md={4}><Form.Group className="mb-3"><Form.Label>Action IP/Mask</Form.Label><Form.Control value={firewallRuleForm.classification.source.lanNat.action} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, source: { ...firewallRuleForm.classification.source, lanNat: { ...firewallRuleForm.classification.source.lanNat, action: e.target.value } } } })} /></Form.Group></Col>
+                </Row>
+                <h6 className="fw-bold">Destination</h6>
+                <Row>
+                  <Col md={6}><Form.Group className="mb-3"><Form.Label>Match IP/Mask</Form.Label><Form.Control value={firewallRuleForm.classification.destination.lanNat.match} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, destination: { ...firewallRuleForm.classification.destination, lanNat: { ...firewallRuleForm.classification.destination.lanNat, match: e.target.value } } } })} /></Form.Group></Col>
+                  <Col md={6}><Form.Group className="mb-3"><Form.Label>Action IP/Mask</Form.Label><Form.Control value={firewallRuleForm.classification.destination.lanNat.action} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, classification: { ...firewallRuleForm.classification, destination: { ...firewallRuleForm.classification.destination, lanNat: { ...firewallRuleForm.classification.destination.lanNat, action: e.target.value } } } })} /></Form.Group></Col>
+                </Row>
+                <Form.Group className="mb-3"><Form.Label>Priority</Form.Label><Form.Control type="number" value={firewallRuleForm.priority} onChange={e => setFirewallRuleForm({ ...firewallRuleForm, priority: Number(e.target.value) })} /></Form.Group>
+              </>
+            )}
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowFirewallRuleModal(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSaveFirewallRule}>Save Rule</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showRoutingFilterModal} onHide={() => setShowRoutingFilterModal(false)} centered size="lg">
+        <Modal.Header closeButton><Modal.Title>{editingRoutingFilterIdx !== null ? 'Edit Routing Filter' : 'New Routing Filter'}</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Row>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Name (no spaces)</Form.Label><Form.Control value={routingFilterForm.name} onChange={e => setRoutingFilterForm({ ...routingFilterForm, name: e.target.value.replace(/\s/g, '') })} /></Form.Group></Col>
+              <Col md={6}><Form.Group className="mb-3"><Form.Label>Description</Form.Label><Form.Control value={routingFilterForm.description} onChange={e => setRoutingFilterForm({ ...routingFilterForm, description: e.target.value })} /></Form.Group></Col>
+            </Row>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h6 className="fw-bold mb-0">Rules</h6>
+              <Button size="sm" variant="outline-primary" onClick={() => setRoutingFilterForm({ ...routingFilterForm, rules: [...routingFilterForm.rules, { route: '', action: 'allow', nextHop: '', priority: routingFilterForm.rules.length }] })}>Add Rule</Button>
+            </div>
+            {routingFilterForm.rules.map((rule, ridx) => (
+              <Row key={ridx} className="align-items-center mb-2">
+                <Col md={4}><Form.Control placeholder="Route (IP/mask)" value={rule.route} onChange={e => { const rules = [...routingFilterForm.rules]; rules[ridx] = { ...rule, route: e.target.value }; setRoutingFilterForm({ ...routingFilterForm, rules }); }} /></Col>
+                <Col md={3}>
+                  <Form.Select value={rule.action} onChange={e => { const rules = [...routingFilterForm.rules]; rules[ridx] = { ...rule, action: e.target.value }; setRoutingFilterForm({ ...routingFilterForm, rules }); }}>
+                    <option value="allow">Allow</option>
+                    <option value="deny">Deny</option>
+                  </Form.Select>
+                </Col>
+                <Col md={3}><Form.Control placeholder="Next hop" value={rule.nextHop} onChange={e => { const rules = [...routingFilterForm.rules]; rules[ridx] = { ...rule, nextHop: e.target.value }; setRoutingFilterForm({ ...routingFilterForm, rules }); }} /></Col>
+                <Col md={1}><Form.Control type="number" placeholder="Pri" value={rule.priority} onChange={e => { const rules = [...routingFilterForm.rules]; rules[ridx] = { ...rule, priority: Number(e.target.value) }; setRoutingFilterForm({ ...routingFilterForm, rules }); }} /></Col>
+                <Col md={1}><button className="btn-icon-red" onClick={() => setRoutingFilterForm({ ...routingFilterForm, rules: routingFilterForm.rules.filter((_, i) => i !== ridx) })}><FaTrash /></button></Col>
+              </Row>
+            ))}
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowRoutingFilterModal(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSaveRoutingFilter} disabled={!routingFilterForm.name}>Save Filter</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showEdgeLoopbackModal} onHide={() => setShowEdgeLoopbackModal(false)} centered>
+        <Modal.Header closeButton><Modal.Title>Add Edge Loopback</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group className="mb-3"><Form.Label>Name</Form.Label><Form.Control value={edgeLoopbackForm.name} onChange={(e) => setEdgeLoopbackForm({ ...edgeLoopbackForm, name: e.target.value })} /></Form.Group>
+            <Form.Group className="mb-3"><Form.Label>IP Address</Form.Label><Form.Control value={edgeLoopbackForm.ip} onChange={(e) => setEdgeLoopbackForm({ ...edgeLoopbackForm, ip: e.target.value })} placeholder="e.g. 10.100.0.1" /></Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowEdgeLoopbackModal(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleAddEdgeLoopback} disabled={!edgeLoopbackForm.name || !edgeLoopbackForm.ip}>Add</Button>
         </Modal.Footer>
       </Modal>
     </div>

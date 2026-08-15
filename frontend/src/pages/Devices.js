@@ -151,7 +151,11 @@ const Devices = () => {
       // api wrapper normally returns { ok: boolean, status: number, ... } but axios response object has status
       // We'll check response.ok (from our wrapper) OR fall back to status check
       if (response && (response.ok || (response.status >= 200 && response.status < 300))) {
-        alert('Tunnel creation started.');
+        // The backend reports exactly how many tunnels it created vs. skipped
+        // (e.g. version mismatch, no WAN interfaces, already exists) in this
+        // message - surface it instead of a generic success alert, since a
+        // 200 response doesn't mean every requested tunnel was actually created.
+        alert(response.data?.message || 'Tunnel creation started.');
         setShowTunnelModal(false);
         setSelectedDevices(new Set());
         fetchDevices();

@@ -763,7 +763,6 @@ const DeviceInfo = () => {
                   <label
                     htmlFor="approved-toggle"
                     className={`toggle-label ${isApproved ? 'checked' : ''}`}
-                    onClick={() => setIsApproved(!isApproved)}
                   ></label>
                 </div>
               </div>
@@ -979,7 +978,7 @@ const DeviceInfo = () => {
                     <label>Redistribute BGP Routes</label>
                     <div className="toggle-wrapper">
                       <input type="checkbox" id="toggle-bgp" className="toggle-checkbox" checked={ospfConfig.redistributeBgp} onChange={(e) => setOspfConfig({...ospfConfig, redistributeBgp: e.target.checked})} />
-                      <label htmlFor="toggle-bgp" className={`toggle-label ${ospfConfig.redistributeBgp ? 'checked' : ''}`} onClick={() => setOspfConfig({...ospfConfig, redistributeBgp: !ospfConfig.redistributeBgp})}></label>
+                      <label htmlFor="toggle-bgp" className={`toggle-label ${ospfConfig.redistributeBgp ? 'checked' : ''}`}></label>
                     </div>
                   </div>
                 </Col>
@@ -1062,7 +1061,7 @@ const DeviceInfo = () => {
                     <label>Enable BGP</label>
                     <div className="toggle-wrapper">
                       <input type="checkbox" id="toggle-bgp-enable" className="toggle-checkbox" checked={bgpConfig.enable} onChange={(e) => setBgpConfig({ ...bgpConfig, enable: e.target.checked })} />
-                      <label htmlFor="toggle-bgp-enable" className={`toggle-label ${bgpConfig.enable ? 'checked' : ''}`} onClick={() => setBgpConfig({ ...bgpConfig, enable: !bgpConfig.enable })}></label>
+                      <label htmlFor="toggle-bgp-enable" className={`toggle-label ${bgpConfig.enable ? 'checked' : ''}`}></label>
                     </div>
                   </div>
                   <div className="settings-field mt-3">
@@ -1077,7 +1076,7 @@ const DeviceInfo = () => {
                     <label>Redistribute OSPF Routes</label>
                     <div className="toggle-wrapper">
                       <input type="checkbox" id="toggle-bgp-redist" className="toggle-checkbox" checked={bgpConfig.redistributeOspf} onChange={(e) => setBgpConfig({ ...bgpConfig, redistributeOspf: e.target.checked })} />
-                      <label htmlFor="toggle-bgp-redist" className={`toggle-label ${bgpConfig.redistributeOspf ? 'checked' : ''}`} onClick={() => setBgpConfig({ ...bgpConfig, redistributeOspf: !bgpConfig.redistributeOspf })}></label>
+                      <label htmlFor="toggle-bgp-redist" className={`toggle-label ${bgpConfig.redistributeOspf ? 'checked' : ''}`}></label>
                     </div>
                   </div>
                 </Col>
@@ -1137,7 +1136,7 @@ const DeviceInfo = () => {
               <div className="settings-field d-flex align-items-center gap-2 mb-0">
                 <div className="toggle-wrapper">
                   <input type="checkbox" id="toggle-device-fw" className="toggle-checkbox" checked={deviceSpecificRulesEnabled} onChange={(e) => setDeviceSpecificRulesEnabled(e.target.checked)} />
-                  <label htmlFor="toggle-device-fw" className={`toggle-label ${deviceSpecificRulesEnabled ? 'checked' : ''}`} onClick={() => setDeviceSpecificRulesEnabled(!deviceSpecificRulesEnabled)}></label>
+                  <label htmlFor="toggle-device-fw" className={`toggle-label ${deviceSpecificRulesEnabled ? 'checked' : ''}`}></label>
                 </div>
                 <label className="mb-0">Enable device-specific rules</label>
               </div>

@@ -65,8 +65,10 @@ const DeviceInfo = () => {
   const [showDhcpModal, setShowDhcpModal] = useState(false);
   const [editingDhcp, setEditingDhcp] = useState(null);
   const [dhcpForm, setDhcpForm] = useState({
-    interface: '', rangeStart: '', rangeEnd: '', dns: '', defaultLeaseTime: '', maxLeaseTime: ''
+    interface: '', rangeStart: '', rangeEnd: '', dns: '', defaultLeaseTime: '', maxLeaseTime: '', macAssign: [], options: []
   });
+  const DHCP_OPTION_CHOICES = ['routers', 'tftp-server-name', 'ntp-servers', 'interface-mtu', 'time-offset', 'domain-name'];
+  const DHCP_OPTION_CODES = ['3', '66', '42', '26', '2', '15'];
 
   // Edge Loopback State (device.edgeLoopbacks - always-available local IP,
   // independent of LAN/WAN interface status; management-side only, see note
@@ -900,7 +902,7 @@ const DeviceInfo = () => {
               <h5 className="mb-0 fw-bold">DHCP Server Configuration</h5>
               <Button variant="primary" size="sm" onClick={() => { 
                 setEditingDhcp(null); 
-                setDhcpForm({ interface: '', rangeStart: '', rangeEnd: '', dns: '8.8.8.8, 8.8.4.4', defaultLeaseTime: '', maxLeaseTime: '' }); 
+                setDhcpForm({ interface: '', rangeStart: '', rangeEnd: '', dns: '8.8.8.8, 8.8.4.4', defaultLeaseTime: '', maxLeaseTime: '', macAssign: [], options: [] });
                 setShowDhcpModal(true); 
               }}>Add DHCP Server</Button>
             </div>
@@ -918,21 +920,23 @@ const DeviceInfo = () => {
                 <tbody>
                   {dhcpServers.length > 0 ? dhcpServers.map((dhcp, i) => (
                     <tr key={i}>
-                      <td className="fw-bold text-primary">{dhcp.interface}</td>
+                      <td className="fw-bold text-primary">{device?.interfaces?.find(i => i.devId === dhcp.interface)?.name || dhcp.interface}</td>
                       <td>{dhcp.rangeStart} - {dhcp.rangeEnd}</td>
                       <td>{dhcp.dns?.join(', ')}</td>
                       <td><Badge bg={dhcp.status === 'installed' ? 'success' : 'warning'}>{dhcp.status || 'pending'}</Badge></td>
                       <td>
                         <button className="btn-icon-action" onClick={() => { 
                           setEditingDhcp(dhcp); 
-                          setDhcpForm({ 
-                            interface: dhcp.interface, 
-                            rangeStart: dhcp.rangeStart, 
-                            rangeEnd: dhcp.rangeEnd, 
+                          setDhcpForm({
+                            interface: dhcp.interface,
+                            rangeStart: dhcp.rangeStart,
+                            rangeEnd: dhcp.rangeEnd,
                             dns: dhcp.dns?.join(', ') || '',
                             defaultLeaseTime: dhcp.defaultLeaseTime,
-                            maxLeaseTime: dhcp.maxLeaseTime
-                          }); 
+                            maxLeaseTime: dhcp.maxLeaseTime,
+                            macAssign: dhcp.macAssign || [],
+                            options: dhcp.options || []
+                          });
                           setShowDhcpModal(true); 
                         }} title="Edit">
                           <FaEdit size={12} />
@@ -1025,8 +1029,8 @@ const DeviceInfo = () => {
                       <td>{iface.name}</td>
                       <td>{iface.IPv4 ? `${iface.IPv4}/${iface.IPv4Mask || '24'}` : '-'}</td>
                       <td>{iface.ospf?.area || '0'}</td>
-                      <td>{iface.ospf?.authKeyId || ''}</td>
-                      <td>{iface.ospf?.authKey || ''}</td>
+                      <td>{iface.ospf?.keyId || ''}</td>
+                      <td>{iface.ospf?.key || ''}</td>
                       <td>{iface.ospf?.cost || ''}</td>
                       <td>
                         <button className="btn-icon-yellow" onClick={() => setEditingInterface(iface)}>
@@ -1471,14 +1475,14 @@ const DeviceInfo = () => {
                     </Col>
                     <Col md={6}>
                       <Form.Group className="mb-3">
-                        <Form.Label>Hello Interval</Form.Label>
-                        <Form.Control type="number" value={interfaceChanges[editingInterface._id]?.ospf?.helloInterval || editingInterface.ospf?.helloInterval || '10'} onChange={(e) => handleInterfaceEdit(editingInterface, 'ospf', { ...editingInterface.ospf, ...interfaceChanges[editingInterface._id]?.ospf, helloInterval: e.target.value })} />
+                        <Form.Label>Authentication Key ID</Form.Label>
+                        <Form.Control type="text" value={interfaceChanges[editingInterface._id]?.ospf?.keyId || editingInterface.ospf?.keyId || ''} onChange={(e) => handleInterfaceEdit(editingInterface, 'ospf', { ...editingInterface.ospf, ...interfaceChanges[editingInterface._id]?.ospf, keyId: e.target.value })} />
                       </Form.Group>
                     </Col>
                     <Col md={6}>
                       <Form.Group className="mb-3">
-                        <Form.Label>Dead Interval</Form.Label>
-                        <Form.Control type="number" value={interfaceChanges[editingInterface._id]?.ospf?.deadInterval || editingInterface.ospf?.deadInterval || '40'} onChange={(e) => handleInterfaceEdit(editingInterface, 'ospf', { ...editingInterface.ospf, ...interfaceChanges[editingInterface._id]?.ospf, deadInterval: e.target.value })} />
+                        <Form.Label>Authentication Key</Form.Label>
+                        <Form.Control type="password" maxLength={16} value={interfaceChanges[editingInterface._id]?.ospf?.key || editingInterface.ospf?.key || ''} onChange={(e) => handleInterfaceEdit(editingInterface, 'ospf', { ...editingInterface.ospf, ...interfaceChanges[editingInterface._id]?.ospf, key: e.target.value })} />
                       </Form.Group>
                     </Col>
                   </Row>
@@ -1494,7 +1498,7 @@ const DeviceInfo = () => {
 
       <Modal show={showRouteModal} onHide={() => setShowRouteModal(false)} centered size="lg">
         <Modal.Header closeButton><Modal.Title>{editingRoute ? 'Edit Route' : 'Add Route'}</Modal.Title></Modal.Header>
-        <Modal.Body><Form><Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Destination Network</Form.Label><Form.Control value={routeForm.destination} onChange={e => setRouteForm({...routeForm, destination: e.target.value})} placeholder="192.168.10.0/24" /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Gateway</Form.Label><Form.Control value={routeForm.gateway} onChange={e => setRouteForm({...routeForm, gateway: e.target.value})} placeholder="192.168.1.1" /></Form.Group></Col></Row><Form.Check label="Redistribute OSPF" checked={routeForm.redistributeViaOSPF} onChange={e => setRouteForm({...routeForm, redistributeViaOSPF: e.target.checked})} /><Form.Check label="Redistribute BGP" checked={routeForm.redistributeViaBGP} onChange={e => setRouteForm({...routeForm, redistributeViaBGP: e.target.checked})} /></Form></Modal.Body>
+        <Modal.Body><Form><Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Destination Network</Form.Label><Form.Control value={routeForm.destination} onChange={e => setRouteForm({...routeForm, destination: e.target.value})} placeholder="192.168.10.0/24" /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Gateway</Form.Label><Form.Control value={routeForm.gateway} onChange={e => setRouteForm({...routeForm, gateway: e.target.value})} placeholder="192.168.1.1" /></Form.Group></Col></Row><Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Interface (optional)</Form.Label><Form.Select value={routeForm.ifname} onChange={e => setRouteForm({...routeForm, ifname: e.target.value})}><option value="">Auto (derive from gateway subnet)</option>{(device?.interfaces || []).map(i => <option key={i._id} value={i.devId || i.name}>{i.name}</option>)}</Form.Select><Form.Text className="text-muted">The outgoing interface. Optional if the gateway is within a subnet of one of the router interfaces.</Form.Text></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Metric (optional)</Form.Label><Form.Control value={routeForm.metric} onChange={e => setRouteForm({...routeForm, metric: e.target.value})} /></Form.Group></Col></Row><Form.Check label="Redistribute OSPF" checked={routeForm.redistributeViaOSPF} onChange={e => setRouteForm({...routeForm, redistributeViaOSPF: e.target.checked})} /><Form.Check label="Redistribute BGP" checked={routeForm.redistributeViaBGP} onChange={e => setRouteForm({...routeForm, redistributeViaBGP: e.target.checked})} /></Form></Modal.Body>
         <Modal.Footer><Button variant="secondary" onClick={() => setShowRouteModal(false)}>Cancel</Button><Button variant="primary" onClick={handleSaveRoute}><FaSave className="me-2"/>Save Route</Button></Modal.Footer>
       </Modal>
 
@@ -1511,7 +1515,7 @@ const DeviceInfo = () => {
               >
                 <option value="">Select Interface</option>
                 {device?.interfaces?.filter(i => i.type === 'LAN').map(i => (
-                  <option key={i._id} value={i.name}>{i.name} ({i.IPv4})</option>
+                  <option key={i._id} value={i.devId || ''} disabled={!i.devId}>{i.name} ({i.IPv4}){!i.devId ? ' (bus address not yet reported by device)' : ''}</option>
                 ))}
               </Form.Select>
             </Form.Group>
@@ -1547,6 +1551,40 @@ const DeviceInfo = () => {
                 </Form.Group>
               </Col>
             </Row>
+
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h6 className="fw-bold mb-0">Static IP Assignments</h6>
+              <Button size="sm" variant="outline-primary" onClick={() => setDhcpForm({ ...dhcpForm, macAssign: [...dhcpForm.macAssign, { host: '', mac: '', ipv4: '' }] })}>Add Assignment</Button>
+            </div>
+            {dhcpForm.macAssign.map((assign, aidx) => (
+              <Row key={aidx} className="align-items-center mb-2">
+                <Col md={4}><Form.Control placeholder="Host name" value={assign.host} onChange={e => { const macAssign = [...dhcpForm.macAssign]; macAssign[aidx] = { ...assign, host: e.target.value }; setDhcpForm({ ...dhcpForm, macAssign }); }} /></Col>
+                <Col md={4}><Form.Control placeholder="MAC address" value={assign.mac} onChange={e => { const macAssign = [...dhcpForm.macAssign]; macAssign[aidx] = { ...assign, mac: e.target.value }; setDhcpForm({ ...dhcpForm, macAssign }); }} /></Col>
+                <Col md={3}><Form.Control placeholder="IPv4 address" value={assign.ipv4} onChange={e => { const macAssign = [...dhcpForm.macAssign]; macAssign[aidx] = { ...assign, ipv4: e.target.value }; setDhcpForm({ ...dhcpForm, macAssign }); }} /></Col>
+                <Col md={1}><button type="button" className="btn-icon-red" onClick={() => setDhcpForm({ ...dhcpForm, macAssign: dhcpForm.macAssign.filter((_, i) => i !== aidx) })}><FaTrash /></button></Col>
+              </Row>
+            ))}
+
+            <div className="d-flex justify-content-between align-items-center mb-2 mt-3">
+              <h6 className="fw-bold mb-0">DHCP Options</h6>
+              <Button size="sm" variant="outline-primary" onClick={() => setDhcpForm({ ...dhcpForm, options: [...dhcpForm.options, { option: DHCP_OPTION_CHOICES[0], code: DHCP_OPTION_CODES[0], value: '' }] })}>Add Option</Button>
+            </div>
+            {dhcpForm.options.map((opt, oidx) => (
+              <Row key={oidx} className="align-items-center mb-2">
+                <Col md={4}>
+                  <Form.Select value={opt.option} onChange={e => { const options = [...dhcpForm.options]; options[oidx] = { ...opt, option: e.target.value }; setDhcpForm({ ...dhcpForm, options }); }}>
+                    {DHCP_OPTION_CHOICES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </Form.Select>
+                </Col>
+                <Col md={3}>
+                  <Form.Select value={opt.code} onChange={e => { const options = [...dhcpForm.options]; options[oidx] = { ...opt, code: e.target.value }; setDhcpForm({ ...dhcpForm, options }); }}>
+                    {DHCP_OPTION_CODES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </Form.Select>
+                </Col>
+                <Col md={4}><Form.Control placeholder="Value" value={opt.value} onChange={e => { const options = [...dhcpForm.options]; options[oidx] = { ...opt, value: e.target.value }; setDhcpForm({ ...dhcpForm, options }); }} /></Col>
+                <Col md={1}><button type="button" className="btn-icon-red" onClick={() => setDhcpForm({ ...dhcpForm, options: dhcpForm.options.filter((_, i) => i !== oidx) })}><FaTrash /></button></Col>
+              </Row>
+            ))}
           </Form>
         </Modal.Body>
         <Modal.Footer>

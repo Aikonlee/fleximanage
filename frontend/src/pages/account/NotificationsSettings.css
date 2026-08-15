@@ -1,0 +1,13 @@
+.notif-rules-table th,
+.notif-rules-table td {
+  white-space: nowrap;
+}
+
+.notif-webhook-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem;
+  max-width: 640px;
+}

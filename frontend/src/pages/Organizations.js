@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Table, Button, Card, Alert, Modal, Row, Col } from 'react-bootstrap';
 import { FaPlus, FaEdit, FaTrash, FaEye, FaCheck } from 'react-icons/fa';
 import api from '../services/api';
+import PageHeader from '../components/common/PageHeader';
 import './Organizations.css';
 import '../styles/unified-table.css';
 
@@ -195,12 +196,10 @@ const Organizations = () => {
   if (error) {
     return (
       <div className="organizations-page p-3 p-md-4">
-        <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-          <div>
-            <h1 className="h2 mb-0 text-primary fw-bold">Organizations</h1>
-            <p className="text-muted mb-0 mt-1 small">Manage your organizations</p>
-          </div>
-        </div>
+        <PageHeader
+          breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Account' }, { label: 'Organizations' }]}
+          title="Organizations"
+        />
         <Alert variant="danger" className="shadow-sm">
           <Alert.Heading>Error Loading Organizations</Alert.Heading>
           <p>{error}</p>
@@ -214,16 +213,16 @@ const Organizations = () => {
 
   return (
     <div className="organizations-page p-3 p-md-4">
-      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-        <div>
-          <h1 className="h2 mb-0 text-primary fw-bold">Organizations</h1>
-          <p className="text-muted mb-0 mt-1 small">Manage your organizations</p>
-        </div>
-        <Button variant="primary" onClick={handleNewOrganization} className="shadow-sm d-flex align-items-center">
-          <FaPlus className="me-2" />
-          New Organization
-        </Button>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Account' }, { label: 'Organizations' }]}
+        title="Organizations"
+        actions={(
+          <Button variant="primary" onClick={handleNewOrganization} className="shadow-sm d-flex align-items-center">
+            <FaPlus className="me-2" />
+            New Organization
+          </Button>
+        )}
+      />
 
       <Card className="shadow-sm border-0">
         <Card.Body className="p-0">

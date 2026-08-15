@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../../services/api';
 import { sortCountries } from '../../constants/countries';
+import PageHeader from '../../components/common/PageHeader';
 import '../../styles/unified-table.css';
 
 // Account Profile page
@@ -108,15 +109,13 @@ export default function AccountProfile () {
 
   return (
     <div className="account-profile-page p-3 p-md-4">
-      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-        <div>
-          <h1 className="h2 mb-0 text-primary fw-bold">Account Profile</h1>
-          <p className="text-muted mb-0 mt-1 small">Manage your account settings</p>
-        </div>
-        {acct && (
+      <PageHeader
+        breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Account' }, { label: 'Profile' }]}
+        title="Profile"
+        actions={acct && (
           <button className="btn btn-sm btn-primary shadow-sm" onClick={openEdit}>Update Profile</button>
         )}
-      </div>
+      />
 
       {error && <div className="alert alert-danger py-2 mb-3 shadow-sm">{error}</div>}
       {loading && <div className="text-center py-5 text-muted"><div className="spinner-border spinner-border-sm me-2"></div>Loading...</div>}

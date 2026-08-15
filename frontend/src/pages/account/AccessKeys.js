@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Button, Form, Alert, Row, Col } from 'react-bootstrap';
 import { FaKey, FaCopy, FaTrash, FaPlus, FaTimes } from 'react-icons/fa';
 import api from '../../services/api';
+import PageHeader from '../../components/common/PageHeader';
 import '../../styles/unified-table.css';
 
 // Access Keys management: creates scoped access keys with role-based permissions.
@@ -206,19 +207,19 @@ const AccountAccessKeys = () => {
 
   return (
     <div className="account-access-keys-page p-3 p-md-4">
-      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-        <div>
-          <h1 className="h2 mb-0 text-primary fw-bold">Access Keys</h1>
-          <p className="text-muted mb-0 mt-1 small">Manage API access keys</p>
-        </div>
-        <Button 
-          variant={showForm ? "secondary" : "primary"} 
-          onClick={showForm ? closeForm : () => setShowForm(true)}
-          className="shadow-sm d-flex align-items-center"
-        >
-          {showForm ? <><FaTimes className="me-2" /> Close Form</> : <><FaPlus className="me-2" /> Add Access Key</>}
-        </Button>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Account' }, { label: 'Access Keys' }]}
+        title="Access Keys"
+        actions={(
+          <Button
+            variant={showForm ? "secondary" : "primary"}
+            onClick={showForm ? closeForm : () => setShowForm(true)}
+            className="shadow-sm d-flex align-items-center"
+          >
+            {showForm ? <><FaTimes className="me-2" /> Close Form</> : <><FaPlus className="me-2" /> Add Access Key</>}
+          </Button>
+        )}
+      />
 
       {showForm && (
         <Card className="border-0 shadow-sm mb-4">

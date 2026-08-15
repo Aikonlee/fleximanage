@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Card, Button, Form, Alert, Badge } from 'react-bootstrap';
 import { FaUser, FaSearch, FaCheck, FaTrash, FaUserShield, FaUserMinus } from 'react-icons/fa';
 import api from '../../services/api';
+import PageHeader from '../../components/common/PageHeader';
 import '../../styles/unified-table.css';
 
 // Simple Members listing page. Fetches /members and displays basic columns.
@@ -101,17 +102,22 @@ export default function AccountMembers () {
   }, []);
 
   if (loading && !rows.length) return <div className="text-center p-5"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div><p className="mt-2 text-muted">Loading users...</p></div>;
-  if (error && !rows.length) return <div className="account-members-page p-3 p-md-4"><Alert variant="danger">{error}</Alert></div>;
+  if (error && !rows.length) {
+    return (
+      <div className="account-members-page p-3 p-md-4">
+        <PageHeader breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Users' }]} title="Users" />
+        <Alert variant="danger">{error}</Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="account-members-page p-3 p-md-4">
-      <div className="page-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-        <div>
-          <h1 className="h2 mb-0 text-primary fw-bold">Users</h1>
-          <p className="text-muted mb-0 mt-1 small">Manage organization members and permissions</p>
-        </div>
-        <div className="small text-muted">Total Users: {serverMeta.total}</div>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Users' }]}
+        title="Users"
+        actions={<div className="small text-muted">Total Users: {serverMeta.total}</div>}
+      />
 
       <div className="filters-bar mb-4 p-3 bg-white border rounded shadow-sm">
         <div className="d-flex flex-wrap gap-3 align-items-end">

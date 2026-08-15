@@ -166,12 +166,18 @@ const NotificationsSettings = () => {
                   </td>
                   <td>
                     {rule.warningThreshold !== null && rule.warningThreshold !== undefined ? (
-                      <Form.Control size="sm" type="number" value={rule.warningThreshold ?? ''} onChange={(e) => updateRule(name, 'warningThreshold', Number(e.target.value))} />
+                      <div className="d-flex align-items-center gap-1">
+                        <Form.Control size="sm" type="number" value={rule.warningThreshold ?? ''} onChange={(e) => updateRule(name, 'warningThreshold', Number(e.target.value))} />
+                        {rule.thresholdUnit && <span className="text-muted small">{rule.thresholdUnit}</span>}
+                      </div>
                     ) : <span className="text-muted">-</span>}
                   </td>
                   <td>
                     {rule.criticalThreshold !== null && rule.criticalThreshold !== undefined ? (
-                      <Form.Control size="sm" type="number" value={rule.criticalThreshold ?? ''} onChange={(e) => updateRule(name, 'criticalThreshold', Number(e.target.value))} />
+                      <div className="d-flex align-items-center gap-1">
+                        <Form.Control size="sm" type="number" value={rule.criticalThreshold ?? ''} onChange={(e) => updateRule(name, 'criticalThreshold', Number(e.target.value))} />
+                        {rule.thresholdUnit && <span className="text-muted small">{rule.thresholdUnit}</span>}
+                      </div>
                     ) : <span className="text-muted">-</span>}
                   </td>
                   <td className="text-center"><Form.Check checked={Boolean(rule.immediateEmail)} onChange={(e) => updateRule(name, 'immediateEmail', e.target.checked)} /></td>

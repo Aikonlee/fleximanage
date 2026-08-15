@@ -38,6 +38,7 @@ cert.*/
 .env
 .env.local
 .env.*.local
+backend/.env
 
 # Build artifacts and generated files
 backend/public/

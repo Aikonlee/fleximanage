@@ -132,7 +132,7 @@ const Tokens = () => {
           name: rec.name,
           token: rec.token,
           createdAt: rec.createdAt,
-          server: payload.server || ''
+          server: rec.server || ''
         }, ...prev]);
         setPage(0);
         setName('');

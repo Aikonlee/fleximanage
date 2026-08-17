@@ -217,6 +217,7 @@ class TokensService {
         org: token.org.toString(),
         name: token.name,
         token: token.token,
+        server: token.server,
         createdAt: token.createdAt.toISOString()
       }, 201);
     } catch (e) {

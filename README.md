@@ -94,6 +94,27 @@ This sends a verification email; POST the `id`/`t` query params from that link t
 
 Supported: flexiEdge routers v6.4.32+, x86-64/ARM64, multi-WAN, IPSec/IKEv2 tunnels.
 
+## Connecting a test flexiEdge device
+
+To register a real (or virtual) flexiEdge router against this deployment for testing:
+
+1. **Download the flexiEdge ISO** (v6.4.32):
+   [flexiEdge.focal.6.4.32.iso.zip](https://imager.flexiwan.com/main/latest/flexiEdge.focal.6.4.32.iso.zip)
+   Install it on the target machine/VM as you would any bootable ISO.
+
+2. **Point the agent at this server** — edit the agent config on the device:
+   ```bash
+   vi /etc/flexiwan/agent/fwagent_config.yaml
+   ```
+   ```yaml
+   agent:
+     server: https://manage.miwide.com:3443
+     bypass_certificate: true
+   ```
+   `bypass_certificate: true` skips TLS certificate validation — only use this for testing against a self-signed/internal cert, never in production.
+
+3. Restart the agent (`systemctl restart fwagent`) and register the device from the UI/API (see [Device management](#device-management) above). It will appear as pending until an admin approves it.
+
 ## Troubleshooting
 
 **Device won't connect**: confirm it's approved in the UI, port 3443 reachable, check `systemctl status fwagent` on the device.

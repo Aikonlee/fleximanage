@@ -62,7 +62,7 @@ const { validateOverlappingSubnets } = require('../deviceLogic/validators');
 const { checkOverlapping } = require('../utils/networks');
 const ObjectId = require('mongoose').Types.ObjectId;
 
-const { getDefaultNotificationsSettings } = require('../models/defaultSettings');
+const notificationsMgr = require('../notifications/notifications')();
 
 class OrganizationsService {
   /**
@@ -721,7 +721,7 @@ class OrganizationsService {
       if (!qosPolicy) throw new Error('Error default QoS policy adding');
 
       // Add default notifications settings
-      const notificationsSettings = getDefaultNotificationsSettings();
+      const notificationsSettings = await notificationsMgr.getDefaultNotificationsSettings();
       const ownerMembership = await membership.find({
         account: updUser.defaultAccount,
         to: 'account',

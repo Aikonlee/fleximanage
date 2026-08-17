@@ -426,8 +426,9 @@ class NotificationsService {
       const orgIds = await NotificationsService.fetchOrgList(user, org, account, group, true);
       const response = await notificationsConf.find({ org: { $in: orgIds.map(orgId => new mongoose.Types.ObjectId(orgId)) } }).lean();
       if (org) {
+        const rules = response[0] ? response[0].rules : await notificationsMgr.getDefaultNotificationsSettings();
         const sortedRules = Object.fromEntries(
-          Object.entries(response[0].rules).sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+          Object.entries(rules).sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
         );
         return Service.successResponse(sortedRules);
       } else {
@@ -702,6 +703,7 @@ class NotificationsService {
         });
 
         const notificationsData = await notificationsConf.find({ org: orgId });
+        const orgSignups = notificationsData[0] || { signedToCritical: [], signedToWarning: [], signedToDaily: [] };
         // A map for storing usersData
         const usersDataMap = new Map();
 
@@ -721,9 +723,9 @@ class NotificationsService {
               email: usersDataMap.get(memberIdStr).email,
               name: usersDataMap.get(memberIdStr).name,
               lastName: usersDataMap.get(memberIdStr).lastName,
-              signedToCritical: notificationsData[0].signedToCritical.includes(member.user),
-              signedToWarning: notificationsData[0].signedToWarning.includes(member.user),
-              signedToDaily: notificationsData[0].signedToDaily.includes(member.user)
+              signedToCritical: orgSignups.signedToCritical.includes(member.user),
+              signedToWarning: orgSignups.signedToWarning.includes(member.user),
+              signedToDaily: orgSignups.signedToDaily.includes(member.user)
             };
 
             if (org) response.push(currentUser);
@@ -737,9 +739,9 @@ class NotificationsService {
 
             const userIndex = response.findIndex(user => user._id.toString() === memberIdStr);
             const existingUser = response[userIndex];
-            existingUser.signedToCritical = notificationsData[0].signedToCritical.includes(member.user) !== existingUser.signedToCritical ? null : existingUser.signedToCritical;
-            existingUser.signedToWarning = notificationsData[0].signedToWarning.includes(member.user) !== existingUser.signedToWarning ? null : existingUser.signedToWarning;
-            existingUser.signedToDaily = notificationsData[0].signedToDaily.includes(member.user) !== existingUser.signedToDaily ? null : existingUser.signedToDaily;
+            existingUser.signedToCritical = orgSignups.signedToCritical.includes(member.user) !== existingUser.signedToCritical ? null : existingUser.signedToCritical;
+            existingUser.signedToWarning = orgSignups.signedToWarning.includes(member.user) !== existingUser.signedToWarning ? null : existingUser.signedToWarning;
+            existingUser.signedToDaily = orgSignups.signedToDaily.includes(member.user) !== existingUser.signedToDaily ? null : existingUser.signedToDaily;
             existingUser.count++;
           }
         }
@@ -906,20 +908,22 @@ class NotificationsService {
       await NotificationsService.validateParams(user, org, account, group);
       const orgIds = await NotificationsService.fetchOrgList(user, org, account, group, true);
       const response = await notificationsConf.find({ org: { $in: orgIds.map(orgId => new mongoose.Types.ObjectId(orgId)) } }, { webHookSettings: 1, _id: 0 }).lean();
+      const defaultWebHookSettings = { webhookURL: '', sendCriticalAlerts: false, sendWarningAlerts: false };
       if (org) {
-        const webHookSettings = { ...response[0].webHookSettings };
+        const webHookSettings = { ...(response[0] ? response[0].webHookSettings : defaultWebHookSettings) };
         return Service.successResponse(webHookSettings);
       } else {
         const mergedSettings = {};
         for (let i = 0; i < response.length; i++) {
-          Object.keys(response[i].webHookSettings).forEach(setting => {
+          const settings = response[i].webHookSettings || defaultWebHookSettings;
+          Object.keys(settings).forEach(setting => {
             if (setting === '_id') {
               return;
             }
             if (!mergedSettings.hasOwnProperty(setting)) {
-              mergedSettings[setting] = response[i].webHookSettings[setting];
+              mergedSettings[setting] = settings[setting];
             } else {
-              if (mergedSettings[setting] !== response[i].webHookSettings[setting]) {
+              if (mergedSettings[setting] !== settings[setting]) {
                 mergedSettings[setting] = null;
               }
             }

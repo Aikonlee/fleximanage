@@ -1397,6 +1397,71 @@ class DevicesService {
   }
 
   /**
+   * Remove data that is owned by deleted devices and is not needed anymore:
+   * notifications, analytics statistics and jobs in the device queue.
+   * Called after the devices were removed from the DB (these models live on
+   * the analytics connection / redis, so they can't join the main DB
+   * transaction). Failures are logged but do not fail the delete request,
+   * the device itself is already gone.
+   *
+   * Note: inactive tunnels are intentionally kept, they serve as a pool of
+   * tunnel numbers that is reused when new tunnels are created.
+   *
+   * @param {Array} delDevices deleted device documents (_id, org, machineId)
+   */
+  static async cleanupDeletedDevicesData (delDevices) {
+    const devIds = delDevices.map(d => d._id);
+    try {
+      await notificationsModel.deleteMany({ 'targets.deviceId': { $in: devIds } });
+    } catch (err) {
+      logger.warn('Failed to remove notifications of deleted devices', {
+        params: { devIds, err: err.message }
+      });
+    }
+    try {
+      await deviceStats.deleteMany({ device: { $in: devIds } });
+    } catch (err) {
+      logger.warn('Failed to remove statistics of deleted devices', {
+        params: { devIds, err: err.message }
+      });
+    }
+    for (const dev of delDevices) {
+      for (const state of ['inactive', 'delayed', 'failed', 'complete']) {
+        try {
+          // collect first, removing while iterating would shift the ranges
+          const jobs = [];
+          await deviceQueues.iterateJobs(state, (job) => { jobs.push(job); }, dev.machineId);
+          for (const job of jobs) {
+            await new Promise((resolve) => job.remove(() => resolve()));
+          }
+        } catch (err) {
+          logger.warn('Failed to remove queue jobs of deleted device', {
+            params: { machineId: dev.machineId, state, err: err.message }
+          });
+        }
+      }
+      // kue keeps a per-type (per-machineId) list and a set of known types,
+      // drop them as well so nothing of the device is left in redis
+      const client = deviceQueues.queue && deviceQueues.queue.client;
+      if (client && dev.machineId) {
+        await new Promise((resolve) => {
+          client.multi()
+            .del(client.getKey(`${dev.machineId}:jobs`))
+            .srem(client.getKey('job:types'), dev.machineId)
+            .exec((err) => {
+              if (err) {
+                logger.warn('Failed to remove queue keys of deleted device', {
+                  params: { machineId: dev.machineId, err: err.message }
+                });
+              }
+              resolve();
+            });
+        });
+      }
+    }
+  }
+
+  /**
    * Delete all devices matched the filters
    *
    * no response value expected for this operation
@@ -1489,6 +1554,7 @@ class DevicesService {
       for (const dev of delDevices) {
         connections.deviceDisconnect(dev.machineId);
       }
+      await DevicesService.cleanupDeletedDevicesData(delDevices);
 
       logger.info('Delete devices by filter success', {
         params: {
@@ -1593,6 +1659,7 @@ class DevicesService {
       });
 
       connections.deviceDisconnect(delDevice.machineId);
+      await DevicesService.cleanupDeletedDevicesData([delDevice]);
 
       logger.info('Device by ID deleted successfully', {
         params: {

@@ -175,7 +175,7 @@ organizationsRouter.route('/summary')
       if (!orgId) {
         return res.status(200).json({
           devices: { total: 0, running: 0, connected: 0, approved: 0 },
-          tunnels: { total: 0, active: 0 },
+          tunnels: { total: 0, active: 0, connected: 0, notConnected: 0, pending: 0, unknown: 0 },
           traffic: { total: 0, unit: 'MBytes', totalBytes: 0, lastUpdate: null }
         });
       }
@@ -196,11 +196,30 @@ organizationsRouter.route('/summary')
       });
 
       // Get tunnel statistics
-      const totalTunnels = await tunnels.countDocuments({ org: orgId });
-      const activeTunnels = await tunnels.countDocuments({
-        org: orgId,
-        isActive: true
-      });
+      // Deleted tunnels are kept with isActive=false (their numbers are reused),
+      // so only active tunnels count. Classify them like upstream flexiManage:
+      //   unknown      - one of the devices is not connected
+      //   pending      - devices connected, tunnel is pending
+      //   connected    - devices connected, not pending, status up
+      //   notConnected - devices connected, not pending, status not up
+      const activeTunnelList = await tunnels.find({ org: orgId, isActive: true })
+        .select('deviceA deviceB isPending status').lean();
+      const tunnelDevIds = [...new Set(activeTunnelList
+        .flatMap(t => [t.deviceA, t.deviceB]).filter(Boolean).map(String))];
+      const connectedTunnelDevs = new Set((await devices.find({
+        _id: { $in: tunnelDevIds }, isConnected: true
+      }).select('_id').lean()).map(d => String(d._id)));
+      const tunnelStats = { connected: 0, notConnected: 0, pending: 0, unknown: 0 };
+      for (const t of activeTunnelList) {
+        // deviceB is empty for peer tunnels
+        const devs = [t.deviceA, t.deviceB].filter(Boolean).map(String);
+        if (devs.some(d => !connectedTunnelDevs.has(d))) tunnelStats.unknown++;
+        else if (t.isPending) tunnelStats.pending++;
+        else if (t.status === 'up') tunnelStats.connected++;
+        else tunnelStats.notConnected++;
+      }
+      const totalTunnels = activeTunnelList.length;
+      const activeTunnels = totalTunnels;
 
       // Get traffic statistics from deviceStats collection
       // Query the latest stats for each device in the organization
@@ -304,7 +323,8 @@ organizationsRouter.route('/summary')
         },
         tunnels: {
           total: totalTunnels,
-          active: activeTunnels
+          active: activeTunnels,
+          ...tunnelStats
         },
         traffic: {
           total: parseFloat(total),

@@ -117,14 +117,13 @@ const Home = () => {
         warning: 0 // Placeholder as logic for warning isn't specified
       });
 
-      const tunnelTotal = data.tunnels?.total || 0;
-      const tunnelActive = data.tunnels?.active || 0;
-      
+      // Backend counts only active (not deleted) tunnels and classifies them
+      const tunnels = data.tunnels || {};
       setTunnelStats({
-        connected: tunnelActive,
-        notConnected: Math.max(0, tunnelTotal - tunnelActive),
-        pending: 0,
-        unknown: 0
+        connected: tunnels.connected || 0,
+        notConnected: tunnels.notConnected || 0,
+        pending: tunnels.pending || 0,
+        unknown: tunnels.unknown || 0
       });
 
       if (data.traffic) {

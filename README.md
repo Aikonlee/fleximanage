@@ -36,7 +36,7 @@ Background workers (periodic jobs, device job queue, WebSocket device connection
 |---|---|
 | Node.js | v20.11.1 (nvm, `/root/.nvm/versions/node/v20.11.1`) |
 | Backend (`flexiwansite`) | v6.5.1 |
-| MongoDB | 8.0.15, 3-node replica set (ports 27017/27018/27019, systemd `mongod-2701x`) — transactions require the replica set |
+| MongoDB | 8.0.15, 3-node replica set (ports 27017/27018/27019, systemd `mongod-2701x`), **localhost only, authentication on** — transactions require the replica set |
 | Redis | 7.0.15 (127.0.0.1:6379, device job queue via kue, prefix `deviceq`) |
 | Process manager | systemd `fleximanage.service` → PM2 app `fleximanage-backend` (`pm2 start bin/www`) |
 | HTTPS | Served directly by Node on :3443 (HTTP on :3000); nginx is not in the request path |
@@ -86,6 +86,18 @@ System administrators are users with `admin: true` in the `users` collection (li
 # reset the admin@flexiwan.com password (also ensures it is verified and admin) — from the repo root
 node scripts/reset-admin-password.js '<new-password>'
 ```
+(`scripts/` is server-local and gitignored.)
+
+### MongoDB access
+
+Since 2026-11 the replica set listens on `127.0.0.1` only and requires authentication (members authenticate with the keyFile `/etc/mongodb/rs.key`; the `mongod-2701x` units pass `--bind_ip 127.0.0.1 --keyFile ...`). The `/etc/mongod-*.conf` files are **not** used by those units.
+
+- App user `fleximanage`: `readWrite` on `flexiwan`, `flexiwanAnalytics`, `flexibilling`, `flexivpn`. Its credentials are embedded in the `MONGO_*_URL` values in `backend/.env` (mode 600), with `&authSource=admin`.
+- Admin user `root`: credentials in `/root/.mongo-admin.cnf` (mode 600, never commit or paste it):
+  ```bash
+  source /root/.mongo-admin.cnf && mongosh "$MONGO_ADMIN_URI"
+  ```
+- Anything that talks to Mongo (scripts, migrations, mongodump) must use one of these credentials; `mongodump --uri "$MONGO_ADMIN_URI"` for backups.
 
 ### Register a user via API
 ```bash
@@ -150,7 +162,7 @@ To register a real (or virtual) flexiEdge router against this deployment for tes
 
 **API/CORS errors in the browser**: check the injected `baseUrl` (browser console), `corsWhiteList` in `configs.js`, DNS, and the TLS cert (`openssl s_client -connect manage.miwide.com:3443`).
 
-**Mongo errors**: confirm replica-set health with `rs.status()` on any node; connection strings live in `backend/configs.js`/`.env`.
+**Mongo errors**: confirm replica-set health with `rs.status()` (as root, see [MongoDB access](#mongodb-access)); connection strings live in `backend/.env`. `requires authentication` / `Authentication failed` means a client is missing the credentials.
 
 **A route "does nothing"**: check whether it's actually mounted in `expressserver.js` — see [Architecture](#architecture) above. `require()`-ing a route file successfully doesn't mean it's live.
 
@@ -165,6 +177,7 @@ To register a real (or virtual) flexiEdge router against this deployment for tes
 - **Device delete looked successful but wasn't**: the Devices page swallowed the backend's 400 ("All device tunnels must be deleted before deleting a device"). Failed actions are now reported per device.
 - **Device delete left data behind**: notifications, analytics stats and redis queue entries are now removed with the device (see [Device management](#device-management)). Leftovers from earlier deletes were cleaned up once.
 - **Home "Network Status" counted deleted tunnels** as "Not Connected": `routes/organizations.js` `/summary` now counts only active tunnels and returns `connected / notConnected / pending / unknown`.
+- **Security**: MongoDB was reachable from the internet without authentication; now bound to localhost with auth (see [MongoDB access](#mongodb-access)). Logs no longer record credentials: `utils/redact.js` masks password/secret/token/MFA fields in every winston log entry and in `logs/client-errors.log` (which used to store request bodies, including login passwords, verbatim — the existing file was scrubbed).
 - **Admin overview**: new `GET /api/admin/organizations` and the **Admin › All Organizations** page (see [Admin users](#admin-users)).
 - User profile page moved to the shared `PageHeader`; Devices page CSV export; legacy Account/account-Organizations pages retired (routes redirect).
 

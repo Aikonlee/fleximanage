@@ -23,6 +23,10 @@ const connections = require('../websocket/Connections')();
 const deviceStatus = require('../periodic/deviceStatus')();
 const usersModel = require('../models/users');
 const accountsModel = require('../models/accounts');
+const organizationsModel = require('../models/organizations');
+const { devices: devicesModel } = require('../models/devices');
+const tunnelsModel = require('../models/tunnels');
+const createError = require('http-errors');
 const flexibilling = require('../flexibilling');
 const { deviceAggregateStats } = require('../models/analytics/deviceStats');
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
@@ -290,6 +294,148 @@ adminRouter
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     return res.json(result);
+  });
+
+/**
+ * Admin only: all accounts and organizations in the system with the devices
+ * installed in each organization. Read-only overview, not limited to the
+ * organizations of the admin's own account.
+ */
+adminRouter
+  .route('/organizations')
+  .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
+  .get(cors.corsWithOptions, auth.verifyAdmin, async (req, res, next) => {
+    try {
+      const [accounts, orgs, devs, tunnelCounts, users] = await Promise.all([
+        accountsModel.find({}, { name: 1, country: 1, companySize: 1, createdAt: 1 }).lean(),
+        organizationsModel.find({}, { name: 1, description: 1, group: 1, account: 1, createdAt: 1 })
+          .lean(),
+        devicesModel.find({}, {
+          org: 1,
+          account: 1,
+          name: 1,
+          description: 1,
+          hostname: 1,
+          machineId: 1,
+          serial: 1,
+          isApproved: 1,
+          isConnected: 1,
+          versions: 1,
+          ipList: 1,
+          'interfaces.name': 1,
+          'interfaces.type': 1,
+          'interfaces.IPv4': 1,
+          'interfaces.PublicIP': 1,
+          'interfaces.isAssigned': 1,
+          distro: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }).lean(),
+        tunnelsModel.aggregate([
+          { $match: { isActive: true } },
+          { $group: { _id: '$org', count: { $sum: 1 } } }
+        ]),
+        usersModel.find({}, { username: 1, defaultAccount: 1 }).lean()
+      ]);
+
+      const tunnelsByOrg = {};
+      tunnelCounts.forEach(t => { tunnelsByOrg[String(t._id)] = t.count; });
+      const usersByAccount = {};
+      users.forEach(u => {
+        const a = String(u.defaultAccount || '');
+        (usersByAccount[a] = usersByAccount[a] || []).push(u.username);
+      });
+
+      const toDevice = (d) => {
+        const status = d.machineId ? deviceStatus.getDeviceStatus(d.machineId) : null;
+        const wan = (d.interfaces || []).filter(i => i.type === 'WAN' && i.isAssigned);
+        return {
+          _id: d._id,
+          name: d.name,
+          description: d.description,
+          hostname: d.hostname,
+          machineId: d.machineId,
+          serial: d.serial,
+          isApproved: !!d.isApproved,
+          isConnected: !!d.isConnected,
+          state: status && status.state ? status.state : (d.isConnected ? 'unknown' : 'offline'),
+          versions: d.versions || {},
+          ipList: d.ipList || '',
+          publicIPs: [...new Set(wan.map(i => i.PublicIP).filter(Boolean))],
+          distro: d.distro || null,
+          createdAt: d.createdAt,
+          updatedAt: d.updatedAt
+        };
+      };
+
+      const devicesByOrg = {};
+      devs.forEach(d => {
+        const o = String(d.org);
+        (devicesByOrg[o] = devicesByOrg[o] || []).push(toDevice(d));
+      });
+
+      const orgIds = new Set(orgs.map(o => String(o._id)));
+      const accountIds = new Set(accounts.map(a => String(a._id)));
+      const toOrg = (o, deleted = false) => {
+        const list = devicesByOrg[String(o._id)] || [];
+        return {
+          _id: o._id,
+          name: o.name,
+          description: o.description || '',
+          group: o.group || '',
+          createdAt: o.createdAt,
+          deleted,
+          tunnels: tunnelsByOrg[String(o._id)] || 0,
+          devicesCount: list.length,
+          connectedCount: list.filter(d => d.isConnected).length,
+          approvedCount: list.filter(d => d.isApproved).length,
+          devices: list
+        };
+      };
+
+      const result = accounts.map(a => ({
+        _id: a._id,
+        name: a.name,
+        country: a.country,
+        createdAt: a.createdAt,
+        users: usersByAccount[String(a._id)] || [],
+        organizations: orgs.filter(o => String(o.account) === String(a._id)).map(o => toOrg(o))
+      }));
+
+      // organizations whose account no longer exists
+      const lostOrgs = orgs.filter(o => !accountIds.has(String(o.account)));
+      // devices whose organization no longer exists
+      const orphanDevOrgs = Object.keys(devicesByOrg).filter(o => !orgIds.has(o));
+      if (lostOrgs.length || orphanDevOrgs.length) {
+        result.push({
+          _id: null,
+          name: 'Unknown (Deleted)',
+          users: [],
+          organizations: [
+            ...lostOrgs.map(o => toOrg(o)),
+            ...orphanDevOrgs.map(o => toOrg({ _id: o, name: 'Unknown (Deleted)' }, true))
+          ]
+        });
+      }
+
+      const allDevices = devs.length;
+      return res.status(200).json({
+        summary: {
+          accounts: accounts.length,
+          organizations: orgs.length,
+          devices: allDevices,
+          connected: devs.filter(d => d.isConnected).length,
+          approved: devs.filter(d => d.isApproved).length,
+          tunnels: tunnelCounts.reduce((s, t) => s + t.count, 0)
+        },
+        accounts: result
+      });
+    } catch (err) {
+      logger.error('Failed to get admin organizations overview', {
+        params: { err: err.message }
+      });
+      return next(createError(500, 'Failed to get organizations overview'));
+    }
   });
 
 // Default exports

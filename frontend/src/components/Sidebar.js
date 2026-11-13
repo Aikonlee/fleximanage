@@ -13,7 +13,8 @@ import {
   FaStore,
   FaShieldAlt,
   FaChartBar,
-  FaWrench
+  FaWrench,
+  FaUserShield
 } from 'react-icons/fa';
 import { decodeJwtPayload, extractPerms, hasViewPermission } from '../auth/permissions';
 import './Sidebar.css';
@@ -22,12 +23,13 @@ const Sidebar = ({ collapsed }) => {
   // Default: all groups collapsed
   const [openSections, setOpenSections] = useState({
     account: false, inventory: false, traffic: false, security: false,
-    dashboards: false, troubleshoot: false
+    dashboards: false, troubleshoot: false, admin: false
   });
 
   // Get current user permissions
   const token = localStorage.getItem('token');
   const perms = token ? extractPerms(decodeJwtPayload(token)) : {};
+  const isAdmin = token ? !!decodeJwtPayload(token)?.admin : false;
   const orgName = token ? (decodeJwtPayload(token)?.orgName || decodeJwtPayload(token)?.org_name) : null;
 
   const toggleSection = (key) => {
@@ -110,6 +112,16 @@ const Sidebar = ({ collapsed }) => {
         { path: '/troubleshoot/notifications', label: 'Notifications', permKey: 'notifications' },
       ]
     },
+    {
+      type: 'group',
+      key: 'admin',
+      icon: <FaUserShield />,
+      label: 'Admin',
+      adminOnly: true,
+      children: [
+        { path: '/admin/organizations', label: 'All Organizations' }
+      ]
+    },
     { type: 'item', path: '/about', icon: <FaInfoCircle />, label: 'About' },
   ];
 
@@ -126,6 +138,7 @@ const Sidebar = ({ collapsed }) => {
       )}
       <Nav className="flex-column sidebar-nav">
         {menuItems
+          .filter(item => !item.adminOnly || isAdmin)
           .filter(item => !item.permKey || hasViewPermission(perms, item.permKey))
           .map(item => {
           if (item.type === 'group') {

@@ -12,6 +12,7 @@ import AccountAccessKeys from './pages/account/AccessKeys';
 import AccountMembers from './pages/account/Members';
 import UserProfile from './pages/UserProfile';
 import Organizations from './pages/Organizations';
+import AdminOrganizations from './pages/admin/AdminOrganizations';
 import AddOrganization from './pages/AddOrganization';
 import EditOrganization from './pages/EditOrganization';
 import Devices from './pages/Devices';
@@ -52,6 +53,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [sidebarCollapsed] = useState(false); // legacy placeholder
   const [perms, setPerms] = useState({});
+  const [isAdmin, setIsAdmin] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -62,6 +64,7 @@ function App() {
       setIsAuthenticated(true);
       const payload = decodeJwtPayload(token);
       setPerms(extractPerms(payload));
+      setIsAdmin(!!payload?.admin);
     }
   }, []);
 
@@ -72,6 +75,7 @@ function App() {
     if (token) {
       const payload = decodeJwtPayload(token);
       setPerms(extractPerms(payload));
+      setIsAdmin(!!payload?.admin);
     }
     // If user was on /login (or any non-app path), send them to /home
     setTimeout(() => {
@@ -85,6 +89,7 @@ function App() {
     localStorage.removeItem('token');
     setIsAuthenticated(false);
     setPerms({});
+    setIsAdmin(false);
   };
 
   // Sidebar toggle removed from header; keeping state & logic placeholder if reintroduced later.
@@ -124,6 +129,7 @@ function App() {
             <Route path="/account/members" element={<Navigate to="/users" replace />} />
             <Route path="/account/access-keys" element={<Guard permKey="accesstokens" element={<AccountAccessKeys />} />} />
             <Route path="/organizations" element={<Guard permKey="organizations" element={<Organizations />} />} />
+            <Route path="/admin/organizations" element={isAdmin ? <AdminOrganizations /> : <Forbidden />} />
             <Route path="/organizations/add" element={<Guard permKey="organizations" element={<AddOrganization />} />} />
             <Route path="/organizations/edit/:id" element={<Guard permKey="organizations" element={<EditOrganization />} />} />
             <Route path="/devices" element={<Guard permKey="devices" element={<Devices />} />} />

@@ -140,8 +140,9 @@ const DeviceInfo = () => {
     }
 
     if (mapInstanceRef.current || !mapContainerRef.current) return undefined;
-    const lat = device.location?.lat || 51.505;
-    const lon = device.location?.lon || -0.09;
+    const coords = Array.isArray(device.coords) && device.coords.length === 2 ? device.coords : null;
+    const lat = coords ? coords[0] : (device.location?.lat ?? 40.416775);
+    const lon = coords ? coords[1] : (device.location?.lon ?? -3.70379);
     const zoom = 13;
 
     const map = L.map(mapContainerRef.current).setView([lat, lon], zoom);

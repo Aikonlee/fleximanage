@@ -237,7 +237,7 @@ const Home = () => {
         <div className="panel-body flex-row-center">
           <span className="traffic-label">Total</span>
           <span className="traffic-value">{trafficStats.total}</span>
-          <Link to="/traffic-dashboard" className="dashboard-link">Check traffic dashboard for more</Link>
+          <Link to="/dashboards/traffic" className="dashboard-link">Check traffic dashboard for more</Link>
         </div>
       </div>
 
@@ -245,7 +245,7 @@ const Home = () => {
       <div className="panel mt-4">
         <div className="panel-header">
           <span>World Map</span>
-          <Link to="/world-map-dashboard" className="dashboard-link ml-4 italic">Larger map in World Map dashboard</Link>
+          <Link to="/dashboards/world-map" className="dashboard-link ml-4 italic">Larger map in World Map dashboard</Link>
         </div>
         <div className="panel-body p-0">
            <div id="map"></div>

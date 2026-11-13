@@ -171,6 +171,37 @@ const Devices = () => {
 
   const isAllSelected = filteredDevices.length > 0 && filteredDevices.every(d => selectedDevices.has(d._id || d.id));
 
+  const handleExportCsv = () => {
+    const rowsToExport = selectedDevices.size > 0
+      ? filteredDevices.filter(d => selectedDevices.has(d._id || d.id))
+      : filteredDevices;
+    if (!rowsToExport.length) return;
+    const headers = ['Name', 'Hostname', 'Status', 'State', 'Sync', 'Approved', 'Version', 'Public IP', 'Description'];
+    const csvLines = [
+      headers.join(','),
+      ...rowsToExport.map(d => [
+        d.name || '',
+        d.hostname || '',
+        d.isConnected ? 'Connected' : 'Disconnected',
+        d.state || '',
+        d.sync?.state || '',
+        d.isApproved ? 'Yes' : 'No',
+        d.version || '',
+        d.PublicIP || '',
+        d.description || ''
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    ];
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `devices-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="devices-page">
       {/* Breadcrumb Navigation */}
@@ -269,7 +300,7 @@ const Devices = () => {
               <FaList />
             </button>
           </div>
-          <button className="btn-export-csv" title="Export CSV">
+          <button className="btn-export-csv" title="Export CSV" onClick={handleExportCsv}>
             <FaFileCsv />
           </button>
         </div>

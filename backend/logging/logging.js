@@ -24,6 +24,7 @@ const pick = require('lodash/pick');
 const kue = require('kue');
 const { createLogger, format, transports } = require('winston');
 const { combine, timestamp, json, colorize, printf } = format;
+const { redact } = require('../utils/redact');
 const maxLevelLength = 'verbose'.length; // Used for log header alignment
 
 // Env specific information
@@ -111,7 +112,16 @@ const createLogEntry = (info) => {
   return logEntry;
 };
 
+// Mask credentials (passwords, secrets, tokens, MFA codes...) in log params
+const redactParams = format(info => {
+  if (info.ctx && info.ctx.params) {
+    info.ctx = { ...info.ctx, params: redact(info.ctx.params) };
+  }
+  return info;
+});
+
 const fileLogFormat = combine(
+  redactParams(),
   format(info => {
     info = createLogEntry(info);
     return info;
@@ -121,6 +131,7 @@ const fileLogFormat = combine(
 );
 
 const consolLogFormat = combine(
+  redactParams(),
   format(info => {
     info.level =
             info.level.toUpperCase() +

@@ -29,6 +29,7 @@ const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
 const OpenApiValidator = require('express-openapi-validator');
 const openapiRouter = require('./utils/openapiRouter');
+const { redact } = require('./utils/redact');
 const WebSocket = require('ws');
 const connections = require('./websocket/Connections')();
 const broker = require('./broker/broker');
@@ -401,8 +402,8 @@ class ExpressServer {
             method: req.method,
             url: req.originalUrl || req.url,
             user: req.userId || (req.user && req.user.email) || '',
-            query: req.query || {},
-            body: req.body || {}
+            query: redact(req.query || {}),
+            body: redact(req.body || {})
           };
           const logPath = '/root/fleximanage/logs/client-errors.log';
           require('fs').appendFileSync(logPath, JSON.stringify(clientErrLog) + '\n');

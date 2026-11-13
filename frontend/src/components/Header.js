@@ -190,7 +190,7 @@ const Header = ({ onLogout }) => {
               <FaUser className="me-2" />
               Profile
             </Dropdown.Item>
-            <Dropdown.Item href="#settings">
+            <Dropdown.Item as={Link} to="/account/profile">
               <FaCog className="me-2" />
               Settings
             </Dropdown.Item>

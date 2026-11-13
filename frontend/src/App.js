@@ -5,9 +5,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Home from './pages/Home';
-import Account from './pages/Account';
 import AccountProfile from './pages/account/Profile';
-import AccountOrganizations from './pages/account/Organizations';
 import AccountNotificationsSettings from './pages/account/NotificationsSettings';
 import AccountBilling from './pages/account/Billing';
 import AccountAccessKeys from './pages/account/AccessKeys';
@@ -115,9 +113,9 @@ function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/home" element={<Home />} />
-            <Route path="/account" element={<Guard permKey="accounts" element={<Account />} />} />
+            <Route path="/account" element={<Navigate to="/account/profile" replace />} />
             <Route path="/account/profile" element={<Guard permKey="accounts" element={<AccountProfile />} />} />
-              <Route path="/account/organizations" element={<Guard permKey="organizations" element={<AccountOrganizations />} />} />
+              <Route path="/account/organizations" element={<Navigate to="/organizations" replace />} />
             <Route path="/account/notifications" element={<Guard permKey="notifications" element={<AccountNotificationsSettings />} />} />
             <Route path="/account/billing" element={<Guard permKey="billing" element={<AccountBilling />} />} />
             { /* Users page guarded by dedicated 'members' permission */ }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import PageHeader from '../components/common/PageHeader';
 import './UserProfile.css';
 
 // User Profile page
@@ -69,13 +70,12 @@ export default function UserProfile() {
   };
 
   return (
-    <div className="user-profile-page">
+    <div className="user-profile-page p-3 p-md-4">
       <div className="profile-container">
-        {/* 面包屑 */}
-        <div className="breadcrumb">User Profile</div>
-        
-        {/* 标题 */}
-        <h1>User Profile</h1>
+        <PageHeader
+          breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'User Profile' }]}
+          title="User Profile"
+        />
 
         {/* 加载状态 */}
         {loading && (

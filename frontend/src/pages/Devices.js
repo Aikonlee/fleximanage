@@ -88,6 +88,7 @@ const Devices = () => {
 
     if (action === 'delete' && !window.confirm(`Delete ${targets.length} device(s)?`)) return;
 
+    const failures = [];
     for (const id of targets) {
       try {
         if (action === 'delete') {
@@ -110,9 +111,15 @@ const Devices = () => {
         }
       } catch (err) {
         console.error(`Action ${action} failed for ${id}:`, err);
+        const dev = devices.find(d => (d._id || d.id) === id);
+        const reason = err.response?.data?.error || err.response?.data?.message || err.message;
+        failures.push(`${dev?.name || id}: ${reason}`);
       }
     }
     setShowActionsMenu(false);
+    if (failures.length > 0) {
+      alert(`Action "${action}" failed for ${failures.length} of ${targets.length} device(s):\n\n${failures.join('\n')}`);
+    }
     // Refresh after short delay
     setTimeout(() => {
         fetchDevices();

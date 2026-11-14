@@ -1,3 +1,4 @@
+import { useAuth } from '../../auth/AuthContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import api, { inferBaseURL } from '../../services/api';
@@ -9,6 +10,8 @@ import './WorldMap.css';
 const TILE_URL_TEMPLATE = `${inferBaseURL().replace(/\/+$/, '')}/public/tiles/{z}/{x}/{y}`;
 
 const WorldMapDashboard = () => {
+  const { can } = useAuth();
+  const canEdit = can('devices', 'put');
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -88,7 +91,7 @@ const WorldMapDashboard = () => {
         markersRef.current[device._id].setLatLng(coords);
         markersRef.current[device._id].setIcon(icon);
       } else {
-        const marker = L.marker(coords, { icon, draggable: true })
+        const marker = L.marker(coords, { icon, draggable: canEdit })
           .bindPopup(`<strong>${device.name || 'Unnamed device'}</strong><br/>${device.state === 'running' ? 'Running' : 'Stopped'} · ${device.isConnected ? 'Connected' : 'Not connected'}`)
           .addTo(map);
         marker.on('dragend', () => handleMarkerDragEnd(device, marker));
@@ -96,7 +99,7 @@ const WorldMapDashboard = () => {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [devices]);
+  }, [devices, canEdit]);
 
   return (
     <div className="page-container world-map-page">

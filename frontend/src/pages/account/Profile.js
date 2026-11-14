@@ -1,3 +1,5 @@
+import PermissionButton from '../../components/common/PermissionButton';
+import { setSessionToken } from '../../auth/session';
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../../services/api';
 import { sortCountries } from '../../constants/countries';
@@ -100,7 +102,7 @@ export default function AccountProfile () {
       setAcct(resp.data);
       // If backend returns updated token in Refresh-JWT header, persist it
       const newToken = resp.headers['refresh-jwt'] || resp.headers['Refresh-JWT'];
-      if (newToken) localStorage.setItem('token', newToken);
+      if (newToken) setSessionToken(newToken);
       setShowModal(false);
     } catch (e) {
       setError(e.response?.data?.error || e.message || 'Update failed');
@@ -113,7 +115,7 @@ export default function AccountProfile () {
         breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Account' }, { label: 'Profile' }]}
         title="Profile"
         actions={acct && (
-          <button className="btn btn-sm btn-primary shadow-sm" onClick={openEdit}>Update Profile</button>
+          <PermissionButton permKey="accounts" method={'put'} native className="btn btn-sm btn-primary shadow-sm" onClick={openEdit}>Update Profile</PermissionButton>
         )}
       />
 
@@ -195,7 +197,7 @@ export default function AccountProfile () {
                   </div>
                   <div className="modal-footer border-top bg-light">
                     <button type="button" className="btn btn-outline-secondary" onClick={() => setShowModal(false)} disabled={saving}>Cancel</button>
-                    <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
+                    <PermissionButton permKey="accounts" method={'put'} native type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</PermissionButton>
                   </div>
                 </form>
               </div>

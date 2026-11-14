@@ -1,7 +1,7 @@
 // Frontend configuration
 const config = {
   // Backend API endpoint
-  apiUrl: process.env.REACT_APP_API_URL || 'https://localhost:3443',
+  apiUrl: process.env.REACT_APP_API_URL || '/api',
   
   // WebSocket endpoint for real-time updates
   wsUrl: process.env.REACT_APP_WS_URL || 'wss://localhost:3443',
@@ -31,7 +31,7 @@ const config = {
   defaultPageSize: 10,
   
   // Token storage key
-  tokenKey: 'fleximanage_token',
+  tokenKey: 'token',
   
   // Enable debug mode in development
   debug: process.env.NODE_ENV === 'development'

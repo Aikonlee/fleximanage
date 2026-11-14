@@ -1,3 +1,4 @@
+import { setSessionToken } from '../auth/session';
 import React, { useState, useEffect, useRef } from 'react';
 import { BRAND_NAME } from '../constants/branding';
 import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
@@ -174,7 +175,7 @@ const Login = ({ onLogin }) => {
 
       const finalToken = response.data?.token || response.headers['refresh-jwt'] || response.headers['Refresh-JWT'];
       if (finalToken) {
-        localStorage.setItem('token', finalToken);
+        setSessionToken(finalToken);
         if (response.data?.refreshToken) {
           localStorage.setItem('refreshToken', response.data.refreshToken);
         }

@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Form, Button, Alert, Row, Col } from 'react-bootstrap';
@@ -245,7 +246,7 @@ const EditOrganization = () => {
             </Form.Group>
 
             <div className="d-flex gap-3">
-              <Button 
+              <PermissionButton permKey="organizations" method={'put'}
                 type="submit" 
                 variant="primary" 
                 disabled={saving}
@@ -253,7 +254,7 @@ const EditOrganization = () => {
               >
                 <FaSave className="me-2" />
                 {saving ? 'Saving...' : 'Save Changes'}
-              </Button>
+              </PermissionButton>
               
               <Button 
                 type="button" 

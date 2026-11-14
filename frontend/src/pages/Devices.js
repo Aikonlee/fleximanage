@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Form, OverlayTrigger, Tooltip, Modal, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
@@ -251,16 +252,16 @@ const Devices = () => {
             {/* Replicated Actions Menu */}
             <div className={`actions-menu ${showActionsMenu ? 'show' : ''}`}>
               <div className="menu-group">
-                <button className="menu-item" onClick={() => performAction('start')}>Start Device</button>
-                <button className="menu-item" onClick={() => performAction('stop')}>Stop Device</button>
-                <button className="menu-item" onClick={() => performAction('reset')}>Reset Device</button>
-                <button className="menu-item text-danger" onClick={() => performAction('delete')}>Delete Selected Device</button>
+                <PermissionButton permKey="devices" method={'post'} native className="menu-item" onClick={() => performAction('start')}>Start Device</PermissionButton>
+                <PermissionButton permKey="devices" method={'post'} native className="menu-item" onClick={() => performAction('stop')}>Stop Device</PermissionButton>
+                <PermissionButton permKey="devices" method={'post'} native className="menu-item" onClick={() => performAction('reset')}>Reset Device</PermissionButton>
+                <PermissionButton permKey="devices" method={'delete'} native className="menu-item text-danger" onClick={() => performAction('delete')}>Delete Selected Device</PermissionButton>
               </div>
               
               <hr className="menu-divider" />
               <div className="menu-group">
                 <div className="menu-header">Create Tunnels</div>
-                <button className="menu-item" onClick={handleCreateTunnelsClick}>Create Peer Connection</button>
+                <PermissionButton permKey="devices" method={'post'} native className="menu-item" onClick={handleCreateTunnelsClick}>Create Peer Connection</PermissionButton>
               </div>
 
               <hr className="menu-divider" />
@@ -271,7 +272,7 @@ const Devices = () => {
 
               <hr className="menu-divider" />
               <div className="menu-group">
-                <button className="menu-item" onClick={() => performAction('sync')}>Sync Device</button>
+                <PermissionButton permKey="devices" method={'post'} native className="menu-item" onClick={() => performAction('sync')}>Sync Device</PermissionButton>
               </div>
             </div>
           </div>
@@ -347,24 +348,24 @@ const Devices = () => {
                   {/* Action Icons */}
                   <div className="device-card-actions-template">
                     <OverlayTrigger overlay={<Tooltip>Start</Tooltip>}>
-                      <button className="btn-icon-play" onClick={() => performAction('start', id)} disabled={!isOnline || isRunning}>
+                      <PermissionButton permKey="devices" method={'post'} native className="btn-icon-play" onClick={() => performAction('start', id)} disabled={!isOnline || isRunning}>
                         <FaPlay className="text-xxs" />
-                      </button>
+                      </PermissionButton>
                     </OverlayTrigger>
                     <OverlayTrigger overlay={<Tooltip>Stop</Tooltip>}>
-                      <button className="btn-icon-stop" onClick={() => performAction('stop', id)} disabled={!isOnline || !isRunning}>
+                      <PermissionButton permKey="devices" method={'post'} native className="btn-icon-stop" onClick={() => performAction('stop', id)} disabled={!isOnline || !isRunning}>
                         <FaStop className="text-xxs" />
-                      </button>
+                      </PermissionButton>
                     </OverlayTrigger>
                     <OverlayTrigger overlay={<Tooltip>Sync</Tooltip>}>
-                      <button className="btn-icon-sync" onClick={() => performAction('sync', id)} disabled={!isOnline}>
+                      <PermissionButton permKey="devices" method={'post'} native className="btn-icon-sync" onClick={() => performAction('sync', id)} disabled={!isOnline}>
                         <FaSyncAlt className="text-xxs" />
-                      </button>
+                      </PermissionButton>
                     </OverlayTrigger>
                     <OverlayTrigger overlay={<Tooltip>Delete</Tooltip>}>
-                      <button className="btn-icon-trash" onClick={() => performAction('delete', id)}>
+                      <PermissionButton permKey="devices" method={'delete'} native className="btn-icon-trash" onClick={() => performAction('delete', id)}>
                         <FaTrashAlt className="text-xxs" />
-                      </button>
+                      </PermissionButton>
                     </OverlayTrigger>
                   </div>
                 </div>
@@ -432,9 +433,9 @@ const Devices = () => {
           <Button variant="link" className="text-muted text-decoration-none" onClick={() => setShowTunnelModal(false)} disabled={creatingTunnels}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleCreateTunnelsSubmit} disabled={creatingTunnels} className="px-4">
+          <PermissionButton permKey="devices" method={'post'} variant="primary" onClick={handleCreateTunnelsSubmit} disabled={creatingTunnels} className="px-4">
             {creatingTunnels ? 'Creating...' : 'Create Tunnels'}
-          </Button>
+          </PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

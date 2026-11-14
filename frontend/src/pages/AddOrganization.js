@@ -1,3 +1,5 @@
+import PermissionButton from '../components/common/PermissionButton';
+import { setSessionToken } from '../auth/session';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Form, Button, Alert, Row, Col } from 'react-bootstrap';
@@ -77,7 +79,7 @@ const AddOrganization = () => {
           const newToken = setOrgResponse.headers['refresh-jwt'] || 
                           setOrgResponse.headers['Refresh-JWT'];
           if (newToken) {
-            localStorage.setItem('token', newToken);
+            setSessionToken(newToken);
           }
           
           setSuccess('Organization created and set as current successfully!');
@@ -233,7 +235,7 @@ const AddOrganization = () => {
             </Form.Group>
 
             <div className="d-flex gap-3">
-              <Button 
+              <PermissionButton permKey="organizations" method={'post'}
                 type="submit" 
                 variant="primary" 
                 disabled={loading}
@@ -241,7 +243,7 @@ const AddOrganization = () => {
               >
                 <FaPlus className="me-2" />
                 {loading ? 'Adding...' : 'Add'}
-              </Button>
+              </PermissionButton>
               
               <Button 
                 type="button" 

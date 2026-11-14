@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Form, Row, Col, Alert } from 'react-bootstrap';
@@ -94,7 +95,7 @@ const IpsecPeeringEditor = () => {
         actions={
           <>
             <button className="btn-icon-action" onClick={() => navigate('/ipsec-peering')} title="Back"><FaArrowLeft /></button>
-            <Button variant="primary" onClick={handleSave} disabled={saving || !form.name || !form.remoteIP}>{saving ? 'Saving...' : 'Save Peer'}</Button>
+            <PermissionButton permKey="peers" method={isNew ? 'post' : 'put'} variant="primary" onClick={handleSave} disabled={saving || !form.name || !form.remoteIP}>{saving ? 'Saving...' : 'Save Peer'}</PermissionButton>
           </>
         }
       />

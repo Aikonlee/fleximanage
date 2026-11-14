@@ -1,5 +1,6 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Alert } from 'react-bootstrap';
+import { Alert } from 'react-bootstrap';
 import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
@@ -47,12 +48,12 @@ const IpsecPeering = () => {
       label: 'Actions',
       render: (row) => (
         <div className="action-buttons">
-          <Button variant="link" size="sm" onClick={() => navigate(`/ipsec-peering/${row._id}`)} title="Edit">
+          <PermissionButton permKey="peers" method={'put'} variant="link" size="sm" onClick={() => navigate(`/ipsec-peering/${row._id}`)} title="Edit">
             <FaEdit />
-          </Button>
-          <Button variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
+          </PermissionButton>
+          <PermissionButton permKey="peers" method={'delete'} variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
             <FaTrash />
-          </Button>
+          </PermissionButton>
         </div>
       ),
     },
@@ -72,9 +73,9 @@ const IpsecPeering = () => {
           columns={columns}
           rows={peers}
           actions={
-            <Button variant="primary" onClick={() => navigate('/ipsec-peering/new')}>
+            <PermissionButton permKey="peers" method={'post'} variant="primary" onClick={() => navigate('/ipsec-peering/new')}>
               <FaPlus className="me-2" /> New Peer
-            </Button>
+            </PermissionButton>
           }
           emptyMessage="No IPsec peers configured yet. Peer connections appear in the Tunnels inventory once created."
         />

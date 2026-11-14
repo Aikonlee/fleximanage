@@ -1,6 +1,7 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button, Form, Row, Col, Alert } from 'react-bootstrap';
+import { Form, Row, Col, Alert } from 'react-bootstrap';
 import { FaArrowLeft } from 'react-icons/fa';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
@@ -24,7 +25,7 @@ const DEFAULT_OUTBOUND = {
   'control-signaling': { weight: 30, dscpRewrite: 'CS0' },
   'prime-select': { weight: 20, dscpRewrite: 'CS0' },
   'standard-select': { weight: 15, dscpRewrite: 'CS0' },
-  'best-effort': { weight: 5, dscpRewrite: 'CS0' },
+  'best-effort': { weight: 10, dscpRewrite: 'CS0' },
 };
 
 const DEFAULT_INBOUND = { policerBandwidthLimitPercent: { high: 100, medium: 80, low: 65 } };
@@ -95,7 +96,7 @@ const QoSEditor = () => {
         actions={
           <>
             <button className="btn-icon-action" onClick={() => navigate('/qos')} title="Back"><FaArrowLeft /></button>
-            <Button variant="primary" onClick={handleSave} disabled={saving || !name}>{saving ? 'Saving...' : 'Save Policy'}</Button>
+            <PermissionButton permKey="qospolicies" method={isNew ? 'post' : 'put'} variant="primary" onClick={handleSave} disabled={saving || !name}>{saving ? 'Saving...' : 'Save Policy'}</PermissionButton>
           </>
         }
       />

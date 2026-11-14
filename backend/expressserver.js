@@ -152,16 +152,40 @@ class ExpressServer {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net'],
-          styleSrc: ["'self'", 'https:', "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://challenges.cloudflare.com',
+            'https://cdn.jsdelivr.net'
+          ],
+          styleSrc: [
+            "'self'",
+            'https:',
+            "'unsafe-inline'",
+            'https://cdn.jsdelivr.net',
+            'https://cdnjs.cloudflare.com'
+          ],
           imgSrc: ["'self'", 'data:', 'https:'],
-          connectSrc: ["'self'", 'https://manage.miwide.com:3443', 'https://localhost:3443', 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+          connectSrc: [
+            "'self'",
+            'https://manage.miwide.com:3443',
+            'https://localhost:3443',
+            'https://challenges.cloudflare.com',
+            'https://cdn.jsdelivr.net',
+            'https://cdnjs.cloudflare.com'
+          ],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
           formAction: ["'self'"],
           frameAncestors: ["'self'"],
-          fontSrc: ["'self'", 'https:', 'data:', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+          fontSrc: [
+            "'self'",
+            'https:',
+            'data:',
+            'https://cdn.jsdelivr.net',
+            'https://cdnjs.cloudflare.com'
+          ],
           mediaSrc: ["'self'"],
           workerSrc: ["'self'", 'blob:']
         }
@@ -225,6 +249,9 @@ class ExpressServer {
     this.app.use(express.urlencoded({ extended: false }));
     this.app.use(cookieParser());
 
+    // Retired authentication helpers must not fall through to static files or the SPA.
+    this.app.get(['/direct-login.html', '/fix-auth.html'], (req, res) => res.sendStatus(410));
+
     // Routes allowed without authentication
     this.app.get('/', (req, res) => this.sendIndexFile(req, res));
     this.app.use(express.static(path.join(__dirname, configs.get('clientStaticDir'))));
@@ -277,7 +304,9 @@ class ExpressServer {
           payload.upgradeDeadline = latest.versionDeadline;
         }
       } catch (err) {
-        logger.warn('Failed to fetch latest device software version', { params: { err: err.message } });
+        logger.warn('Failed to fetch latest device software version', {
+          params: { err: err.message }
+        });
       }
       res.json(payload);
     });
@@ -334,15 +363,15 @@ class ExpressServer {
         ? origIndex.replace('<title>flexiWAN Management</title>',
           `<title>${configs.get('companyName')} Management</title>`)
         : origIndex;
-      
+
       // Try to match the old format first
       let m = modifiedIndex.match(/const __FLEXIWAN_SERVER_CONFIG__=({.*?});?/);
-      
+
       // If not found, try the new window format
       if (!m || m.length === 0) {
         m = modifiedIndex.match(/window\.__FLEXIWAN_SERVER_CONFIG__\s*=\s*({.*?});?/);
       }
-      
+
       if (m instanceof Array && m.length > 0) { // successful match
         try {
           // eslint-disable-next-line no-eval
@@ -352,13 +381,17 @@ class ExpressServer {
             newConfig[c] = clientConfig[c];
           }
           const serialized = serialize(newConfig, { isJSON: true });
-          
+
           // Replace with new format (window object)
           if (m[0].includes('window.')) {
-            modifiedIndex = modifiedIndex.replace(m[0], 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';');
+            modifiedIndex = modifiedIndex.replace(
+              m[0], 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';'
+            );
           } else {
             // Replace old const format with new window format
-            modifiedIndex = modifiedIndex.replace(m[0], 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';');
+            modifiedIndex = modifiedIndex.replace(
+              m[0], 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';'
+            );
           }
         } catch (e) {
           logger.warn('Failed to parse/replace server config:', { error: e.message });

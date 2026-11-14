@@ -54,3 +54,7 @@ frontend/build/
 # myself readme
 docs/
 scripts/
+# Frontend CI cache and local integration credentials/results
+frontend/.npm/
+frontend/e2e/fixture-state.json*
+frontend/e2e/results.json

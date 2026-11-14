@@ -1,5 +1,6 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Alert } from 'react-bootstrap';
+import { Alert } from 'react-bootstrap';
 import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
@@ -47,12 +48,12 @@ const FirewallPolicies = () => {
       label: 'Actions',
       render: (row) => (
         <div className="action-buttons">
-          <Button variant="link" size="sm" onClick={() => navigate(`/firewall-policies/${row._id}`)} title="Edit">
+          <PermissionButton permKey="firewallpolicies" method={'put'} variant="link" size="sm" onClick={() => navigate(`/firewall-policies/${row._id}`)} title="Edit">
             <FaEdit />
-          </Button>
-          <Button variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
+          </PermissionButton>
+          <PermissionButton permKey="firewallpolicies" method={'delete'} variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
             <FaTrash />
-          </Button>
+          </PermissionButton>
         </div>
       ),
     },
@@ -72,9 +73,9 @@ const FirewallPolicies = () => {
           columns={columns}
           rows={policies}
           actions={
-            <Button variant="primary" onClick={() => navigate('/firewall-policies/new')}>
+            <PermissionButton permKey="firewallpolicies" method={'post'} variant="primary" onClick={() => navigate('/firewall-policies/new')}>
               <FaPlus className="me-2" /> New Firewall Policy
-            </Button>
+            </PermissionButton>
           }
           emptyMessage="No firewall policies configured yet."
         />

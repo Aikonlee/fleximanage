@@ -68,7 +68,7 @@ const Register = () => {
           sitekey: TURNSTILE_SITE_KEY,
           callback: (token) => { 
             setCaptchaToken(token); 
-            CAPTCHA_DEBUG && console.log('[captcha][register] token received', token ? token.substring(0, 8) + '...' : '(empty)'); 
+            CAPTCHA_DEBUG && console.log('[captcha][register] token received:', !!token);
           },
           'error-callback': (error) => {
             setCaptchaToken('');

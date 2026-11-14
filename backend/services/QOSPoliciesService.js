@@ -117,7 +117,9 @@ class QOSPoliciesService {
         .skip(offset)
         .limit(limit);
 
-      return Service.successResponse(qosPolicies);
+      // Lean queries retain ObjectIds; OpenAPI validates before JSON serialization.
+      const converted = qosPolicies.map(policy => ({ ...policy, _id: policy._id.toString() }));
+      return Service.successResponse(converted);
     } catch (e) {
       return Service.rejectResponse(
         e.message || 'Internal Server Error',

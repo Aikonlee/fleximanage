@@ -1,3 +1,5 @@
+import PermissionButton from '../components/common/PermissionButton';
+import { clearSession } from '../auth/session';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Badge, Button, Alert, Form } from 'react-bootstrap';
 import { FaRoute, FaTrash, FaSync, FaNetworkWired, FaExclamationTriangle } from 'react-icons/fa';
@@ -63,7 +65,7 @@ const Tunnels = () => {
       setLoading(false);
       
       if (error.response?.status === 401) {
-        localStorage.removeItem('token');
+        clearSession();
         navigate('/login');
       }
     }
@@ -346,15 +348,15 @@ const Tunnels = () => {
           <div className="d-flex gap-2">
             {selectedTunnels.size > 0 && (
               <>
-                <Button
+                <PermissionButton permKey="devices" method={'post'}
                   variant="danger"
                   onClick={handleBatchDelete}
                   className="d-flex align-items-center shadow-sm"
                 >
                   <FaTrash className="me-2" />
                   {`Delete tunnels (${selectedTunnels.size})`}
-                </Button>
-                <Button
+                </PermissionButton>
+                <PermissionButton permKey="devices" method={'put'}
                   variant="success"
                   onClick={handleBatchOspf}
                   disabled={batchOspfLoading}
@@ -362,7 +364,7 @@ const Tunnels = () => {
                 >
                   <FaNetworkWired className="me-2" />
                   {batchOspfLoading ? 'Configuring...' : `Batch OSPF (${selectedTunnels.size})`}
-                </Button>
+                </PermissionButton>
               </>
             )}
             <Button
@@ -532,7 +534,7 @@ const Tunnels = () => {
                         {getStatusBadge(tunnel)}
                       </td>
                       <td>
-                        <Button
+                        <PermissionButton permKey="devices" method={'post'}
                           variant="outline-danger"
                           size="sm"
                           onClick={() => handleDeleteTunnel(tunnel._id || tunnel.id)}
@@ -540,7 +542,7 @@ const Tunnels = () => {
                           className="btn-icon"
                         >
                           <FaTrash />
-                        </Button>
+                        </PermissionButton>
                       </td>
                     </tr>
                     );

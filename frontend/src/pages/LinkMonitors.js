@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Modal, Form, Button, Alert } from 'react-bootstrap';
 import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
@@ -94,8 +95,8 @@ const LinkMonitors = () => {
       label: 'Actions',
       render: (row) => (
         <div className="action-buttons">
-          <Button variant="link" size="sm" onClick={() => openEdit(row)} title="Edit"><FaEdit /></Button>
-          <Button variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete"><FaTrash /></Button>
+          <PermissionButton permKey="linkmonitors" method={'put'} variant="link" size="sm" onClick={() => openEdit(row)} title="Edit"><FaEdit /></PermissionButton>
+          <PermissionButton permKey="linkmonitors" method={'delete'} variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete"><FaTrash /></PermissionButton>
         </div>
       ),
     },
@@ -119,7 +120,7 @@ const LinkMonitors = () => {
         <DataTable
           columns={columns}
           rows={monitors}
-          actions={<Button variant="primary" onClick={openCreate}><FaPlus className="me-2" /> New Link Monitor</Button>}
+          actions={<PermissionButton permKey="linkmonitors" method={'post'} variant="primary" onClick={openCreate}><FaPlus className="me-2" /> New Link Monitor</PermissionButton>}
           emptyMessage="No link monitors configured yet."
         />
       )}
@@ -148,7 +149,7 @@ const LinkMonitors = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave} disabled={saving || !form.name}>{saving ? 'Saving...' : 'Save'}</Button>
+          <PermissionButton permKey="linkmonitors" method={editingId ? 'put' : 'post'} variant="primary" onClick={handleSave} disabled={saving || !form.name}>{saving ? 'Saving...' : 'Save'}</PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

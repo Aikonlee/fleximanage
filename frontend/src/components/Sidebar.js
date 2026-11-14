@@ -16,7 +16,8 @@ import {
   FaWrench,
   FaUserShield
 } from 'react-icons/fa';
-import { decodeJwtPayload, extractPerms, hasViewPermission } from '../auth/permissions';
+import { hasViewPermission } from '../auth/permissions';
+import { useAuth } from '../auth/AuthContext';
 import './Sidebar.css';
 
 const Sidebar = ({ collapsed }) => {
@@ -27,10 +28,7 @@ const Sidebar = ({ collapsed }) => {
   });
 
   // Get current user permissions
-  const token = localStorage.getItem('token');
-  const perms = token ? extractPerms(decodeJwtPayload(token)) : {};
-  const isAdmin = token ? !!decodeJwtPayload(token)?.admin : false;
-  const orgName = token ? (decodeJwtPayload(token)?.orgName || decodeJwtPayload(token)?.org_name) : null;
+  const { perms, isAdmin, orgName } = useAuth();
 
   const toggleSection = (key) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -61,7 +59,7 @@ const Sidebar = ({ collapsed }) => {
       label: 'Inventory',
       children: [
         { path: '/devices', label: 'Devices', permKey: 'devices' },
-        { path: '/tokens', label: 'Tokens', permKey: 'accesstokens' }
+        { path: '/tokens', label: 'Tokens', permKey: 'tokens' }
       ]
     },
     {
@@ -97,9 +95,9 @@ const Sidebar = ({ collapsed }) => {
       icon: <FaChartBar />,
       label: 'Dashboards',
       children: [
-        { path: '/dashboards/network', label: 'Network Connectivity' },
-        { path: '/dashboards/world-map', label: 'World Map' },
-        { path: '/dashboards/traffic', label: 'Traffic PPS/BPS' },
+        { path: '/dashboards/network', label: 'Network Connectivity', permKey: 'devices' },
+        { path: '/dashboards/world-map', label: 'World Map', permKey: 'devices' },
+        { path: '/dashboards/traffic', label: 'Traffic PPS/BPS', permKey: 'devices' },
       ]
     },
     {
@@ -108,7 +106,7 @@ const Sidebar = ({ collapsed }) => {
       icon: <FaWrench />,
       label: 'Troubleshoot',
       children: [
-        { path: '/device-upgrade', label: 'Device Upgrade' },
+        { path: '/device-upgrade', label: 'Device Upgrade', permKey: 'devices' },
         { path: '/troubleshoot/notifications', label: 'Notifications', permKey: 'notifications' },
       ]
     },

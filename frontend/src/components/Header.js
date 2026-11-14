@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Navbar, Nav, Dropdown } from 'react-bootstrap';
 import { FaUser, FaSignOutAlt, FaBell, FaCog, FaBars, FaGlobe } from 'react-icons/fa';
@@ -11,6 +12,9 @@ import './Header.css';
 const NOTIFICATIONS_PREVIEW_LIMIT = 8;
 
 const Header = ({ onLogout }) => {
+  const { payload, orgName, can } = useAuth();
+  const userLabel = payload?.email || payload?.username || 'User';
+  const canReadNotifications = can('notifications');
   const [notificationCount, setNotificationCount] = useState(0);
   const displayCount = notificationCount > 9 ? '9+' : notificationCount;
   const [locale, setLocaleState] = useState(getLocale());
@@ -18,22 +22,24 @@ const Header = ({ onLogout }) => {
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
 
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
+    if (!canReadNotifications) return;
     try {
       const res = await api.get('/notifications', { params: { status: 'unread', limit: 1 } });
       setNotificationCount(Number(res.headers['records-total']) || 0);
     } catch (e) {
       // Non-fatal - leave the badge at its last known value
     }
-  };
+  }, [canReadNotifications]);
 
   useEffect(() => {
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchUnreadCount]);
 
   const fetchRecentNotifications = async () => {
+    if (!can('notifications')) return;
     setNotificationsLoading(true);
     try {
       const res = await api.get('/notifications', {
@@ -53,6 +59,7 @@ const Header = ({ onLogout }) => {
   };
 
   const markNotificationRead = async (id) => {
+    if (!can('notifications', 'put')) return;
     setRecentNotifications((list) => list.filter((n) => n._id !== id));
     setNotificationCount((count) => Math.max(0, count - 1));
     try {
@@ -63,6 +70,7 @@ const Header = ({ onLogout }) => {
   };
 
   const markAllNotificationsRead = async () => {
+    if (!can('notifications', 'put')) return;
     setRecentNotifications([]);
     setNotificationCount(0);
     try {
@@ -73,21 +81,6 @@ const Header = ({ onLogout }) => {
     }
   };
 
-  // Parse token to get username/email + org name
-  let userLabel = 'User';
-  let orgName = '';
-  try {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const payloadB64 = token.split('.')[1];
-      if (payloadB64) {
-        const json = atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'));
-        const payload = JSON.parse(decodeURIComponent(escape(json)));
-        userLabel = payload.email || payload.username || 'User';
-        orgName = payload.orgName || payload.org_name || '';
-      }
-    }
-  } catch (e) {}
 
   const handleLocaleChange = (loc) => {
     setLocale(loc);
@@ -132,7 +125,7 @@ const Header = ({ onLogout }) => {
             <div className="notifications-menu-header">
               <span>Notifications</span>
               {recentNotifications.length > 0 && (
-                <button type="button" className="notifications-mark-all-btn" onClick={markAllNotificationsRead}>
+                <button type="button" className="notifications-mark-all-btn" disabled={!can('notifications', 'put')} onClick={markAllNotificationsRead}>
                   Mark all as read
                 </button>
               )}
@@ -147,7 +140,7 @@ const Header = ({ onLogout }) => {
                   type="button"
                   key={n._id}
                   className="notification-item"
-                  onClick={() => markNotificationRead(n._id)}
+                  disabled={!can('notifications', 'put')} onClick={() => markNotificationRead(n._id)}
                   title="Mark as read"
                 >
                   <div className="notification-item-title">

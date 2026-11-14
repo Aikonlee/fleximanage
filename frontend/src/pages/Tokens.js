@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useEffect, useState, useMemo } from 'react';
 import { FaKey, FaSync, FaPlus, FaCopy, FaTrash } from 'react-icons/fa';
 import api from '../services/api';
@@ -233,13 +234,13 @@ const Tokens = () => {
             </div>
             <div className="col-12 col-lg-3">
               <label className="form-label mb-1">&nbsp;</label>
-              <button 
+              <PermissionButton permKey="tokens" method="post" native
                 className="btn btn-primary btn-sm w-100" 
                 type="submit" 
                 disabled={creating}
               >
                 {creating ? 'Creating…' : 'Create'}
-              </button>
+              </PermissionButton>
             </div>
           </div>
           <div className="row mt-2">
@@ -309,14 +310,14 @@ const Tokens = () => {
                         >
                           {copiedToken === t.id ? 'Copied' : <FaCopy />}
                         </button>
-                        <button
+                        <PermissionButton permKey="tokens" method={'delete'} native
                           type="button"
                           className="btn btn-sm btn-outline-danger"
                           onClick={() => handleDelete(t.id)}
                           title="Delete Token"
                         >
                           <FaTrash />
-                        </button>
+                        </PermissionButton>
                       </div>
                     </td>
                   </tr>

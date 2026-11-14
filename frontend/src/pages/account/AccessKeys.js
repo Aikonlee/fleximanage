@@ -1,3 +1,4 @@
+import PermissionButton from '../../components/common/PermissionButton';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Button, Form, Alert, Row, Col } from 'react-bootstrap';
 import { FaKey, FaCopy, FaTrash, FaPlus, FaTimes } from 'react-icons/fa';
@@ -285,9 +286,9 @@ const AccountAccessKeys = () => {
                   </Form.Group>
                 </Col>
                 <Col md={2}>
-                  <Button type="submit" variant="primary" size="sm" className="w-100" disabled={creating}>
+                  <PermissionButton permKey="accesstokens" method={'post'} type="submit" variant="primary" size="sm" className="w-100" disabled={creating}>
                     {creating ? 'Adding...' : 'Create Key'}
-                  </Button>
+                  </PermissionButton>
                 </Col>
               </Row>
             </Form>
@@ -375,7 +376,7 @@ const AccountAccessKeys = () => {
                                 >
                                   {copiedKey === k.id ? 'Copied' : <FaCopy />}
                                 </Button>
-                                <Button
+                                <PermissionButton permKey="accesstokens" method={'delete'}
                                   variant="outline-danger"
                                   size="sm"
                                   onClick={async () => {
@@ -390,7 +391,7 @@ const AccountAccessKeys = () => {
                                   title="Delete"
                                 >
                                   <FaTrash />
-                                </Button>
+                                </PermissionButton>
                               </div>
                             </td>
                           </tr>

@@ -1,3 +1,5 @@
+import PermissionButton from '../components/common/PermissionButton';
+import { clearSession } from '../auth/session';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Badge, Modal, Form, Table, Button, Alert, Spinner, Row, Col } from 'react-bootstrap';
@@ -194,7 +196,7 @@ const DeviceInfo = () => {
       });
       return { ok: response.status >= 200 && response.status < 300, data: response.data, status: response.status };
     } catch (error) {
-      if (error.response?.status === 401) { localStorage.removeItem('token'); navigate('/login'); return null; }
+      if (error.response?.status === 401) { clearSession(); navigate('/login'); return null; }
       throw error;
     }
   }, [navigate]);
@@ -697,11 +699,11 @@ const DeviceInfo = () => {
       </div>
 
       <div className="action-buttons-bar">
-        <button className="btn-template btn-orange" onClick={handleUpdateDevice}>Update Device</button>
-        <button className="btn-template btn-green" onClick={() => performAction('start')} disabled={syncing || !isOnline || isRunning}><FaPlay className="small" /> Start Device</button>
-        <button className="btn-template btn-gray" style={{backgroundColor: '#ef4444'}} onClick={() => performAction('stop')} disabled={syncing || !isOnline || !isRunning}><FaStop className="small" /> Stop Device</button>
-        <button className="btn-template btn-gray" onClick={() => performAction('sync')} disabled={syncing || !isOnline}><FaSyncAlt className="small" /> Sync Device</button>
-        <button className="btn-template btn-gray" onClick={() => setShowHardwareModal(true)}><FaMicrochip className="small" /> Hardware Configuration</button>
+        <PermissionButton permKey="devices" method={'put'} native className="btn-template btn-orange" onClick={handleUpdateDevice}>Update Device</PermissionButton>
+        <PermissionButton permKey="devices" method={'post'} native className="btn-template btn-green" onClick={() => performAction('start')} disabled={syncing || !isOnline || isRunning}><FaPlay className="small" /> Start Device</PermissionButton>
+        <PermissionButton permKey="devices" method={'post'} native className="btn-template btn-gray" style={{backgroundColor: '#ef4444'}} onClick={() => performAction('stop')} disabled={syncing || !isOnline || !isRunning}><FaStop className="small" /> Stop Device</PermissionButton>
+        <PermissionButton permKey="devices" method={'post'} native className="btn-template btn-gray" onClick={() => performAction('sync')} disabled={syncing || !isOnline}><FaSyncAlt className="small" /> Sync Device</PermissionButton>
+        <PermissionButton permKey="devices" method={'put'} native className="btn-template btn-gray" onClick={() => setShowHardwareModal(true)}><FaMicrochip className="small" /> Hardware Configuration</PermissionButton>
       </div>
 
       {/* 3. Tabs Navigation */}
@@ -802,9 +804,9 @@ const DeviceInfo = () => {
                   return (
                     <tr key={iface._id || idx}>
                       <td className="text-center">
-                        <button className="btn-icon-action" onClick={() => setEditingInterface(iface)}>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-action" onClick={() => setEditingInterface(iface)}>
                           <FaCog />
-                        </button>
+                        </PermissionButton>
                       </td>
                       <td className="fw-bold text-dark">
                         <span className={`status-dot ${isUp ? 'bg-success' : 'bg-secondary'}`}></span>
@@ -860,7 +862,7 @@ const DeviceInfo = () => {
 
           <div className="d-flex justify-content-between align-items-center mt-4 mb-2">
             <h6 className="fw-bold mb-0">Edge Loopback</h6>
-            <Button variant="primary" size="sm" onClick={() => { setEdgeLoopbackForm({ name: '', ip: '' }); setShowEdgeLoopbackModal(true); }}>Add Edge Loopback</Button>
+            <PermissionButton permKey="devices" method={'put'} variant="primary" size="sm" onClick={() => { setEdgeLoopbackForm({ name: '', ip: '' }); setShowEdgeLoopbackModal(true); }}>Add Edge Loopback</PermissionButton>
           </div>
           <p className="text-muted small">An always-available local IP for this device, independent of LAN/WAN interface status, routable via OSPF.</p>
           <div className="table-container-template">
@@ -871,7 +873,7 @@ const DeviceInfo = () => {
                   <tr key={idx}>
                     <td className="fw-bold">{lb.name}</td>
                     <td>{lb.ip}</td>
-                    <td><button className="btn-icon-red" onClick={() => handleDeleteEdgeLoopback(idx)}><FaTrash /></button></td>
+                    <td><PermissionButton permKey="devices" method={'put'} native className="btn-icon-red" onClick={() => handleDeleteEdgeLoopback(idx)}><FaTrash /></PermissionButton></td>
                   </tr>
                 )) : (
                   <tr><td colSpan="3" className="text-center text-muted py-4">No edge loopback configured.</td></tr>
@@ -884,12 +886,12 @@ const DeviceInfo = () => {
 
         {activeTab === 'configuration' && currentSubTab === 'static-routes' && (
           <div className="p-4 bg-white border border-gray-300 rounded shadow-sm">
-            <div className="d-flex justify-content-between align-items-center mb-3"><h5 className="mb-0 fw-bold">Static Routing Table</h5><Button variant="primary" size="sm" onClick={() => { setEditingRoute(null); setRouteForm({ destination: '', gateway: '', ifname: '', metric: '', redistributeViaOSPF: false, redistributeViaBGP: false, onLink: false, conditions: [] }); setShowRouteModal(true); }}>Add Route</Button></div>
+            <div className="d-flex justify-content-between align-items-center mb-3"><h5 className="mb-0 fw-bold">Static Routing Table</h5><PermissionButton permKey="devices" method={'post'} variant="primary" size="sm" onClick={() => { setEditingRoute(null); setRouteForm({ destination: '', gateway: '', ifname: '', metric: '', redistributeViaOSPF: false, redistributeViaBGP: false, onLink: false, conditions: [] }); setShowRouteModal(true); }}>Add Route</PermissionButton></div>
             <Table hover responsive className="custom-table-template">
               <thead><tr><th>Route</th><th>Redistribution</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
                 {staticRoutes.map((route, i) => (
-                  <tr key={route._id || i}><td><strong>Dest:</strong> <code>{route.destination}</code><br/><strong>GW:</strong> <code>{route.gateway}</code></td><td>{route.redistributeViaOSPF && <Badge bg="info" className="me-1">OSPF</Badge>} {route.redistributeViaBGP && <Badge bg="info">BGP</Badge>}</td><td><Badge bg={route.status === 'complete' ? 'success' : 'warning'}>{route.status || 'pending'}</Badge></td><td><Button variant="outline-primary" size="sm" className="me-1" onClick={() => { setEditingRoute(route); setRouteForm(route); setShowRouteModal(true); }}><FaEdit/></Button><Button variant="outline-danger" size="sm" onClick={() => handleDeleteRoute(route._id)}><FaTrash/></Button></td></tr>
+                  <tr key={route._id || i}><td><strong>Dest:</strong> <code>{route.destination}</code><br/><strong>GW:</strong> <code>{route.gateway}</code></td><td>{route.redistributeViaOSPF && <Badge bg="info" className="me-1">OSPF</Badge>} {route.redistributeViaBGP && <Badge bg="info">BGP</Badge>}</td><td><Badge bg={route.status === 'complete' ? 'success' : 'warning'}>{route.status || 'pending'}</Badge></td><td><PermissionButton permKey="devices" method={'patch'} variant="outline-primary" size="sm" className="me-1" onClick={() => { setEditingRoute(route); setRouteForm(route); setShowRouteModal(true); }}><FaEdit/></PermissionButton><PermissionButton permKey="devices" method={'delete'} variant="outline-danger" size="sm" onClick={() => handleDeleteRoute(route._id)}><FaTrash/></PermissionButton></td></tr>
                 ))}
               </tbody>
             </Table>
@@ -900,11 +902,11 @@ const DeviceInfo = () => {
           <div className="p-4 bg-white border border-gray-300 rounded shadow-sm">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h5 className="mb-0 fw-bold">DHCP Server Configuration</h5>
-              <Button variant="primary" size="sm" onClick={() => { 
+              <PermissionButton permKey="devices" method={'put'} variant="primary" size="sm" onClick={() => {
                 setEditingDhcp(null); 
                 setDhcpForm({ interface: '', rangeStart: '', rangeEnd: '', dns: '8.8.8.8, 8.8.4.4', defaultLeaseTime: '', maxLeaseTime: '', macAssign: [], options: [] });
                 setShowDhcpModal(true); 
-              }}>Add DHCP Server</Button>
+              }}>Add DHCP Server</PermissionButton>
             </div>
             <div className="table-container-template">
               <table className="custom-table-template">
@@ -925,7 +927,7 @@ const DeviceInfo = () => {
                       <td>{dhcp.dns?.join(', ')}</td>
                       <td><Badge bg={dhcp.status === 'installed' ? 'success' : 'warning'}>{dhcp.status || 'pending'}</Badge></td>
                       <td>
-                        <button className="btn-icon-action" onClick={() => { 
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-action" onClick={() => {
                           setEditingDhcp(dhcp); 
                           setDhcpForm({
                             interface: dhcp.interface,
@@ -940,10 +942,10 @@ const DeviceInfo = () => {
                           setShowDhcpModal(true); 
                         }} title="Edit">
                           <FaEdit size={12} />
-                        </button>
-                        <button className="btn-icon-action text-danger" onClick={() => handleDeleteDHCP(dhcp.interface)} title="Delete">
+                        </PermissionButton>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-action text-danger" onClick={() => handleDeleteDHCP(dhcp.interface)} title="Delete">
                           <FaTrash size={12} />
-                        </button>
+                        </PermissionButton>
                       </td>
                     </tr>
                   )) : (
@@ -960,7 +962,7 @@ const DeviceInfo = () => {
             <h5 className="section-header">OSPF Configuration</h5>
             
             <div className="mb-4">
-               <button className="btn-template btn-save-gray" onClick={handleSaveOSPF}>Save</button>
+               <PermissionButton permKey="devices" method={'put'} native className="btn-template btn-save-gray" onClick={handleSaveOSPF}>Save</PermissionButton>
             </div>
 
             <div className="global-settings-card">
@@ -1033,9 +1035,9 @@ const DeviceInfo = () => {
                       <td>{iface.ospf?.key || ''}</td>
                       <td>{iface.ospf?.cost || ''}</td>
                       <td>
-                        <button className="btn-icon-yellow" onClick={() => setEditingInterface(iface)}>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-yellow" onClick={() => setEditingInterface(iface)}>
                           <FaCog />
-                        </button>
+                        </PermissionButton>
                       </td>
                     </tr>
                   )) : (
@@ -1053,7 +1055,7 @@ const DeviceInfo = () => {
           <div className="bgp-container">
             <h5 className="section-header">BGP Configuration</h5>
             <div className="mb-4">
-              <button className="btn-template btn-save-gray" onClick={handleSaveBGP}>Save</button>
+              <PermissionButton permKey="devices" method={'put'} native className="btn-template btn-save-gray" onClick={handleSaveBGP}>Save</PermissionButton>
             </div>
             <div className="global-settings-card">
               <Row>
@@ -1100,7 +1102,7 @@ const DeviceInfo = () => {
 
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h5 className="section-header mb-0">Neighbors</h5>
-              <Button variant="primary" size="sm" onClick={() => { setEditingBgpNeighborIdx(null); setBgpNeighborForm({ ip: '', remoteASN: '', password: '', inboundFilter: '', outboundFilter: '', sendCommunity: 'all', multiHop: 1 }); setShowBgpNeighborModal(true); }}>Add Neighbor</Button>
+              <PermissionButton permKey="devices" method={'put'} variant="primary" size="sm" onClick={() => { setEditingBgpNeighborIdx(null); setBgpNeighborForm({ ip: '', remoteASN: '', password: '', inboundFilter: '', outboundFilter: '', sendCommunity: 'all', multiHop: 1 }); setShowBgpNeighborModal(true); }}>Add Neighbor</PermissionButton>
             </div>
             <div className="table-container-template">
               <table className="custom-table-template">
@@ -1116,8 +1118,8 @@ const DeviceInfo = () => {
                       <td>{n.outboundFilter || '-'}</td>
                       <td>{n.multiHop}</td>
                       <td>
-                        <button className="btn-icon-yellow" onClick={() => { setEditingBgpNeighborIdx(idx); setBgpNeighborForm(n); setShowBgpNeighborModal(true); }}><FaCog /></button>
-                        <button className="btn-icon-red" onClick={() => handleDeleteBgpNeighbor(idx)}><FaTrash /></button>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-yellow" onClick={() => { setEditingBgpNeighborIdx(idx); setBgpNeighborForm(n); setShowBgpNeighborModal(true); }}><FaCog /></PermissionButton>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-red" onClick={() => handleDeleteBgpNeighbor(idx)}><FaTrash /></PermissionButton>
                       </td>
                     </tr>
                   )) : (
@@ -1133,7 +1135,7 @@ const DeviceInfo = () => {
           <div className="firewall-container">
             <h5 className="section-header">Firewall & NAT</h5>
             <div className="mb-4 d-flex align-items-center gap-3">
-              <button className="btn-template btn-save-gray" onClick={handleSaveFirewall}>Save</button>
+              <PermissionButton permKey="devices" method={'put'} native className="btn-template btn-save-gray" onClick={handleSaveFirewall}>Save</PermissionButton>
               <div className="settings-field d-flex align-items-center gap-2 mb-0">
                 <div className="toggle-wrapper">
                   <input type="checkbox" id="toggle-device-fw" className="toggle-checkbox" checked={deviceSpecificRulesEnabled} onChange={(e) => setDeviceSpecificRulesEnabled(e.target.checked)} />
@@ -1145,7 +1147,7 @@ const DeviceInfo = () => {
 
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h6 className="fw-bold mb-0">Firewall Rules (Inbound / Outbound)</h6>
-              <Button variant="primary" size="sm" onClick={() => { setEditingFirewallRuleIdx(null); setFirewallRuleForm(EMPTY_FIREWALL_RULE); setShowFirewallRuleModal(true); }}>New Rule</Button>
+              <PermissionButton permKey="devices" method={'put'} variant="primary" size="sm" onClick={() => { setEditingFirewallRuleIdx(null); setFirewallRuleForm(EMPTY_FIREWALL_RULE); setShowFirewallRuleModal(true); }}>New Rule</PermissionButton>
             </div>
             <div className="table-container-template mb-4">
               <table className="custom-table-template">
@@ -1163,8 +1165,8 @@ const DeviceInfo = () => {
                       <td>{rule.priority}</td>
                       <td>{rule.enabled ? 'Yes' : 'No'}</td>
                       <td>
-                        <button className="btn-icon-yellow" onClick={() => { setEditingFirewallRuleIdx(idx); setFirewallRuleForm(rule); setShowFirewallRuleModal(true); }}><FaCog /></button>
-                        <button className="btn-icon-red" onClick={() => handleDeleteFirewallRule(idx)}><FaTrash /></button>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-yellow" onClick={() => { setEditingFirewallRuleIdx(idx); setFirewallRuleForm(rule); setShowFirewallRuleModal(true); }}><FaCog /></PermissionButton>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-red" onClick={() => handleDeleteFirewallRule(idx)}><FaTrash /></PermissionButton>
                       </td>
                     </tr>
                   )) : (
@@ -1176,7 +1178,7 @@ const DeviceInfo = () => {
 
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h6 className="fw-bold mb-0">LAN NAT Rules</h6>
-              <Button variant="primary" size="sm" onClick={() => { setEditingFirewallRuleIdx(null); setFirewallRuleForm({ ...EMPTY_FIREWALL_RULE, direction: 'lanNat' }); setShowFirewallRuleModal(true); }}>New LAN NAT Rule</Button>
+              <PermissionButton permKey="devices" method={'put'} variant="primary" size="sm" onClick={() => { setEditingFirewallRuleIdx(null); setFirewallRuleForm({ ...EMPTY_FIREWALL_RULE, direction: 'lanNat' }); setShowFirewallRuleModal(true); }}>New LAN NAT Rule</PermissionButton>
             </div>
             <div className="table-container-template">
               <table className="custom-table-template">
@@ -1191,8 +1193,8 @@ const DeviceInfo = () => {
                       <td>{rule.classification?.destination?.lanNat?.match ? `${rule.classification.destination.lanNat.match} → ${rule.classification.destination.lanNat.action}` : '-'}</td>
                       <td>{rule.priority}</td>
                       <td>
-                        <button className="btn-icon-yellow" onClick={() => { setEditingFirewallRuleIdx(idx); setFirewallRuleForm(rule); setShowFirewallRuleModal(true); }}><FaCog /></button>
-                        <button className="btn-icon-red" onClick={() => handleDeleteFirewallRule(idx)}><FaTrash /></button>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-yellow" onClick={() => { setEditingFirewallRuleIdx(idx); setFirewallRuleForm(rule); setShowFirewallRuleModal(true); }}><FaCog /></PermissionButton>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-red" onClick={() => handleDeleteFirewallRule(idx)}><FaTrash /></PermissionButton>
                       </td>
                     </tr>
                   )) : (
@@ -1208,11 +1210,11 @@ const DeviceInfo = () => {
           <div className="routing-filters-container">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h5 className="section-header mb-0">Routing Filters</h5>
-              <Button variant="primary" size="sm" onClick={() => { setEditingRoutingFilterIdx(null); setRoutingFilterForm({ name: '', description: '', rules: [] }); setShowRoutingFilterModal(true); }}>New Filter</Button>
+              <PermissionButton permKey="devices" method={'put'} variant="primary" size="sm" onClick={() => { setEditingRoutingFilterIdx(null); setRoutingFilterForm({ name: '', description: '', rules: [] }); setShowRoutingFilterModal(true); }}>New Filter</PermissionButton>
             </div>
             <p className="text-muted small">Referenced by BGP neighbors via Inbound/Outbound Filter (matched by name).</p>
             <div className="mb-3">
-              <button className="btn-template btn-save-gray" onClick={handleSaveRoutingFilters}>Save</button>
+              <PermissionButton permKey="devices" method={'put'} native className="btn-template btn-save-gray" onClick={handleSaveRoutingFilters}>Save</PermissionButton>
             </div>
             <div className="table-container-template">
               <table className="custom-table-template">
@@ -1224,8 +1226,8 @@ const DeviceInfo = () => {
                       <td>{filter.description}</td>
                       <td>{(filter.rules || []).length} rule(s)</td>
                       <td>
-                        <button className="btn-icon-yellow" onClick={() => { setEditingRoutingFilterIdx(idx); setRoutingFilterForm(filter); setShowRoutingFilterModal(true); }}><FaCog /></button>
-                        <button className="btn-icon-red" onClick={() => handleDeleteRoutingFilter(idx)}><FaTrash /></button>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-yellow" onClick={() => { setEditingRoutingFilterIdx(idx); setRoutingFilterForm(filter); setShowRoutingFilterModal(true); }}><FaCog /></PermissionButton>
+                        <PermissionButton permKey="devices" method={'put'} native className="btn-icon-red" onClick={() => handleDeleteRoutingFilter(idx)}><FaTrash /></PermissionButton>
                       </td>
                     </tr>
                   )) : (
@@ -1244,7 +1246,7 @@ const DeviceInfo = () => {
             <div className="global-settings-card">
               <Form.Control as="textarea" rows={10} className="font-monospace" value={advancedRoutingCli} onChange={(e) => setAdvancedRoutingCli(e.target.value)} placeholder="e.g. router bgp 65000&#10; neighbor 10.0.0.1 route-map MYMAP in" />
             </div>
-            <button className="btn-template btn-save-gray" onClick={handleSaveAdvancedRouting}>Save</button>
+            <PermissionButton permKey="devices" method={'put'} native className="btn-template btn-save-gray" onClick={handleSaveAdvancedRouting}>Save</PermissionButton>
           </div>
         )}
 
@@ -1350,8 +1352,8 @@ const DeviceInfo = () => {
           <div className="global-settings-card">
             <h6 className="fw-bold mb-3">Device Commands</h6>
             <div className="d-flex gap-2 flex-wrap">
-              <button className="btn-template btn-gray" onClick={() => performAction('sync')} disabled={syncing}>Sync Device</button>
-              <button className="btn-template btn-gray" onClick={() => performAction('reset')} disabled={syncing}>Reset Device</button>
+              <PermissionButton permKey="devices" method={'post'} native className="btn-template btn-gray" onClick={() => performAction('sync')} disabled={syncing}>Sync Device</PermissionButton>
+              <PermissionButton permKey="devices" method={'post'} native className="btn-template btn-gray" onClick={() => performAction('reset')} disabled={syncing}>Reset Device</PermissionButton>
             </div>
             <p className="text-muted small mt-3 mb-0">Commands are queued as device jobs and applied over the device's websocket connection.</p>
           </div>
@@ -1403,7 +1405,7 @@ const DeviceInfo = () => {
             <Form.Check type="switch" label="Power Saving" checked={powerSaving} onChange={(e) => setPowerSaving(e.target.checked)} />
           </Form>
         </Modal.Body>
-        <Modal.Footer><Button variant="secondary" onClick={() => setShowHardwareModal(false)}>Cancel</Button><Button variant="primary" onClick={handleApplyHardwareConfig} disabled={applyingConfig}>{applyingConfig ? 'Applying...' : 'Apply Configuration'}</Button></Modal.Footer>
+        <Modal.Footer><Button variant="secondary" onClick={() => setShowHardwareModal(false)}>Cancel</Button><PermissionButton permKey="devices" method={'put'} variant="primary" onClick={handleApplyHardwareConfig} disabled={applyingConfig}>{applyingConfig ? 'Applying...' : 'Apply Configuration'}</PermissionButton></Modal.Footer>
       </Modal>
 
       {editingInterface && (
@@ -1490,7 +1492,7 @@ const DeviceInfo = () => {
               )}
             </Form>
           </Modal.Body>
-          <Modal.Footer><Button variant="secondary" onClick={() => setEditingInterface(null)}>Cancel</Button><Button variant="primary" onClick={() => setEditingInterface(null)}>Save Locally</Button></Modal.Footer>
+          <Modal.Footer><PermissionButton permKey="devices" method={'put'} variant="secondary" onClick={() => setEditingInterface(null)}>Cancel</PermissionButton><PermissionButton permKey="devices" method={'put'} variant="primary" onClick={() => setEditingInterface(null)}>Save Locally</PermissionButton></Modal.Footer>
         </Modal>
       )}
 
@@ -1499,7 +1501,7 @@ const DeviceInfo = () => {
       <Modal show={showRouteModal} onHide={() => setShowRouteModal(false)} centered size="lg">
         <Modal.Header closeButton><Modal.Title>{editingRoute ? 'Edit Route' : 'Add Route'}</Modal.Title></Modal.Header>
         <Modal.Body><Form><Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Destination Network</Form.Label><Form.Control value={routeForm.destination} onChange={e => setRouteForm({...routeForm, destination: e.target.value})} placeholder="192.168.10.0/24" /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Gateway</Form.Label><Form.Control value={routeForm.gateway} onChange={e => setRouteForm({...routeForm, gateway: e.target.value})} placeholder="192.168.1.1" /></Form.Group></Col></Row><Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Interface (optional)</Form.Label><Form.Select value={routeForm.ifname} onChange={e => setRouteForm({...routeForm, ifname: e.target.value})}><option value="">Auto (derive from gateway subnet)</option>{(device?.interfaces || []).map(i => <option key={i._id} value={i.devId || i.name}>{i.name}</option>)}</Form.Select><Form.Text className="text-muted">The outgoing interface. Optional if the gateway is within a subnet of one of the router interfaces.</Form.Text></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Metric (optional)</Form.Label><Form.Control value={routeForm.metric} onChange={e => setRouteForm({...routeForm, metric: e.target.value})} /></Form.Group></Col></Row><Form.Check label="Redistribute OSPF" checked={routeForm.redistributeViaOSPF} onChange={e => setRouteForm({...routeForm, redistributeViaOSPF: e.target.checked})} /><Form.Check label="Redistribute BGP" checked={routeForm.redistributeViaBGP} onChange={e => setRouteForm({...routeForm, redistributeViaBGP: e.target.checked})} /></Form></Modal.Body>
-        <Modal.Footer><Button variant="secondary" onClick={() => setShowRouteModal(false)}>Cancel</Button><Button variant="primary" onClick={handleSaveRoute}><FaSave className="me-2"/>Save Route</Button></Modal.Footer>
+        <Modal.Footer><Button variant="secondary" onClick={() => setShowRouteModal(false)}>Cancel</Button><PermissionButton permKey="devices" method={editingRoute ? 'patch' : 'post'} variant="primary" onClick={handleSaveRoute}><FaSave className="me-2"/>Save Route</PermissionButton></Modal.Footer>
       </Modal>
 
       <Modal show={showDhcpModal} onHide={() => setShowDhcpModal(false)} centered size="lg">
@@ -1589,7 +1591,7 @@ const DeviceInfo = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowDhcpModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveDHCP}><FaSave className="me-2"/>Save DHCP Server</Button>
+          <PermissionButton permKey="devices" method={'post'} variant="primary" onClick={handleSaveDHCP}><FaSave className="me-2"/>Save DHCP Server</PermissionButton>
         </Modal.Footer>
       </Modal>
 
@@ -1621,7 +1623,7 @@ const DeviceInfo = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowBgpNeighborModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveBgpNeighbor} disabled={!bgpNeighborForm.ip || !bgpNeighborForm.remoteASN}>Save Neighbor</Button>
+          <PermissionButton permKey="devices" method={'put'} variant="primary" onClick={handleSaveBgpNeighbor} disabled={!bgpNeighborForm.ip || !bgpNeighborForm.remoteASN}>Save Neighbor</PermissionButton>
         </Modal.Footer>
       </Modal>
 
@@ -1725,7 +1727,7 @@ const DeviceInfo = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowFirewallRuleModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveFirewallRule}>Save Rule</Button>
+          <PermissionButton permKey="devices" method={'put'} variant="primary" onClick={handleSaveFirewallRule}>Save Rule</PermissionButton>
         </Modal.Footer>
       </Modal>
 
@@ -1759,7 +1761,7 @@ const DeviceInfo = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowRoutingFilterModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveRoutingFilter} disabled={!routingFilterForm.name}>Save Filter</Button>
+          <PermissionButton permKey="devices" method={'put'} variant="primary" onClick={handleSaveRoutingFilter} disabled={!routingFilterForm.name}>Save Filter</PermissionButton>
         </Modal.Footer>
       </Modal>
 
@@ -1773,7 +1775,7 @@ const DeviceInfo = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowEdgeLoopbackModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleAddEdgeLoopback} disabled={!edgeLoopbackForm.name || !edgeLoopbackForm.ip}>Add</Button>
+          <PermissionButton permKey="devices" method={'put'} variant="primary" onClick={handleAddEdgeLoopback} disabled={!edgeLoopbackForm.name || !edgeLoopbackForm.ip}>Add</PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

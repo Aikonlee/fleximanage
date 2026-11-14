@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button, ButtonGroup } from 'react-bootstrap';
 import { FaCheck, FaCheckDouble, FaTrash, FaTrashAlt } from 'react-icons/fa';
@@ -136,20 +137,20 @@ const Notifications = () => {
       key: 'actions', label: 'Actions',
       render: (row) => (
         <div className="action-buttons">
-          <Button
+          <PermissionButton permKey="notifications" method={'put'}
             variant="link" size="sm" onClick={() => toggleRead(row)}
             title={row.status === 'unread' ? 'Mark as read' : 'Mark as unread'}
           >
             <FaCheck />
-          </Button>
+          </PermissionButton>
           {!row.resolved && (
-            <Button variant="link" size="sm" onClick={() => resolveOne(row)} title="Resolve">
+            <PermissionButton permKey="notifications" method={'put'} variant="link" size="sm" onClick={() => resolveOne(row)} title="Resolve">
               <FaCheckDouble />
-            </Button>
+            </PermissionButton>
           )}
-          <Button variant="link" size="sm" className="text-danger" onClick={() => deleteOne(row)} title="Delete">
+          <PermissionButton permKey="notifications" method="delete" variant="link" size="sm" className="text-danger" onClick={() => deleteOne(row)} title="Delete">
             <FaTrash />
-          </Button>
+          </PermissionButton>
         </div>
       )
     }
@@ -162,12 +163,12 @@ const Notifications = () => {
         title="Notifications"
         actions={(
           <div className="d-flex gap-2">
-            <Button variant="outline-primary" onClick={markAllRead}>
+            <PermissionButton permKey="notifications" method={'put'} variant="outline-primary" onClick={markAllRead}>
               <FaCheckDouble className="me-2" />Mark all as read
-            </Button>
-            <Button variant="outline-danger" onClick={deleteAll}>
+            </PermissionButton>
+            <PermissionButton permKey="notifications" method="delete" variant="outline-danger" onClick={deleteAll}>
               <FaTrashAlt className="me-2" />Delete all
-            </Button>
+            </PermissionButton>
           </div>
         )}
       />

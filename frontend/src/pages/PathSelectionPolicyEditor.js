@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Form, Row, Col, Alert, Modal } from 'react-bootstrap';
@@ -179,7 +180,7 @@ const PathSelectionPolicyEditor = () => {
         actions={
           <>
             <button className="btn-icon-action" onClick={() => navigate('/path-selection-policy')} title="Back"><FaArrowLeft /></button>
-            <Button variant="primary" onClick={handleSave} disabled={saving || !name}>{saving ? 'Saving...' : 'Save Policy'}</Button>
+            <PermissionButton permKey="mlpolicies" method={isNew ? 'post' : 'put'} variant="primary" onClick={handleSave} disabled={saving || !name}>{saving ? 'Saving...' : 'Save Policy'}</PermissionButton>
           </>
         }
       />
@@ -382,7 +383,7 @@ const PathSelectionPolicyEditor = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowRuleModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveRule} disabled={!ruleForm.name}>Save Rule</Button>
+          <PermissionButton permKey="mlpolicies" method={isNew ? 'post' : 'put'} variant="primary" onClick={handleSaveRule} disabled={!ruleForm.name}>Save Rule</PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

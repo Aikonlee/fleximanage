@@ -1,3 +1,5 @@
+import PermissionButton from '../components/common/PermissionButton';
+import { clearSession } from '../auth/session';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Modal, Form, Button, Alert } from 'react-bootstrap';
 import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
@@ -30,7 +32,7 @@ const PathLabels = () => {
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to fetch path labels');
       if (err.response?.status === 401) {
-        localStorage.removeItem('token');
+        clearSession();
         navigate('/login');
       }
     } finally {
@@ -113,12 +115,12 @@ const PathLabels = () => {
       label: 'Actions',
       render: (row) => (
         <div className="action-buttons">
-          <Button variant="link" size="sm" onClick={() => openEdit(row)} title="Edit">
+          <PermissionButton permKey="pathlabels" method={'put'} variant="link" size="sm" onClick={() => openEdit(row)} title="Edit">
             <FaEdit />
-          </Button>
-          <Button variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
+          </PermissionButton>
+          <PermissionButton permKey="pathlabels" method={'delete'} variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
             <FaTrash />
-          </Button>
+          </PermissionButton>
         </div>
       ),
     },
@@ -140,9 +142,9 @@ const PathLabels = () => {
           columns={columns}
           rows={labels}
           actions={
-            <Button variant="primary" onClick={openCreate}>
+            <PermissionButton permKey="pathlabels" method={'post'} variant="primary" onClick={openCreate}>
               <FaPlus className="me-2" /> New Path Label
-            </Button>
+            </PermissionButton>
           }
           emptyMessage="No path labels configured yet."
         />
@@ -192,9 +194,9 @@ const PathLabels = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave} disabled={saving || !form.name}>
+          <PermissionButton permKey="pathlabels" method={editingId ? 'put' : 'post'} variant="primary" onClick={handleSave} disabled={saving || !form.name}>
             {saving ? 'Saving...' : 'Save'}
-          </Button>
+          </PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

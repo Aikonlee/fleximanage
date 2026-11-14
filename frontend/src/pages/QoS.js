@@ -1,5 +1,6 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Alert } from 'react-bootstrap';
+import { Alert } from 'react-bootstrap';
 import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
@@ -47,12 +48,12 @@ const QoS = () => {
       label: 'Actions',
       render: (row) => (
         <div className="action-buttons">
-          <Button variant="link" size="sm" onClick={() => navigate(`/qos/${row._id}`)} title="Edit">
+          <PermissionButton permKey="qospolicies" method={'put'} variant="link" size="sm" onClick={() => navigate(`/qos/${row._id}`)} title="Edit">
             <FaEdit />
-          </Button>
-          <Button variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
+          </PermissionButton>
+          <PermissionButton permKey="qospolicies" method={'delete'} variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
             <FaTrash />
-          </Button>
+          </PermissionButton>
         </div>
       ),
     },
@@ -72,9 +73,9 @@ const QoS = () => {
           columns={columns}
           rows={policies}
           actions={
-            <Button variant="primary" onClick={() => navigate('/qos/new')}>
+            <PermissionButton permKey="qospolicies" method={'post'} variant="primary" onClick={() => navigate('/qos/new')}>
               <FaPlus className="me-2" /> New QoS Policy
-            </Button>
+            </PermissionButton>
           }
           emptyMessage="No QoS policies configured yet."
         />

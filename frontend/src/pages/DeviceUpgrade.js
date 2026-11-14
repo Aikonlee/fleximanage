@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Alert, Modal, Form } from 'react-bootstrap';
 import api from '../services/api';
@@ -105,12 +106,12 @@ const DeviceUpgrade = () => {
           onSelectionChange={setSelected}
           actions={
             <>
-              <Button variant="primary" disabled={selected.length === 0 || applying} onClick={handleUpgradeNow}>
+              <PermissionButton permKey="devices" method={'post'} variant="primary" disabled={selected.length === 0 || applying} onClick={handleUpgradeNow}>
                 Upgrade Now ({selected.length})
-              </Button>
-              <Button variant="outline-primary" disabled={selected.length === 0 || applying} onClick={() => setShowScheduleModal(true)}>
+              </PermissionButton>
+              <PermissionButton permKey="devices" method={'post'} variant="outline-primary" disabled={selected.length === 0 || applying} onClick={() => setShowScheduleModal(true)}>
                 Schedule Upgrade...
-              </Button>
+              </PermissionButton>
             </>
           }
           emptyMessage="No devices found."
@@ -130,7 +131,7 @@ const DeviceUpgrade = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowScheduleModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSchedule} disabled={!scheduleTime || applying}>{applying ? 'Scheduling...' : 'Schedule'}</Button>
+          <PermissionButton permKey="devices" method={'post'} variant="primary" onClick={handleSchedule} disabled={!scheduleTime || applying}>{applying ? 'Scheduling...' : 'Schedule'}</PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

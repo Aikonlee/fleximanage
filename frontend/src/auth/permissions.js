@@ -20,10 +20,7 @@ export function extractPerms(payload) {
 // Check if user has view (GET) permission for a given domain key
 export function hasViewPermission(perms, key) {
   if (!key) return true; // no key required
-  const val = perms?.[key];
-  if (typeof val !== 'number') return false;
-  // bit 0 (0x1) corresponds to GET
-  return (val & 0x1) === 0x1;
+  return hasPermission(perms, key, 'get');
 }
 
 // Utility: given a list of candidate keys, return first allowed one or null
@@ -32,4 +29,10 @@ export function firstAllowed(perms, keys) {
     if (hasViewPermission(perms, k)) return k;
   }
   return null;
+}
+
+// Matches backend/models/membership.js; OpenAPI maps PATCH to POST.
+export function hasPermission(perms, key, method = 'get') {
+  const mask = { get: 1, post: 2, patch: 2, put: 4, delete: 8, del: 8 }[method.toLowerCase()];
+  return !!mask && typeof perms?.[key] === 'number' && (perms[key] & mask) === mask;
 }

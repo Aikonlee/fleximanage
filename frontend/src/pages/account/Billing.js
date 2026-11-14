@@ -1,5 +1,6 @@
+import PermissionButton from '../../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Alert, Form } from 'react-bootstrap';
+import { Alert, Form } from 'react-bootstrap';
 import api from '../../services/api';
 import PageHeader from '../../components/common/PageHeader';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -88,7 +89,7 @@ const AccountBilling = () => {
         {couponMessage && <Alert variant={couponMessage.variant} onClose={() => setCouponMessage(null)} dismissible>{couponMessage.text}</Alert>}
         <div className="d-flex gap-2">
           <Form.Control style={{ maxWidth: 280 }} value={coupon} onChange={(e) => setCoupon(e.target.value)} placeholder="Coupon code" />
-          <Button variant="primary" onClick={handleApplyCoupon} disabled={applyingCoupon || !coupon.trim()}>{applyingCoupon ? 'Applying...' : 'Apply'}</Button>
+          <PermissionButton permKey="billing" method={'post'} variant="primary" onClick={handleApplyCoupon} disabled={applyingCoupon || !coupon.trim()}>{applyingCoupon ? 'Applying...' : 'Apply'}</PermissionButton>
         </div>
       </div>
 

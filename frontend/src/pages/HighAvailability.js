@@ -1,5 +1,6 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Alert, Badge } from 'react-bootstrap';
+import { Alert, Badge } from 'react-bootstrap';
 import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
@@ -80,12 +81,12 @@ const HighAvailability = () => {
       label: 'Actions',
       render: (row) => (
         <div className="action-buttons">
-          <Button variant="link" size="sm" onClick={() => navigate(`/high-availability/${row._id}`)} title="Edit">
+          <PermissionButton permKey="vrrp" method={'put'} variant="link" size="sm" onClick={() => navigate(`/high-availability/${row._id}`)} title="Edit">
             <FaEdit />
-          </Button>
-          <Button variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
+          </PermissionButton>
+          <PermissionButton permKey="vrrp" method={'delete'} variant="link" size="sm" className="text-danger" onClick={() => handleDelete(row)} title="Delete">
             <FaTrash />
-          </Button>
+          </PermissionButton>
         </div>
       ),
     },
@@ -105,9 +106,9 @@ const HighAvailability = () => {
           columns={columns}
           rows={groups}
           actions={
-            <Button variant="primary" onClick={() => navigate('/high-availability/new')}>
+            <PermissionButton permKey="vrrp" method={'post'} variant="primary" onClick={() => navigate('/high-availability/new')}>
               <FaPlus className="me-2" /> New VRRP Group
-            </Button>
+            </PermissionButton>
           }
           emptyMessage="No VRRP groups configured yet."
         />

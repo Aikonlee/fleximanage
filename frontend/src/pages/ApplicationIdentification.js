@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Alert, Modal, Form, Row, Col } from 'react-bootstrap';
 import { FaPlus, FaEdit, FaTrash, FaUndo } from 'react-icons/fa';
@@ -118,13 +119,13 @@ const ApplicationIdentification = () => {
       label: 'Actions',
       render: (row) => isCustom(row) ? (
         <div className="action-buttons">
-          <Button variant="link" size="sm" onClick={() => openEditCustom(row)} title="Edit"><FaEdit /></Button>
-          <Button variant="link" size="sm" className="text-danger" onClick={() => handleDeleteCustom(row)} title="Delete"><FaTrash /></Button>
+          <PermissionButton permKey="appidentifications" method={'put'} variant="link" size="sm" onClick={() => openEditCustom(row)} title="Edit"><FaEdit /></PermissionButton>
+          <PermissionButton permKey="appidentifications" method={'delete'} variant="link" size="sm" className="text-danger" onClick={() => handleDeleteCustom(row)} title="Delete"><FaTrash /></PermissionButton>
         </div>
       ) : (
         <div className="action-buttons">
-          <Button variant="link" size="sm" onClick={() => openOverride(row)} title="Edit classification"><FaEdit /></Button>
-          {row.modified && <Button variant="link" size="sm" onClick={() => handleResetImported(row)} title="Reset to original"><FaUndo /></Button>}
+          <PermissionButton permKey="appidentifications" method={'put'} variant="link" size="sm" onClick={() => openOverride(row)} title="Edit classification"><FaEdit /></PermissionButton>
+          {row.modified && <PermissionButton permKey="appidentifications" method={'put'} variant="link" size="sm" onClick={() => handleResetImported(row)} title="Reset to original"><FaUndo /></PermissionButton>}
         </div>
       ),
     },
@@ -148,7 +149,7 @@ const ApplicationIdentification = () => {
           columns={columns}
           rows={items}
           rowKey={(row) => row._id || row.id}
-          actions={<Button variant="primary" onClick={openNewCustom}><FaPlus className="me-2" /> New Custom Identification</Button>}
+          actions={<PermissionButton permKey="appidentifications" method={'post'} variant="primary" onClick={openNewCustom}><FaPlus className="me-2" /> New Custom Identification</PermissionButton>}
           emptyMessage="No application identifications found."
           defaultPageSize={25}
         />
@@ -199,7 +200,7 @@ const ApplicationIdentification = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowCustomModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveCustom} disabled={!customForm.name || !customForm.category || !customForm.serviceClass}>Save</Button>
+          <PermissionButton permKey="appidentifications" method={editingCustomId ? 'put' : 'post'} variant="primary" onClick={handleSaveCustom} disabled={!customForm.name || !customForm.category || !customForm.serviceClass}>Save</PermissionButton>
         </Modal.Footer>
       </Modal>
 
@@ -221,7 +222,7 @@ const ApplicationIdentification = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowOverrideModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveOverride}>Save</Button>
+          <PermissionButton permKey="appidentifications" method={'put'} variant="primary" onClick={handleSaveOverride}>Save</PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

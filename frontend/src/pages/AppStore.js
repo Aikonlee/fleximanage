@@ -1,5 +1,6 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Alert, Row, Col } from 'react-bootstrap';
+import {  Alert, Row, Col } from 'react-bootstrap';
 import { FaStore, FaTrash } from 'react-icons/fa';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
@@ -84,9 +85,9 @@ const AppStore = () => {
                   </div>
                   <StatusBadge status={p.status || 'running'} label={p.status || 'installed'} />
                 </div>
-                <Button variant="outline-danger" size="sm" className="mt-3" disabled={busyId === p._id} onClick={() => handleUninstall(p)}>
+                <PermissionButton permKey="applications" method="delete" variant="outline-danger" size="sm" className="mt-3" disabled={busyId === p._id} onClick={() => handleUninstall(p)}>
                   <FaTrash className="me-1" /> Remove
-                </Button>
+                </PermissionButton>
               </div>
             </Col>
           ))}
@@ -107,14 +108,14 @@ const AppStore = () => {
               <p className="text-muted small mb-2">{app.description}</p>
               <div className="d-flex justify-content-between align-items-center">
                 <span className="small text-muted">{app.cost ? `$${app.cost}` : 'Free'}</span>
-                <Button
+                <PermissionButton permKey="applications" method="post"
                   variant="primary"
                   size="sm"
                   disabled={isPurchased(app._id) || busyId === app._id}
                   onClick={() => handlePurchase(app)}
                 >
                   {isPurchased(app._id) ? 'Installed' : 'Install'}
-                </Button>
+                </PermissionButton>
               </div>
             </div>
           </Col>

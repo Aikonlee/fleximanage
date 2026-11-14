@@ -1,3 +1,6 @@
+import PermissionButton from '../components/common/PermissionButton';
+import { decodeJwtPayload } from '../auth/permissions';
+import { useAuth } from '../auth/AuthContext';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, Card, Alert, Modal, Row, Col } from 'react-bootstrap';
@@ -18,6 +21,8 @@ const Organizations = () => {
   const [settingOrg, setSettingOrg] = useState(null);
   const [currentOrgId, setCurrentOrgId] = useState(null);
   const navigate = useNavigate();
+  const { orgId } = useAuth();
+  useEffect(() => { setCurrentOrgId(orgId); }, [orgId]);
 
   useEffect(() => {
     // Get current org from JWT token
@@ -25,7 +30,7 @@ const Organizations = () => {
       try {
         const token = localStorage.getItem('token');
         if (token) {
-          const payload = JSON.parse(atob(token.split('.')[1]));
+          const payload = decodeJwtPayload(token);
           if (payload.org) {
             setCurrentOrgId(payload.org);
           }
@@ -121,7 +126,7 @@ const Organizations = () => {
         try {
           const token = localStorage.getItem('token');
           if (token) {
-            const payload = JSON.parse(atob(token.split('.')[1]));
+            const payload = decodeJwtPayload(token);
             if (payload.org) {
               setCurrentOrgId(payload.org);
             } else {
@@ -154,29 +159,7 @@ const Organizations = () => {
 
     setSettingOrg(orgId);
     try {
-      const response = await api.post('/organizations/select', { org: orgId });
-
-      // Check if there's a new token in the response headers
-      const newToken = response.headers['refresh-jwt'] || response.headers['Refresh-JWT'];
-      if (newToken) {
-        localStorage.setItem('token', newToken);
-        
-        // Read org ID from the new token to ensure consistency
-        try {
-          const payload = JSON.parse(atob(newToken.split('.')[1]));
-          if (payload.org) {
-            setCurrentOrgId(payload.org);
-          } else {
-            setCurrentOrgId(orgId);
-          }
-        } catch (err) {
-          console.error('Error parsing new token:', err);
-          setCurrentOrgId(orgId);
-        }
-      } else {
-        // If no new token, just update state
-        setCurrentOrgId(orgId);
-      }
+      await api.post('/organizations/select', { org: orgId });
 
       // Clear any previous errors - no alert popup
       setError(null);
@@ -217,10 +200,10 @@ const Organizations = () => {
         breadcrumb={[{ label: 'Home', path: '/home' }, { label: 'Account' }, { label: 'Organizations' }]}
         title="Organizations"
         actions={(
-          <Button variant="primary" onClick={handleNewOrganization} className="shadow-sm d-flex align-items-center">
+          <PermissionButton permKey="organizations" method={'post'} variant="primary" onClick={handleNewOrganization} className="shadow-sm d-flex align-items-center">
             <FaPlus className="me-2" />
             New Organization
-          </Button>
+          </PermissionButton>
         )}
       />
 
@@ -268,7 +251,7 @@ const Organizations = () => {
                           size="sm"
                           onClick={() => handleSetOrganization(orgId)}
                           title={isCurrent ? "Current Organization" : "Set as Current Organization"}
-                          disabled={isCurrent || settingOrg === orgId}
+                          disabled={isCurrent || !!settingOrg}
                           style={{ minWidth: '35px' }}
                         >
                           {settingOrg === orgId ? <span className="spinner-border spinner-border-sm" /> : <FaCheck />}
@@ -282,7 +265,7 @@ const Organizations = () => {
                         >
                           <FaEye />
                         </Button>
-                        <Button
+                        <PermissionButton permKey="organizations" method={'put'}
                           variant="outline-primary"
                           size="sm"
                           onClick={() => handleEditOrganization(org._id || org.id)}
@@ -290,8 +273,8 @@ const Organizations = () => {
                           style={{ minWidth: '35px' }}
                         >
                           <FaEdit />
-                        </Button>
-                        <Button
+                        </PermissionButton>
+                        <PermissionButton permKey="organizations" method={'delete'}
                           variant="outline-danger"
                           size="sm"
                           onClick={() => handleDeleteOrganization(orgId)}
@@ -299,7 +282,7 @@ const Organizations = () => {
                           style={{ minWidth: '35px' }}
                         >
                           <FaTrash />
-                        </Button>
+                        </PermissionButton>
                       </div>
                     </td>
                   </tr>
@@ -384,9 +367,9 @@ const Organizations = () => {
           <Button variant="secondary" onClick={() => setShowDeleteModal(false)} disabled={deleting}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={confirmDelete} disabled={deleting}>
+          <PermissionButton permKey="organizations" method={'delete'} variant="danger" onClick={confirmDelete} disabled={deleting}>
             {deleting ? 'Deleting...' : 'Delete Organization'}
-          </Button>
+          </PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

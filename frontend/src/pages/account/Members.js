@@ -1,3 +1,5 @@
+import { useAuth } from '../../auth/AuthContext';
+import PermissionButton from '../../components/common/PermissionButton';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Card, Button, Form, Alert, Badge } from 'react-bootstrap';
 import { FaUser, FaSearch, FaCheck, FaTrash, FaUserShield, FaUserMinus } from 'react-icons/fa';
@@ -11,7 +13,7 @@ export default function AccountMembers () {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [rows, setRows] = useState([]);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const { isAdmin: isSuperAdmin } = useAuth();
   const [page, setPage] = useState(0); // zero-based
   const [pageSize, setPageSize] = useState(25);
   const [serverMeta, setServerMeta] = useState({ offset: 0, limit: 25, total: 0 });
@@ -88,18 +90,7 @@ export default function AccountMembers () {
   };
 
 
-  useEffect(() => {
-    // Determine super admin from token (admin flag added to JWT payload)
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const payloadB64 = token.split('.')[1];
-      if (!payloadB64) return;
-      const json = atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'));
-      const payload = JSON.parse(decodeURIComponent(escape(json)));
-      setIsSuperAdmin(payload.admin === true);
-    } catch (_) {}
-  }, []);
+
 
   if (loading && !rows.length) return <div className="text-center p-5"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div><p className="mt-2 text-muted">Loading users...</p></div>;
   if (error && !rows.length) {
@@ -303,7 +294,7 @@ export default function AccountMembers () {
                                   <FaUserShield />
                                 </Button>
                               )}
-                              <Button
+                              <PermissionButton permKey="members" method={'delete'}
                                 variant="danger"
                                 size="sm"
                                 onClick={async () => {
@@ -318,7 +309,7 @@ export default function AccountMembers () {
                                 title="Delete User"
                               >
                                 <FaTrash />
-                              </Button>
+                              </PermissionButton>
                             </div>
                           </td>
                         )}

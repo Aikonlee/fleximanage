@@ -1,6 +1,7 @@
+import PermissionButton from '../../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Alert, Form } from 'react-bootstrap';
+import { Alert, Form } from 'react-bootstrap';
 import api from '../../services/api';
 import PageHeader from '../../components/common/PageHeader';
 import { decodeJwtPayload } from '../../auth/permissions';
@@ -154,9 +155,9 @@ const NotificationsSettings = () => {
         title="Notifications"
         actions={
           <>
-            <Button variant="outline-primary" size="sm" onClick={setAsAccountDefault} disabled={saving}>Set as account default</Button>
-            <Button variant="outline-secondary" size="sm" onClick={() => applyDefaults(true)} disabled={saving}>Reset to account defaults</Button>
-            <Button variant="outline-secondary" size="sm" onClick={() => applyDefaults(false)} disabled={saving}>Reset to system defaults</Button>
+            <PermissionButton permKey="notifications" method={'put'} variant="outline-primary" size="sm" onClick={setAsAccountDefault} disabled={saving}>Set as account default</PermissionButton>
+            <PermissionButton permKey="notifications" method={'put'} variant="outline-secondary" size="sm" onClick={() => applyDefaults(true)} disabled={saving}>Reset to account defaults</PermissionButton>
+            <PermissionButton permKey="notifications" method={'put'} variant="outline-secondary" size="sm" onClick={() => applyDefaults(false)} disabled={saving}>Reset to system defaults</PermissionButton>
           </>
         }
       />
@@ -165,7 +166,7 @@ const NotificationsSettings = () => {
 
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h6 className="fw-bold mb-0">Notification Rules</h6>
-        <Button variant="primary" size="sm" onClick={applyRules} disabled={saving}>{saving ? 'Saving...' : 'Apply'}</Button>
+        <PermissionButton permKey="notifications" method={'put'} variant="primary" size="sm" onClick={applyRules} disabled={saving}>{saving ? 'Saving...' : 'Apply'}</PermissionButton>
       </div>
       <div className="table-container-template mb-4 notif-rules-table">
         <table className="custom-table-template">
@@ -213,7 +214,7 @@ const NotificationsSettings = () => {
 
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h6 className="fw-bold mb-0">Email Notifications</h6>
-        <Button variant="primary" size="sm" onClick={applyEmails} disabled={saving}>{saving ? 'Saving...' : 'Apply'}</Button>
+        <PermissionButton permKey="notifications" method={'put'} variant="primary" size="sm" onClick={applyEmails} disabled={saving}>{saving ? 'Saving...' : 'Apply'}</PermissionButton>
       </div>
       <div className="table-container-template mb-4">
         <table className="custom-table-template">
@@ -236,7 +237,7 @@ const NotificationsSettings = () => {
 
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h6 className="fw-bold mb-0">Webhook Integration</h6>
-        <Button variant="primary" size="sm" onClick={applyWebhook} disabled={saving}>{saving ? 'Saving...' : 'Apply'}</Button>
+        <PermissionButton permKey="notifications" method={'put'} variant="primary" size="sm" onClick={applyWebhook} disabled={saving}>{saving ? 'Saving...' : 'Apply'}</PermissionButton>
       </div>
       <div className="notif-webhook-card">
         <Form.Group className="mb-3">

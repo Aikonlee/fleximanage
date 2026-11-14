@@ -1,100 +1,50 @@
 import axios from 'axios';
+import { hasPermission } from '../auth/permissions';
+import { getSessionToken, setSessionToken, clearSession, validPayload, scopeOf } from '../auth/session';
 
-// Smartly infer API base URL. Prevent Mixed Content errors when page is HTTPS but code still targets http://localhost:3000
-function inferBaseURL () {
-  // First, try to use the server-injected config
-  if (typeof window !== 'undefined' && window.__FLEXIWAN_SERVER_CONFIG__?.baseUrl) {
-    console.log('[api] Using server-injected API URL');
-    return window.__FLEXIWAN_SERVER_CONFIG__.baseUrl;
-  }
-  
-  // Fallback to HTTPS and correct port
-  console.log('[api] Using HTTPS API URL (fallback)');
-  return 'https://localhost:3443/api';
+export function inferBaseURL() {
+  return (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
 }
-
-const api = axios.create({
-  baseURL: inferBaseURL(),
-  timeout: 30000, // Increased timeout for HTTPS proxy
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-
-// Add debug logging
-console.log('[api] API configuration:', {
-  baseURL: api.defaults.baseURL,
-  timeout: api.defaults.timeout,
-  NODE_ENV: process.env.NODE_ENV,
-  REACT_APP_API_URL: process.env.REACT_APP_API_URL
-});
-
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    console.log('[api] Request interceptor - token status:', token ? 'exists' : 'missing', 'for URL:', config.url);
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('[api] Authorization header added:', `Bearer ${token.substring(0, 20)}...`);
-    } else {
-      console.log('[api] WARNING: No token found in localStorage!');
-    }
-    return config;
-  },
-  (error) => {
+const api = axios.create({ baseURL: inferBaseURL(), timeout: 30000, headers: { 'Content-Type': 'application/json' } });
+api.interceptors.request.use((config) => {
+  const token = getSessionToken();
+  config.sessionToken = token;
+  config.sessionScope = scopeOf(validPayload(token));
+  const payload = validPayload(token);
+  const resource = (config.url || '').replace(/^\/api\//, '/').split(/[/?]/).filter(Boolean)[0]?.toLowerCase();
+  const domains = { devices: 'devices', organizations: 'organizations', tunnels: 'tunnels',
+    mlpolicies: 'mlpolicies', qospolicies: 'qospolicies', firewallpolicies: 'firewallpolicies',
+    vrrp: 'vrrp', peers: 'peers', pathlabels: 'pathlabels', linkmonitors: 'linkmonitors',
+    appidentifications: 'appidentifications', tokens: 'tokens', accesstokens: 'accesstokens',
+    notifications: 'notifications', notificationsconf: 'notifications', accounts: 'accounts',
+    members: 'members', coupons: 'billing', appstore: 'applications' };
+  const method = (config.method || 'get').toLowerCase();
+  const isSelection = /^\/(organizations|accounts)\/select(?:\?|$)/.test(config.url || '');
+  if (payload && !['get', 'head', 'options'].includes(method) && domains[resource] && !isSelection &&
+      !hasPermission(payload.perms, domains[resource], method)) {
+    const error = new Error('You do not have permission to perform this operation');
+    error.response = { status: 403, data: { error: error.message } };
     return Promise.reject(error);
   }
-);
-
-// Response interceptor to handle common errors
-api.interceptors.response.use(
-  (response) => {
-    // Check if backend sent a new JWT token via Refresh-JWT header
-    const refreshToken = response.headers['refresh-jwt'];
-    if (refreshToken) {
-      console.log('[api] Received new JWT token from backend, updating localStorage');
-      localStorage.setItem('token', refreshToken);
-    }
-    return response;
-  },
-  (error) => {
-    // No response usually means: network down / CORS / Mixed Content / self-signed certificate rejected
-    if (!error.response) {
-      // Add diagnostic info to console
-      // Avoid intrusive alert popups
-      // eslint-disable-next-line no-console
-      console.warn('[api] Network error (possibly CORS / Mixed Content / certificate) ->', {
-        message: error.message,
-        baseURL: api.defaults.baseURL,
-        url: error.config?.url,
-        httpsPage: typeof window !== 'undefined' ? window.location.protocol === 'https:' : undefined
-      });
-    } else if (error.response.status === 401) {
-      // Log 401 errors with context
-      console.warn('[api] 401 Unauthorized error:', {
-        url: error.config?.url,
-        hasToken: !!localStorage.getItem('token'),
-        tokenPreview: localStorage.getItem('token')?.substring(0, 20) + '...',
-        responseData: error.response.data,
-        headers: error.response.headers
-      });
-      
-      // Only redirect if not already on login page to avoid loop
-      // Don't automatically remove token - let the component decide
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-        console.warn('[api] Redirecting to login due to 401');
-        // Clear token only if it exists (user was logged in)
-        if (localStorage.getItem('token')) {
-          localStorage.removeItem('token');
-        }
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error);
+  if (token && validPayload(token)) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+api.interceptors.response.use((response) => {
+  const current = getSessionToken();
+  // An old organization's slow response must neither replace its successor's JWT nor data.
+  if (response.config.sessionToken && response.config.sessionToken !== current &&
+      response.config.sessionScope !== scopeOf(validPayload(current))) {
+    throw new axios.CanceledError('Session changed while request was in flight');
   }
-);
-
-export { inferBaseURL };
-
+  const token = response.headers['refresh-jwt'];
+  if (token && (response.config.sessionToken === current ||
+      (current && response.config.sessionScope === scopeOf(validPayload(current))))) setSessionToken(token);
+  return response;
+}, (error) => {
+  if (error.response?.status === 401 && error.config?.sessionToken === getSessionToken() &&
+      !/^\/users\/(login|register|verify-account|reverify-account)/.test(error.config?.url || '')) {
+    clearSession();
+  }
+  return Promise.reject(error);
+});
 export default api;

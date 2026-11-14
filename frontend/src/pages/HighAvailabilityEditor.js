@@ -1,3 +1,4 @@
+import PermissionButton from '../components/common/PermissionButton';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Form, Row, Col, Alert, Modal } from 'react-bootstrap';
@@ -115,7 +116,7 @@ const HighAvailabilityEditor = () => {
         actions={
           <>
             <button className="btn-icon-action" onClick={() => navigate('/high-availability')} title="Back"><FaArrowLeft /></button>
-            <Button variant="primary" onClick={handleSave} disabled={saving || !name || !virtualIp}>{saving ? 'Saving...' : 'Save Group'}</Button>
+            <PermissionButton permKey="vrrp" method={isNew ? 'post' : 'put'} variant="primary" onClick={handleSave} disabled={saving || !name || !virtualIp}>{saving ? 'Saving...' : 'Save Group'}</PermissionButton>
           </>
         }
       />
@@ -218,7 +219,7 @@ const HighAvailabilityEditor = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowMemberModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveMember} disabled={!memberForm.device || !memberForm.interface}>Save Device</Button>
+          <PermissionButton permKey="vrrp" method={isNew ? 'post' : 'put'} variant="primary" onClick={handleSaveMember} disabled={!memberForm.device || !memberForm.interface}>Save Device</PermissionButton>
         </Modal.Footer>
       </Modal>
     </div>

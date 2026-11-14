@@ -1,80 +1,34 @@
-/**
- * This module verifies google recaptcha
- */
+/** Server-side Cloudflare Turnstile verification. */
 const fetch = require('fetch-with-proxy').default;
-// Use Cloudflare Turnstile endpoint
 const verifyURL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 class ReCaptcha {
-  constructor (secretKey) {
-    this.verifyReCaptcha = this.verifyReCaptcha.bind(this);
+  constructor (secretKey, { enforced = true } = {}) {
     this.secretKey = secretKey;
+    this.enforced = enforced;
+    this.verifyReCaptcha = this.verifyReCaptcha.bind(this);
   }
 
-  /**
-     * Verifies a captcha.
-     * @async
-     * @param  {string}         token captcha to verify
-     * @return {boolean|Object}       false if verification failed, verification result otherwise
-     */
   async verifyReCaptcha (token, remoteip = undefined) {
-    // For an empty key (development), return true
-    if (this.secretKey === '') return Promise.resolve(true);
-    
-    // If no token provided, allow it through (graceful degradation for browser restrictions)
-    // The frontend will only omit the token if Turnstile failed to load
-    if (!token) {
-      // eslint-disable-next-line no-console
-      console.warn('[recaptcha] No token provided, allowing registration without captcha verification');
-      return Promise.resolve(true);
-    }
-
-    const headers = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'flexiWAN Turnstile checker'
-    };
-    // Cloudflare Turnstile expects: secret, response, optionally remoteip
-    const params = { secret: this.secretKey, response: token };
-    if (remoteip) params.remoteip = remoteip;
-    const encodedParams = Object.keys(params).map((key) => {
-      return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
-    }).join('&');
-
-    return fetch(verifyURL, {
-      method: 'POST',
-      headers: headers,
-      body: encodedParams
-    })
-      .then(response => {
-        return response.json()
-          .then(json => {
-            response.message = json;
-            return response;
-          },
-          error => {
-            throw error;
-          });
-      },
-      error => {
-        throw error;
-      })
-      .then(response => {
-        // Cloudflare Turnstile returns { success: true/false, ... }
-        if (response.message && response.message.success === true) return true;
-        return false;
-      })
-      .catch((error) => {
-        // General error handling
-        return false;
+    if (!this.enforced) return true;
+    // Missing configuration or a missing challenge must fail closed.
+    if (!this.secretKey || typeof token !== 'string' || !token.trim()) return false;
+    try {
+      const params = new URLSearchParams({ secret: this.secretKey, response: token });
+      if (remoteip) params.set('remoteip', remoteip);
+      const response = await fetch(verifyURL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+        timeout: 10000
       });
+      if (response.ok === false) return false;
+      const result = await response.json();
+      return result.success === true;
+    } catch (error) {
+      return false;
+    }
   }
 }
 
-let reCaptchaHandler = null;
-module.exports = function (secretKey) {
-  if (reCaptchaHandler) return reCaptchaHandler;
-  else {
-    reCaptchaHandler = new ReCaptcha(secretKey);
-    return reCaptchaHandler;
-  }
-};
+module.exports = (secretKey, options) => new ReCaptcha(secretKey, options);

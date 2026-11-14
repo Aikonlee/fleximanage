@@ -18,6 +18,7 @@
 const Service = require('./Service');
 const createError = require('http-errors');
 const isEqual = require('lodash/isEqual');
+const escapeRegExp = require('lodash/escapeRegExp');
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 const MultiLinkPolicies = require('../models/mlpolicies');
 const { devices } = require('../models/devices');
@@ -39,6 +40,32 @@ const emptyApp = {
   category: '',
   serviceClass: '',
   importance: ''
+};
+
+// Serialize IDs before joining references: global ObjectId getters can interfere
+// with Mongoose populate and silently empty arrays of label references.
+const hydratePolicyLabels = async (policies, orgList) => {
+  const result = JSON.parse(JSON.stringify(policies));
+  const ids = [...new Set(result.flatMap(policy => (policy.rules || []).flatMap(rule =>
+    (rule.action?.links || []).flatMap(link =>
+      (link.pathlabels || []).map(label => String(label?._id || label))
+    )
+  )))];
+  const labels = ids.length ? await pathLabelsModel.find({
+    _id: { $in: ids }, org: { $in: orgList }
+  }, '_id name description color type').lean() : [];
+  const byId = new Map(labels.map(label => [String(label._id), JSON.parse(JSON.stringify(label))]));
+  result.forEach(policy => (policy.rules || []).forEach(rule =>
+    (rule.action?.links || []).forEach(link => {
+      link.pathlabels = (link.pathlabels || []).map(label => {
+        const id = String(label?._id || label);
+        return byId.get(id) || {
+          _id: id, name: 'Deleted path label', description: '', color: '#808080', type: 'DIA'
+        };
+      });
+    })
+  ));
+  return result;
 };
 
 class MultiLinkPoliciesService {
@@ -93,7 +120,11 @@ class MultiLinkPoliciesService {
 
     // Duplicate names are not allowed in the same organization
     const hasDuplicateName = await MultiLinkPolicies.findOne(
-      { org, name: { $regex: new RegExp(`^${name}$`, 'i') }, _id: { $ne: ObjectId(_id) } }
+      {
+        org,
+        name: { $regex: new RegExp(`^${escapeRegExp(name)}$`, 'i') },
+        ...(_id ? { _id: { $ne: new ObjectId(_id) } } : {})
+      }
     );
     if (hasDuplicateName) {
       return {
@@ -105,13 +136,12 @@ class MultiLinkPoliciesService {
     // Not allowed to assign path labels of a different organization
     let orgPathLabels = await pathLabelsModel.find({ org }, '_id').lean();
     orgPathLabels = orgPathLabels.map(pl => pl._id.toString());
-    const notAllowedPathLabels = rules.map(rule =>
-      rule.action && !Array.isArray(rule.action.links) ? []
-        : rule.action.links.map(link =>
-          !Array.isArray(link.pathlabels) ? []
-            : link.pathlabels.map(pl => pl._id).filter(id => !orgPathLabels.includes(id))
-        )
-    ).flat(3);
+    const requestedPathLabels = rules.flatMap(rule =>
+      (rule.action?.links || []).flatMap(link =>
+        (link.pathlabels || []).map(label => String(label?._id || label))
+      )
+    );
+    const notAllowedPathLabels = requestedPathLabels.filter(id => !orgPathLabels.includes(id));
     if (notAllowedPathLabels.length) {
       return {
         valid: false,
@@ -144,12 +174,9 @@ class MultiLinkPoliciesService {
       )
         .skip(offset)
         .limit(limit)
-        .populate(
-          'rules.action.links.pathlabels',
-          '_id name description color type'
-        );
+        .lean();
 
-      const converted = JSON.parse(JSON.stringify(mlPolicies));
+      const converted = await hydratePolicyLabels(mlPolicies, orgList);
       return Service.successResponse(converted);
     } catch (e) {
       return Service.rejectResponse(
@@ -235,16 +262,13 @@ class MultiLinkPoliciesService {
           rules: 1
         }
       )
-        .populate(
-          'rules.action.links.pathlabels',
-          '_id name description color type'
-        );
+        .lean();
 
       if (!MLPolicy) {
         return Service.rejectResponse('Not found', 404);
       }
 
-      const converted = JSON.parse(JSON.stringify(MLPolicy));
+      const converted = (await hydratePolicyLabels([MLPolicy], orgList))[0];
       return Service.successResponse(converted);
     } catch (e) {
       return Service.rejectResponse(
@@ -275,7 +299,7 @@ class MultiLinkPoliciesService {
       );
       // Verify request schema
       const { valid, message } = await MultiLinkPoliciesService.verifyRequestSchema(
-        mLPolicyRequest, orgList[0]
+        { ...mLPolicyRequest, _id: id }, orgList[0]
       );
       if (!valid) {
         throw createError(400, message);
@@ -320,10 +344,7 @@ class MultiLinkPoliciesService {
         opDevices, MLPolicy.toObject(), 'install', user, orgList[0]
       );
 
-      const populated = await MLPolicy.populate(
-        'rules.action.links.pathlabels',
-        '_id name description color type'
-      );
+      const populated = (await hydratePolicyLabels([MLPolicy], orgList))[0];
 
       const converted = JSON.parse(JSON.stringify(populated));
       // send a notification
@@ -409,10 +430,7 @@ class MultiLinkPoliciesService {
         rules: rules
       });
 
-      result = await result.populate(
-        'rules.action.links.pathlabels',
-        '_id name description color type'
-      );
+      result = (await hydratePolicyLabels([result], orgList))[0];
 
       const MLPolicy = (({ _id, name, description, applyOnWan, overrideDefaultRoute, rules }) => ({
         _id,
@@ -461,7 +479,7 @@ class MultiLinkPoliciesService {
       // To each policy, attach the installation status of
       // each of the devices the policy is installed on.
       const mlPoliciesMeta = await MultiLinkPolicies.aggregate([
-        { $match: { org: { $in: orgList.map(org => ObjectId(org)) } } },
+        { $match: { org: { $in: orgList.map(org => new ObjectId(org)) } } },
         {
           $project: {
             _id: 1,

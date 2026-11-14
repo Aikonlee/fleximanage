@@ -26,7 +26,7 @@ export function subscribeSession(listener) {
 }
 export function validPayload(token) {
   const payload = decodeJwtPayload(token);
-  return payload && Number.isFinite(payload.exp) && payload.exp * 1000 > Date.now()
+  return payload && payload.type !== 'login' && Number.isFinite(payload.exp) && payload.exp * 1000 > Date.now()
     ? payload : null;
 }
 export const scopeOf = (payload) => JSON.stringify([payload?._id, payload?.account, payload?.org]);

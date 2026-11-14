@@ -17,7 +17,7 @@
 
 const configs = require('../configs')();
 const net = require('net');
-const cidr = require('cidr-tools');
+const cidr = require('../utils/cidr');
 const { getBridges, getCpuInfo, validateFirewallRules, isEmpty, calculateRecommendedVppCores } = require('../utils/deviceUtils');
 const { generateTunnelParams } = require('../utils/tunnelUtils');
 const { getMajorVersion, getMinorVersion } = require('../versioning');

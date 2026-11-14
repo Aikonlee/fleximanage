@@ -20,7 +20,8 @@ const path = require('path');
 const apnsJson = require(path.join(__dirname, 'mcc_mnc_apn.json'));
 const wifiChannels = require('./wifi-channels');
 const { getOrgDefaultTunnelPort } = require('../utils/tunnelUtils');
-const SHA1 = require('crypto-js/sha1');
+const { createHash } = require('crypto');
+const SHA1 = value => createHash('sha1').update(value).digest('hex');
 
 /**
  * Get the default gateway of the device

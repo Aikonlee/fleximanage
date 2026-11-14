@@ -22,7 +22,7 @@ const http = require('http');
 const https = require('https');
 const configs = require('./configs')();
 const swaggerUI = require('swagger-ui-express');
-const yamljs = require('yamljs');
+const YAML = require('yaml');
 const express = require('express');
 const cors = require('./routes/cors');
 const cookieParser = require('cookie-parser');
@@ -82,7 +82,7 @@ class ExpressServer {
     this.securePort = securePort;
     this.app = express();
     this.openApiPath = openApiYaml;
-    this.schema = yamljs.load(openApiYaml);
+    this.schema = YAML.parse(fs.readFileSync(openApiYaml, 'utf8'));
     const restServerUrl = configs.get('restServerUrl', 'list');
     const servers = this.schema.servers.filter(server => server.url.includes(restServerUrl));
     if (servers.length === 0) {
@@ -280,15 +280,8 @@ class ExpressServer {
     // add API documentation
     this.app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(this.schema));
 
-    // Enable db admin only in development mode
-    if (configs.get('environment') === 'development') {
-      logger.warn('Warning: Enabling UI database access');
-      // mongo database UI
-      const mongoExpress = require('mongo-express/lib/middleware');
-      const mongoExpressConfig = require('./mongo_express_config');
-      const expressApp = await mongoExpress(mongoExpressConfig);
-      this.app.use('/admindb', expressApp);
-    }
+    // Database administration is performed through the local authenticated MongoDB CLI.
+    this.app.use('/admindb', (req, res) => res.sendStatus(410));
 
     // Enable routes for non-authorized links
     this.app.use('/ok', express.static(path.join(__dirname, 'public', 'ok.html')));
@@ -526,13 +519,13 @@ class ExpressServer {
       this.wss.on('connection', connections.createConnection);
       logger.info('WebSocket server initialized on port ' + this.securePort);
 
-      this.server.listen(this.port, () => {
+      this.server.listen(this.port, configs.get('listenHost') || undefined, () => {
         console.log('HTTP server listening on port', { params: { port: this.port } });
       });
       this.server.on('error', this.onError(this.port));
       this.server.on('listening', this.onListening(this.server));
 
-      this.secureServer.listen(this.securePort, () => {
+      this.secureServer.listen(this.securePort, configs.get('listenHost') || undefined, () => {
         console.log('HTTPS server listening on port', { params: { port: this.securePort } });
       });
       this.secureServer.on('error', this.onError(this.securePort));

@@ -237,6 +237,9 @@ const apply = async (deviceList, user, data) => {
  * @param  {String}   org           Org ID
  */
 const applyPolicy = async (opDevices, mLPolicy, op, user, org) => {
+  // Editing an uninstalled policy must not fetch catalogs or create device jobs.
+  if (opDevices.length === 0) return { ids: [], status: 'completed', message: '' };
+
   const deviceIds = opDevices.map(device => device._id);
   const requestTime = Date.now();
 

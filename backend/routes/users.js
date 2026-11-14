@@ -33,14 +33,18 @@ const mailer = require('../utils/mailer')(
   configs.get('mailerPort'),
   configs.get('mailerBypassCert', 'boolean')
 );
-const reCaptcha = require('../utils/recaptcha')(configs.get('captchaKey'));
+const reCaptcha = require('../utils/recaptcha')(configs.get('captchaKey'), {
+  enforced: process.env.NODE_ENV === 'production' || configs.get('environment') === 'production' ||
+    configs.get('captchaEnforced', 'boolean')
+});
 const webHooks = require('../utils/webhooks')();
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 const { getUiServerUrl } = require('../utils/httpUtils');
 const flexibilling = require('../flexibilling');
 const { getUserOrganizations } = require('../utils/membershipUtils');
 const { generateSecret, verifyCode } = require('../otp');
-const SHA256 = require('crypto-js/sha256');
+const { createHash } = require('crypto');
+const SHA256 = value => createHash('sha256').update(value).digest('hex');
 const rateLimit = require('express-rate-limit');
 const RateLimitStore = require('../rateLimitStore');
 const jwt = require('jsonwebtoken');
@@ -69,6 +73,10 @@ const verifyAdminJWT = async (req, res, next) => {
     
     if (!user) {
       return next(createError(401, 'User not found'));
+    }
+
+    if ((user.mfa?.enabled || user.defaultAccount?.forceMfa) && decoded.mfaVerified !== true) {
+      return next(createError(401, 'Two-factor authentication required'));
     }
 
     if (user.admin !== true) {
@@ -127,8 +135,8 @@ router.route('/register')
     if (!auth.validatePassword(req.body.password)) return next(createError(500, 'Bad Password'));
 
     // Verify captcha
-    if (!await reCaptcha.verifyReCaptcha(req.body.captcha)) {
-      return next(createError(500, 'Wrong Captcha'));
+    if (!await reCaptcha.verifyReCaptcha(req.body.captcha, req.ip)) {
+      return next(createError(401, 'Wrong Captcha'));
     }
 
     // Continue with registration
@@ -649,6 +657,15 @@ const inMemoryStore = new RateLimitStore(1000 * 30); // 30 seconds
 const verifyMfaRateLimit = rateLimit({
   store: inMemoryStore,
   max: 5, // Allow 5 times in token period. The 6th request will be blocked
+  keyGenerator: (req) => {
+    try {
+      const bearer = req.headers.authorization?.split(' ')[1];
+      const decoded = jwt.verify(bearer, configs.get('userTokenSecretKey'));
+      return String(decoded._id || decoded.userId || req.ip);
+    } catch (error) {
+      return req.ip;
+    }
+  },
   message: { error: 'Too many attempts. Please wait and try again later' },
   onLimitReached: (req, res, options) => {
     logger.warn(
@@ -746,7 +763,7 @@ router.route('/mfa/generateRecoveryCodes')
     const hashed = []; // store hashed in DB
 
     if (req?.user?.mfa?.recoveryCodes?.length > 0 && req.query.regenerate !== 'true') {
-      res.json({ codes });
+      return res.json({ codes });
     }
 
     for (let i = 0; i < 10; i++) {
@@ -766,50 +783,25 @@ router.route('/mfa/generateRecoveryCodes')
 
 router.route('/mfa/verifyRecoveryCode')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .post(cors.corsWithOptions, auth.verifyUserOrLoginJWT, async (req, res, next) => {
-    const userRecoveryCodes = req.user?.mfa?.recoveryCodes ?? [];
-    if (userRecoveryCodes.length === 0) {
-      return next(createError(401, 'Recovery codes are not generated for the user'));
-    }
-
-    const requestedCode = req.body?.recoveryCode;
-    if (!requestedCode) {
-      return next(createError(403, 'Recovery codes are missing'));
-    }
-
-    let validated = false;
-
-    const hashedRequestedCode = SHA256(requestedCode).toString();
-    for (const userRecoveryCode of userRecoveryCodes) {
-      const { code, usedTime } = userRecoveryCode;
-
-      // recovery code can be used once
-      if (usedTime) {
-        return next(createError(403, 'This recovery code is already used'));
-      };
-
-      if (hashedRequestedCode === code) {
-        // mark recovery code as used
-        await User.findOneAndUpdate(
-          {
-            _id: req.user._id,
-            'mfa.recoveryCodes.code': code
-          },
-          { $set: { 'mfa.recoveryCodes.$.usedTime': new Date() } },
-          { upsert: false }
-        );
-
-        validated = true;
-        break;
+  .post(verifyMfaRateLimit, cors.corsWithOptions, auth.verifyUserOrLoginJWT,
+    async (req, res, next) => {
+      const requestedCode = req.body?.recoveryCode;
+      if (typeof requestedCode !== 'string' || !requestedCode.trim()) {
+        return next(createError(403, 'Recovery code is required'));
       }
-    }
-
-    if (!validated) {
-      return next(createError(403, 'Recovery code is invalid'));
-    }
-
-    return await sendJwtToken(req, res, validated);
-  });
+      const hashedCode = SHA256(requestedCode.trim()).toString();
+      // Match and consume atomically so concurrent requests cannot reuse a code.
+      // A previously consumed, different code must not prevent the next valid code.
+      const updatedUser = await User.findOneAndUpdate({
+        _id: req.user._id,
+        'mfa.enabled': true,
+        'mfa.recoveryCodes': { $elemMatch: { code: hashedCode, usedTime: null } }
+      }, {
+        $set: { 'mfa.recoveryCodes.$.usedTime': new Date() }
+      }, { new: true });
+      if (!updatedUser) return next(createError(403, 'Recovery code is invalid or already used'));
+      return await sendJwtToken(req, res, true);
+    });
 
 // Batch verify users by admin (must come before /:userId/verify to avoid route conflict)
 router.route('/verify/batch')

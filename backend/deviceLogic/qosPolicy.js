@@ -560,6 +560,9 @@ const apply = async (deviceList, user, data) => {
  * @param  {Boolean} installed        the policy is installed already, just updating values
  */
 const applyPolicy = async (opDevices, qosPolicy, op, user, org, installed = false) => {
+  // Editing an uninstalled policy must not fetch catalogs or create device jobs.
+  if (opDevices.length === 0) return { ids: [], status: 'completed', message: '' };
+
   // validate QoS on devices
   if (op === 'install') {
     const { valid, err } = validateQOSPolicy(opDevices);

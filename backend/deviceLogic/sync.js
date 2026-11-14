@@ -43,7 +43,8 @@ const vrrpSyncHandler = require('./vrrp').sync;
 const vrrpCompleteHandler = require('./vrrp').completeSync;
 const logger = require('../logging/logging')({ module: module.filename, type: 'job' });
 const stringify = require('json-stable-stringify');
-const SHA1 = require('crypto-js/sha1');
+const { createHash } = require('crypto');
+const SHA1 = value => createHash('sha1').update(value).digest('hex');
 const {
   activatePendingTunnelsOfDevice,
   releasePublicAddrLimiterBlockage

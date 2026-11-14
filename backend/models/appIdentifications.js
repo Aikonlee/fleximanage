@@ -244,7 +244,7 @@ const getAllAppIdentifications = async (offset, limit, orgList) => {
   // Before merge with modified values taken from custom document,
   // assign each imported app identification with modified = false.
   const importedAppIdents1 =
-    (importedAppIdentsRes || {}).appIdentifications.map((item) => {
+    (importedAppIdentsRes?.appIdentifications || []).map((item) => {
       item.modified = false;
       return item;
     }) || [];

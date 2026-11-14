@@ -228,7 +228,7 @@ class FirewallPoliciesService {
 
       // Verify request schema
       const { valid, message } = await FirewallPoliciesService.verifyRequestSchema(
-        firewallPolicyRequest, orgList[0], opDevices
+        { ...firewallPolicyRequest, _id: id }, orgList[0], opDevices
       );
       if (!valid) {
         throw createError(400, message);
@@ -236,7 +236,7 @@ class FirewallPoliciesService {
 
       // only one default policy per organization is allowed
       if (isDefault) {
-        await FirewallPolicies.update(
+        await FirewallPolicies.updateMany(
           { org: { $in: orgList }, _id: { $ne: id }, isDefault: true },
           { $set: { isDefault: false } },
           { upsert: false }
@@ -352,7 +352,7 @@ class FirewallPoliciesService {
 
       // only one default policy per organization is allowed
       if (isDefault) {
-        await FirewallPolicies.update(
+        await FirewallPolicies.updateMany(
           { org: { $in: orgList }, isDefault: true },
           { $set: { isDefault: false } },
           { upsert: false }

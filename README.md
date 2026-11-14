@@ -34,19 +34,19 @@ Background workers (periodic jobs, device job queue, WebSocket device connection
 
 | Component | Version |
 |---|---|
-| Node.js | v20.11.1 (nvm, `/root/.nvm/versions/node/v20.11.1`) |
+| Node.js | Node 22 (see `.nvmrc`) |
 | Backend (`flexiwansite`) | v6.5.1 |
 | MongoDB | 8.0.15, 3-node replica set (ports 27017/27018/27019, systemd `mongod-2701x`), **localhost only, authentication on** — transactions require the replica set |
 | Redis | 7.0.15 (127.0.0.1:6379, device job queue via kue, prefix `deviceq`) |
 | Process manager | systemd `fleximanage.service` → PM2 app `fleximanage-backend` (`pm2 start bin/www`) |
 | HTTPS | Served directly by Node on :3443 (HTTP on :3000); nginx is not in the request path |
-| Frontend | React 18, react-router 6, Bootstrap 5 (`react-scripts build`) |
+| Frontend | React 18, react-router 6, Bootstrap 5 (Vite production build) |
 | Platform | aarch64 (ARM64) |
 
 ## Getting started
 
 ### Prerequisites
-* Node.js v20+, npm
+* Node.js v22.12+, npm
 * MongoDB running as a 3-node replica set (transactions won't work standalone)
 * Redis
 * An SMTP-capable mail path — see [Mail configuration](#mail-configuration) below
@@ -207,3 +207,29 @@ GNU AGPLv3 — see [LICENSE](LICENSE).
 ## Other open source used
 
 Listed in [OPENSOURCE.md](OPENSOURCE.md).
+
+## Verification and dependency maintenance
+
+Use Node 22.22.2 or newer in the 22.x series (`nvm use`). The frontend uses Vite/Vitest and still publishes to
+`frontend/build/`. GitHub Actions and GitLab CI both run frontend lint, tests,
+build and audit; backend CI runs `npm run test:regression` and records full and
+production-only dependency audits. High/critical production advisories fail the
+backend gate. See `SECURITY.md` for remaining dependency work.
+
+The legacy backend model tests under `npm test` still contain Mongoose 5 callback
+fixtures. They are not represented as passing by the focused regression job;
+migrating those fixtures is separate from the security/policy regression suite.
+
+CAPTCHA requires backend `CAPTCHA_KEY` and `CAPTCHA_SITE_KEY`. Missing/invalid
+challenges fail closed. `CAPTCHA_ENFORCED=false` is an explicit development-only
+setting; production mode always enforces verification. CAPTCHA, setup keys and
+recovery codes must not be logged. The database web console has been retired
+(`/admindb` returns 410); use the authenticated local MongoDB CLI.
+
+Two-factor enrollment is available on User Profile. Sign-in supports an
+authenticator code, one-time recovery code and setup when the account requires
+MFA. Generate recovery codes after enrollment and save them securely.
+
+Opt-in integration instructions are in `frontend/e2e/README.md`. The integration
+fixtures have no device agent; configuration acknowledgements and forwarding
+remain tests for a real flexiEdge router.

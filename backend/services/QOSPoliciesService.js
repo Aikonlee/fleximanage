@@ -238,7 +238,7 @@ class QOSPoliciesService {
 
       // Verify request schema
       const { valid, message } = await QOSPoliciesService.verifyRequestSchema(
-        qosPolicyRequest, orgList[0]
+        { ...qosPolicyRequest, _id: id }, orgList[0]
       );
       if (!valid) {
         throw createError(400, message);

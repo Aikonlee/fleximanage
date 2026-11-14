@@ -22,7 +22,7 @@ const validator = require('validator');
 const filenamify = require('filenamify');
 const phoneUtil = require('google-libphonenumber').PhoneNumberUtil.getInstance();
 const configs = require('../configs')();
-const IPCidr = require('ip-cidr');
+const { networkStart } = require('../utils/cidr');
 const Joi = require('joi');
 
 // Globals
@@ -63,8 +63,7 @@ const validateIPv4Mask = mask => {
 };
 const validateIPv4Prefix = (ipWithMask) => {
   const ip = ipWithMask.split('/')[0];
-  const ipCidr = new IPCidr(ipWithMask);
-  return (ipCidr.start() === ip);
+  return networkStart(ipWithMask) === ip;
 };
 const validateIPv6Mask = mask => {
   return (
@@ -77,8 +76,7 @@ const validateIPv6Mask = mask => {
 const validateIPv6 = (ip) => { return ip === '' || net.isIPv6(ip); };
 const validateIPaddr = (ip) => { return validateIPv4(ip) || validateIPv6(ip); };
 const validateTunnelRangeIP = (ip) => {
-  const ipCidr = new IPCidr(ip + '/' + configs.get('tunnelRangeMask'));
-  return (ipCidr.start() === ip);
+  return networkStart(ip + '/' + configs.get('tunnelRangeMask')) === ip;
 };
 
 const validateDevId = (devId) => {

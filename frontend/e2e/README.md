@@ -1,11 +1,12 @@
 # Frontend regression and integration checks
 
-Run the regular checks with Node 20:
+Run the regular checks with Node 22:
 
 ```sh
 cd frontend
 npm ci
-CI=true npm test -- --watchAll=false --runInBand
+npm run lint -- --max-warnings=0
+npm test
 CI=true npm run build
 ```
 
@@ -45,3 +46,21 @@ online flexiEdge test router and are not covered by the offline fixture.
 
 Set `E2E_FRONTEND_URL=https://localhost:3443` to replay the browser checks against
 the deployed frontend instead of the temporary preview.
+
+## Authentication/security suite
+
+Run `security.cjs` after `run.cjs` against an **isolated backend and database**.
+Set `E2E_API_URL`, `E2E_FRONTEND_URL` and `E2E_CAPTCHA_TOKEN`. The security suite
+requires the official Turnstile always-pass test sitekey and dummy token, and
+refuses a server reporting another sitekey. Never install test keys on the
+production service. See the [Cloudflare testing guide](https://developers.cloudflare.com/turnstile/troubleshooting/testing/).
+
+The suite tests missing-CAPTCHA rejection, an unavailable widget, authenticator
+enrollment, interim-token isolation, invalid/valid OTP, recovery-code generation,
+one-time atomic consumption, subsequent valid codes and per-user attempt limits.
+It waits one 30-second rate-limit window before its recovery-code tests.
+
+The fixtures are password protected, use `example.invalid` identities and do not
+send email. Delete them with `fixtures.cjs cleanup`, then remove the dedicated
+test database/user and stop the loopback backend. Test output contains check
+names; passwords and recovery codes must stay out of repository artifacts.

@@ -6,7 +6,7 @@ export function decodeJwtPayload(token) {
   try {
     const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
     return JSON.parse(decodeURIComponent(escape(json)));
-  } catch (e) {
+  } catch (_e) {
     return null;
   }
 }

@@ -30,7 +30,7 @@ const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 var mongoose = require('mongoose');
 const find = require('lodash/find');
 const remove = require('lodash/remove');
-const IPCidr = require('ip-cidr');
+const { networkStart } = require('../utils/cidr');
 const { validateIPv4WithMask, validatePortRange } = require('../models/validators');
 
 class AppIdentificationsService {
@@ -87,8 +87,7 @@ class AppIdentificationsService {
           throw new Error(`[${rule.ip}] - 'ip' should be a valid IPv4 address with mask`);
         };
         const [, mask] = rule.ip.split('/');
-        const ipCidr = new IPCidr(rule.ip);
-        if (ipCidr.start() + '/' + mask !== rule.ip) {
+        if (networkStart(rule.ip) + '/' + mask !== rule.ip) {
           throw new Error(`[${rule.ip}] - invalid prefix for given mask`);
         }
       }

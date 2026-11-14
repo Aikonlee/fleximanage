@@ -65,6 +65,8 @@ const configEnv = {
     // Key used to validate google captcha token, generated at https://www.google.com/u/1/recaptcha/admin/create
     // Default value is not set, which only validate the client side captcha
     captchaKey: '',
+    // Disable only explicitly in a controlled development/test environment.
+    captchaEnforced: true,
     // Mongo main database
     mongoUrl: process.env.MONGO_URL || `mongodb://${hostname}:27017,${hostname}:27018,${hostname}:27019/flexiwan?replicaSet=rs`,
     // Mongo analytics database
@@ -113,6 +115,7 @@ const configEnv = {
     // HTTP port of the node server. On production we usually forward port 80 to this port using:
     // sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-port 3000
     httpPort: parseInt(process.env.HTTP_PORT || '3000', 10),
+    listenHost: '',
     // HTTPS port of the node server. On production we usually forward port 443 to this port using:
     // sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 443 -j REDIRECT --to-port 3443
     httpsPort: parseInt(process.env.HTTPS_PORT || '3443', 10),
@@ -261,8 +264,8 @@ const configEnv = {
     contactUsUrl: 'mailto:yourfriends@flexiwan.com',
     // Repository setup URL
     agentRepositoryUrl: 'https://deb.flexiwan.com/setup',
-    // Captcha client key for flexiwan domain
-    captchaSiteKey: '6LfkP8IUAAAAABt2dxrb9U2WzxonxJlhs0_2Hadi',
+    // Cloudflare Turnstile public site key, configured for this deployment.
+    captchaSiteKey: '',
     // HTML content of the UI about page
     aboutContent: '',
     // UI URL for feedback
@@ -566,6 +569,8 @@ class Configs {
       contactUsUrl: this.get('contactUsUrl'),
       agentRepositoryUrl: this.get('agentRepositoryUrl'),
       captchaSiteKey: this.get('captchaSiteKey'),
+      captchaEnforced: process.env.NODE_ENV === 'production' ||
+        this.get('environment') === 'production' || this.get('captchaEnforced', 'boolean'),
       aboutContent: this.get('aboutContent'),
       feedbackUrl: this.get('feedbackUrl'),
       showDeviceLimitAlert: this.get('showDeviceLimitAlert', 'boolean'),

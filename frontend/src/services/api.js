@@ -1,11 +1,12 @@
+import config from '../config';
 import axios from 'axios';
 import { hasPermission } from '../auth/permissions';
 import { getSessionToken, setSessionToken, clearSession, validPayload, scopeOf } from '../auth/session';
 
 export function inferBaseURL() {
-  return (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
+  return (config.apiUrl).replace(/\/+$/, '');
 }
-const api = axios.create({ baseURL: inferBaseURL(), timeout: 30000, headers: { 'Content-Type': 'application/json' } });
+const api = axios.create({ baseURL: inferBaseURL(), timeout: config.requestTimeout, headers: { 'Content-Type': 'application/json' } });
 api.interceptors.request.use((config) => {
   const token = getSessionToken();
   config.sessionToken = token;
@@ -26,7 +27,7 @@ api.interceptors.request.use((config) => {
     error.response = { status: 403, data: { error: error.message } };
     return Promise.reject(error);
   }
-  if (token && validPayload(token)) config.headers.Authorization = `Bearer ${token}`;
+  if (!config.authFlow && token && validPayload(token)) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 api.interceptors.response.use((response) => {
@@ -41,7 +42,7 @@ api.interceptors.response.use((response) => {
       (current && response.config.sessionScope === scopeOf(validPayload(current))))) setSessionToken(token);
   return response;
 }, (error) => {
-  if (error.response?.status === 401 && error.config?.sessionToken === getSessionToken() &&
+  if (!error.config?.authFlow && error.response?.status === 401 && error.config?.sessionToken === getSessionToken() &&
       !/^\/users\/(login|register|verify-account|reverify-account)/.test(error.config?.url || '')) {
     clearSession();
   }

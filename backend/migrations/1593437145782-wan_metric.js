@@ -16,7 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 const { devices } = require('../models/devices');
 const logger = require('../logging/logging')({ module: module.filename, type: 'migration' });
-const cidr = require('cidr-tools');
+const cidr = require('../utils/cidr');
 
 async function up () {
   try {

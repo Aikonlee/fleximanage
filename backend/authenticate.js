@@ -27,7 +27,10 @@ const { permissionMasks } = require('./models/membership');
 const { orgUpdateFromNull, getUserOrgByID } = require('./utils/membershipUtils');
 var configs = require('./configs')();
 const createError = require('http-errors');
-const reCaptcha = require('./utils/recaptcha')(configs.get('captchaKey'));
+const reCaptcha = require('./utils/recaptcha')(configs.get('captchaKey'), {
+  enforced: process.env.NODE_ENV === 'production' || configs.get('environment') === 'production' ||
+    configs.get('captchaEnforced', 'boolean')
+});
 const logger = require('./logging/logging')({ module: module.filename, type: 'req' });
 var jwt = require('jsonwebtoken');
 
@@ -119,6 +122,9 @@ const setUserPerms = async (user, jwtPayload, token = null) => {
 
   if (!isAccessToken && !isValidAccount) return false;
 
+  if (!isAccessToken && (user.mfa?.enabled || user.defaultAccount?.forceMfa) &&
+      jwtPayload.mfaVerified !== true) return false;
+
   user.accessToken = isAccessToken;
   user.jwtAccount = jwtPayload.account;
   user.perms = jwtPayload.perms;
@@ -166,18 +172,8 @@ const setUserPerms = async (user, jwtPayload, token = null) => {
 
 // Authentication verification for local and JWT strategy, and populate req.user
 exports.verifyUserLocal = async function (req, res, next) {
-  // Verify captcha (skip in development if CAPTCHA_KEY is test key)
-  const configs = require('./configs')();
-  const isTestCaptcha = configs.get('captchaKey') === '0x4AAAAAAB43PO97iTQPqCGoeQsv0SPYXk4';
-  const isDevelopment = configs.get('environment') === 'development';
-  
-  if (!isTestCaptcha || !isDevelopment) {
-    // Only verify CAPTCHA in production or with non-test keys
-    if (!await reCaptcha.verifyReCaptcha(req.body.captcha)) {
-      return next(createError(401, 'Wrong Captcha'));
-    }
-  } else {
-    console.log('[DEV] Skipping CAPTCHA verification (test key in development)');
+  if (!await reCaptcha.verifyReCaptcha(req.body.captcha, req.ip)) {
+    return next(createError(401, 'Wrong Captcha'));
   }
 
   // Continue with verifying password
@@ -279,7 +275,9 @@ exports.verifyUserJWT = function (req, res, next) {
             // since passport's JWT strategy callback will not
             // be called.
             const jwtPayload = jwt.decode(token);
-            await setUserPerms(userDetails, jwtPayload);
+            if (!await setUserPerms(userDetails, jwtPayload)) {
+              return next(createError(401, 'Two-factor authentication required'));
+            }
             user = userDetails;
           } catch (err) {
             if (req.header('Origin') !== undefined) {

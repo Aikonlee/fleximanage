@@ -10,6 +10,7 @@ const mongoose = load('node_modules/mongoose');
 const Account = load('models/accounts');
 const User = load('models/users');
 const Org = load('models/organizations');
+const PathLabel = load('models/pathlabels');
 const { devices } = load('models/devices');
 const { membership, preDefinedPermissions } = load('models/membership');
 const root = process.env.E2E_STATE_DIR || path.resolve(backend, '../tmp/frontend-e2e-state');
@@ -21,7 +22,7 @@ async function main() {
     const state = JSON.parse(fs.readFileSync(statePath));
     // Every delete is scoped by IDs created by this run, never a blanket collection delete.
     const orgIds = state.orgs.map(o => new mongoose.Types.ObjectId(o.id));
-    for (const name of ['qospolicies', 'firewallpolicies', 'mlpolicies', 'devices', 'tokens', 'pathlabels', 'linkmonitors']) {
+    for (const name of ['qospolicies', 'firewallpolicies', 'multilinkpolicies', 'devices', 'tokens', 'pathlabels', 'linkmonitors']) {
       await db.collection(name).deleteMany({ org: { $in: orgIds } });
     }
     const analytics = load('mongoConns')().getAnalyticsDB();
@@ -47,6 +48,8 @@ async function main() {
     state.orgs.push({ id: String(org._id), name: org.name }); save();
   }
   account.organizations = state.orgs.map(o => o.id); await account.save();
+  const foreign = await PathLabel.create({ org: state.orgs[1].id, name: 'E2E foreign path', color: '#ff0000', type: 'DIA' });
+  state.foreignLabel = { id: String(foreign._id) }; save();
   for (const role of ['owner', 'mixed', 'viewer']) {
     const password = crypto.randomBytes(24).toString('hex');
     const username = `e2e-${suffix}-${role}@example.invalid`;

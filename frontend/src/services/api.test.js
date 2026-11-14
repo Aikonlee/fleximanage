@@ -1,9 +1,9 @@
 import api, { inferBaseURL } from './api';
 import { setSessionToken, getSessionToken, clearSession } from '../auth/session';
 const token = (org, perms = { devices: 15 }) => `eyJhbGciOiJIUzI1NiJ9.${btoa(JSON.stringify({ _id: 'user', account: 'account', org, exp: Math.floor(Date.now() / 1000) + 3600, perms }))}.signature`;
-const adapter = jest.fn();
+const adapter = vi.fn();
 beforeEach(() => { localStorage.clear(); adapter.mockReset(); api.defaults.adapter = adapter; });
-test('uses same-origin API fallback', () => { expect(inferBaseURL()).toBe(process.env.REACT_APP_API_URL || '/api'); });
+test('uses same-origin API fallback', () => { expect(inferBaseURL()).toBe(import.meta.env.REACT_APP_API_URL || '/api'); });
 test('viewer writes rejected before network, selection remains allowed', async () => {
   setSessionToken(token('A', { devices: 1, organizations: 1 }));
   await expect(api.delete('/devices/id')).rejects.toMatchObject({ response: { status: 403 } });

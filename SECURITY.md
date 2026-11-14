@@ -50,3 +50,11 @@ The embedded database web console is retired (`/admindb` returns 410).
 
 MFA enrollment currently provides an authenticator URI and manual setup key;
 recovery codes are displayed only when generated. Keep them in a secure location.
+
+Historical device validation, membership and Redis queue tests run with
+`npm run test:historical` (137 tests). They use modern ObjectId construction and
+Promise completion, with application subnets mocked in the validation fixture.
+Queue tests use a unique prefix in a dedicated Redis database and close all
+clients, removing only their own keys. CI supplies a disposable Redis service.
+Physical policy delivery and forwarding remain unverified: no flexiEdge is
+currently connected.

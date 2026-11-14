@@ -16,6 +16,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+jest.mock('../../applicationLogic/applications', () => () => ({
+  getApplicationSubnets: jest.fn().mockResolvedValue([])
+}));
+
 const { ObjectId } = require('mongoose').Types;
 const { validateDevice, validateModifyDeviceMsg, validateStaticRoute } = require('../validators');
 const { validateConfiguration } = require('../../utils/deviceUtils');
@@ -41,14 +45,14 @@ beforeAll(async () => {
   // setQuery({
   //   _id: {
   //     $in: [
-  //       ObjectId('5ef0b7a657344d1ad6187100'),
-  //       ObjectId('5ef0b7a657344d1ad6187101'),
-  //       ObjectId('5ef0b7a657344d1ad6187102')
+  //       new ObjectId('5ef0b7a657344d1ad6187100'),
+  //       new ObjectId('5ef0b7a657344d1ad6187101'),
+  //       new ObjectId('5ef0b7a657344d1ad6187102')
   //     ]
   //   },
   //   group: 'Default'
   // }, [
-  //   ObjectId('5ef0b7a657344d1ad6187100'), ObjectId('5ef0b7a657344d1ad6187101')
+  //   new ObjectId('5ef0b7a657344d1ad6187100'), new ObjectId('5ef0b7a657344d1ad6187101')
   // ]);
 });
 
@@ -120,7 +124,7 @@ describe('validateDevice', () => {
         isAssigned: true,
         routing: 'None',
         type: 'WAN',
-        pathlabels: [ObjectId('5e65290fbe66a2335718e081')]
+        pathlabels: [new ObjectId('5e65290fbe66a2335718e081')]
       },
       {
         name: 'eth2',
@@ -423,7 +427,7 @@ describe('validateDevice', () => {
   });
 
   it('Should be an invalid device if LAN interface has path labels', async () => {
-    device.interfaces[0].pathlabels = [ObjectId('5e65290fbe66a2335718e081')];
+    device.interfaces[0].pathlabels = [new ObjectId('5e65290fbe66a2335718e081')];
     failureObject.err = 'Path Labels are not allowed on LAN interfaces';
     const result = await validateDevice(device, org);
     expect(result).toMatchObject(failureObject);
@@ -862,7 +866,7 @@ describe('validateStaticRoute', () => {
         isAssigned: true,
         routing: 'None',
         type: 'WAN',
-        pathlabels: [ObjectId('5e65290fbe66a2335718e081')]
+        pathlabels: [new ObjectId('5e65290fbe66a2335718e081')]
       }]
     };
   });

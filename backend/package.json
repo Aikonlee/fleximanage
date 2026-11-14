@@ -8,7 +8,8 @@
     "test": "jest",
     "migrate": "migrate --autosync --config migrate_config.js",
     "test:regression": "jest --runInBand utils/tests/recaptcha.test.js services/tests/multilink-regression.test.js utils/tests/cidr.test.js",
-    "test:models": "jest models/tests --runInBand --setupFiles ./tools/test-models-setup.cjs"
+    "test:models": "jest models/tests --runInBand --setupFiles ./tools/test-models-setup.cjs",
+    "test:historical": "jest deviceLogic/tests/validators.test.js utils/__tests__/membershipUtils.test.js utils/__tests__/deviceQueue.test.js --runInBand --setupFiles ./tools/test-models-setup.cjs"
   },
   "dependencies": {
     "async": "^3.2.3",

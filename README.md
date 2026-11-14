@@ -234,3 +234,11 @@ MFA. Generate recovery codes after enrollment and save them securely.
 Opt-in integration instructions are in `frontend/e2e/README.md`. The integration
 fixtures have no device agent; configuration acknowledgements and forwarding
 remain tests for a real flexiEdge router.
+
+Historical device validation, membership and Redis queue tests run with
+`npm run test:historical` (137 tests). They use modern ObjectId construction and
+Promise completion, with application subnets mocked in the validation fixture.
+Queue tests use a unique prefix in a dedicated Redis database and close all
+clients, removing only their own keys. CI supplies a disposable Redis service.
+Physical policy delivery and forwarding remain unverified: no flexiEdge is
+currently connected.

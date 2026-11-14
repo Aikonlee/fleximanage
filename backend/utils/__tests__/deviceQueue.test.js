@@ -16,16 +16,36 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 // Module for deviceQueues Unit Test
+process.env.REDIS_URL = process.env.TEST_REDIS_URL || 'redis://127.0.0.1:6379/15';
+process.env.KUE_PREFIX = 'legacy-test-' + process.pid + '-' + Date.now();
 var configs = require('../../configs')();
 var deviceQueues = require('../deviceQueue')(configs.get('kuePrefix'), configs.get('redisUrl'));
 const logger = require('../../logging/logging')({ module: module.filename, type: 'unit-test' });
 
 describe('Initialization', () => {
-  afterAll(() => {
-    deviceQueues.shutdown();
+  afterAll(async () => {
+    // Kue shutdown does not clear the interval installed by watchStuckJobs.
+    clearInterval(deviceQueues.queue.stuck_job_watch);
+    await new Promise((resolve, reject) => {
+      deviceQueues.queue.shutdown(5000, error => error ? reject(error) : resolve());
+    });
+    const client = require('redis').createClient(configs.get('redisUrl'));
+    const call = (method, ...args) => new Promise((resolve, reject) => {
+      client[method](...args, (error, result) => error ? reject(error) : resolve(result));
+    });
+    try {
+      let cursor = '0';
+      do {
+        const [next, keys] = await call('scan', cursor, 'MATCH', process.env.KUE_PREFIX + ':*', 'COUNT', 100);
+        cursor = next;
+        if (keys.length) await call('del', keys);
+      } while (cursor !== '0');
+    } finally { await call('quit'); }
   });
 
-  test('Starting queue, adding and processing a job, remove on complete', async (done) => {
+  test('Starting queue, adding and processing a job, remove on complete', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     let err;
     try {
       await deviceQueues.startQueue('AAA', async (rjob) => {
@@ -53,12 +73,15 @@ describe('Initialization', () => {
       (jobid, res) => {
         logger.verbose('Job completed, res=' + JSON.stringify(res));
         expect(res).toEqual({ resp: 'RRR1' });
-        done();
+        complete();
       });
     logger.verbose('Job ID = ' + job.id);
+    await completion;
   });
 
-  test('Starting queue, adding and processing a job, keep on complete', async (done) => {
+  test('Starting queue, adding and processing a job, keep on complete', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     let err;
     try {
       await deviceQueues.startQueue('BBB', async (rjob) => {
@@ -91,29 +114,38 @@ describe('Initialization', () => {
       (jobid, res) => {
         logger.verbose('Job completed, res=' + JSON.stringify(res));
         expect(res).toBe(1);
-        done();
+        complete();
       }
     );
     logger.verbose('Job ID = ' + job.id);
+    await completion;
   });
 
-  test('Checking completed jobs', async (done) => {
+  test('Checking completed jobs', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     const c = await deviceQueues.getCount('complete');
     expect(c).toBe(1);
     await deviceQueues.iterateJobs('complete', (rjob) => {
       expect(rjob.data.message.testdata).toBe('BBB1');
     });
-    done();
+    complete();
+    await completion;
   });
 
-  test('Check completed by org', async (done) => {
+  test('Check completed by org', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     await deviceQueues.iterateJobsByOrg('4edd40c86762e0fb12000001', 'complete', (rjob) => {
       expect(rjob.data.message.testdata).toBe('BBB1');
     });
-    done();
+    complete();
+    await completion;
   });
 
-  test('Add two more jobs to Org', async (done) => {
+  test('Add two more jobs to Org', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     let err;
     try {
       await deviceQueues.startQueue('DDD', async (rjob) => {
@@ -146,13 +178,16 @@ describe('Initialization', () => {
       (jobid, res) => {
         logger.verbose('Job completed, res=' + JSON.stringify(res));
         expect(res).toBe(1);
-        done();
+        complete();
       }
     );
     logger.verbose('Job IDs = ' + [job1.id, job2.id]);
+    await completion;
   });
 
-  test('Checking completed jobs2', async (done) => {
+  test('Checking completed jobs2', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     const testDataList = ['BBB1', 'DDD1', 'DDD2'];
     const testDataResult = [];
     const c = await deviceQueues.getCount('complete');
@@ -161,10 +196,13 @@ describe('Initialization', () => {
       testDataResult.push(rjob.data.message.testdata);
     });
     expect(testDataResult).toStrictEqual(testDataList);
-    done();
+    complete();
+    await completion;
   });
 
-  test('Checking completed jobs2, desc order', async (done) => {
+  test('Checking completed jobs2, desc order', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     const testDataList = ['BBB1', 'DDD1', 'DDD2'];
     const testDataResult = [];
     const c = await deviceQueues.getCount('complete');
@@ -174,10 +212,13 @@ describe('Initialization', () => {
       return true;
     }, null, 0, -1, 'desc', -1);
     expect(testDataResult).toStrictEqual(testDataList.reverse());
-    done();
+    complete();
+    await completion;
   });
 
-  test('Checking completed jobs2, limit', async (done) => {
+  test('Checking completed jobs2, limit', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     const testDataList = ['BBB1', 'DDD1'];
     const testDataResult = [];
     const c = await deviceQueues.getCount('complete');
@@ -187,10 +228,13 @@ describe('Initialization', () => {
       return true;
     }, null, 0, -1, 'asc', 2);
     expect(testDataResult).toStrictEqual(testDataList);
-    done();
+    complete();
+    await completion;
   });
 
-  test('Check completed by org, skip, limit', async (done) => {
+  test('Check completed by org, skip, limit', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     const testDataList = ['BBB1', 'DDD1', 'DDD2'];
     let testDataResult = [];
     await deviceQueues.iterateJobsByOrg('4edd40c86762e0fb12000001', 'complete', (rjob) => {
@@ -204,9 +248,12 @@ describe('Initialization', () => {
       return true;
     }, 0, -1, 'desc', 0, 2);
     expect(testDataResult).toStrictEqual(testDataList.slice(-2).reverse());
-    done();
+    complete();
+    await completion;
   });
-  test('Check completed by org, device filter', async (done) => {
+  test('Check completed by org, device filter', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     const testDataList = ['BBB1', 'DDD1', 'DDD2'];
     let testDataResult = [];
     await deviceQueues.iterateJobsByOrg('4edd40c86762e0fb12000001', 'complete', (rjob) => {
@@ -220,16 +267,20 @@ describe('Initialization', () => {
       return true;
     }, 0, -1, 'desc', 0, -1, [{ key: 'type', op: '==', val: 'DDD' }]);
     expect(testDataResult).toStrictEqual(testDataList.slice(-2).reverse());
-    done();
+    complete();
+    await completion;
   });
 
-  test('Get last job', async (done) => {
+  test('Get last job', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     let lastJob;
     lastJob = await deviceQueues.getLastJob('BBB');
     expect(lastJob.data.message.testdata).toBe('BBB1');
     lastJob = await deviceQueues.getLastJob('DDD');
     expect(lastJob.data.message.testdata).toBe('DDD2');
-    done();
+    complete();
+    await completion;
   });
   test('Removing completed jobs', async () => {
     await deviceQueues.removeJobs('complete', 0);
@@ -237,7 +288,9 @@ describe('Initialization', () => {
     expect(c).toBe(0);
   });
 
-  test('Pause / Resume', async (done) => {
+  test('Pause / Resume', async () => {
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
     let err;
     try {
       await deviceQueues.startQueue('CCC', async (rjob) => {
@@ -271,7 +324,7 @@ describe('Initialization', () => {
       (jobid, res) => {
         logger.verbose('Job completed, res=' + JSON.stringify(res));
         expect(res).toBe(true);
-        done();
+        complete();
       }
     );
     logger.verbose('Job ID = ' + job.id);
@@ -282,5 +335,6 @@ describe('Initialization', () => {
     c = await deviceQueues.getOPendingJobsCount('DDD');
     expect(c).toBe(0);
     deviceQueues.resumeQueue('CCC');
+    await completion;
   });
 });

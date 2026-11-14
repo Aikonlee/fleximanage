@@ -22,6 +22,11 @@ frontend_validate:
 
 backend_validate:
   stage: test
+  services:
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    TEST_REDIS_URL: redis://redis:6379/15
   cache:
     key:
       files: [backend/package-lock.json]
@@ -31,6 +36,7 @@ backend_validate:
     - npm ci --ignore-scripts --cache .npm --prefer-offline
     - npm run test:regression
     - npm run test:models
+    - npm run test:historical
     - npm audit --json > audit-all.json || true
     - npm audit --omit=dev --json > audit-production.json || true
     - node tools/check-audit.cjs audit-production.json

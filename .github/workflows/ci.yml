@@ -38,6 +38,15 @@ jobs:
           retention-days: 7
   backend:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,6 +59,8 @@ jobs:
       - run: npm run test:regression
         working-directory: backend
       - run: npm run test:models
+        working-directory: backend
+      - run: npm run test:historical
         working-directory: backend
       - name: Record dependency audit
         working-directory: backend

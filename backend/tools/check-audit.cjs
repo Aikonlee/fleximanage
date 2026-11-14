@@ -1,4 +1,4 @@
-// CI fails on missing audit data or high/critical production advisories.
+// CI fails on missing audit data or moderate/high/critical production advisories.
 const fs = require('fs');
 const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (report.error || !report.metadata?.vulnerabilities) {
@@ -6,4 +6,4 @@ if (report.error || !report.metadata?.vulnerabilities) {
 }
 const counts = report.metadata.vulnerabilities;
 console.log(JSON.stringify(counts));
-if (counts.high || counts.critical) process.exit(1);
+if (counts.moderate || counts.high || counts.critical) process.exit(1);

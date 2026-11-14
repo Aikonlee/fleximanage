@@ -49,6 +49,8 @@ jobs:
         working-directory: backend
       - run: npm run test:regression
         working-directory: backend
+      - run: npm run test:models
+        working-directory: backend
       - name: Record dependency audit
         working-directory: backend
         run: |

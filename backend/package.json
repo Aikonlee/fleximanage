@@ -7,7 +7,8 @@
     "start": "node ./bin/www",
     "test": "jest",
     "migrate": "migrate --autosync --config migrate_config.js",
-    "test:regression": "jest --runInBand utils/tests/recaptcha.test.js services/tests/multilink-regression.test.js utils/tests/cidr.test.js"
+    "test:regression": "jest --runInBand utils/tests/recaptcha.test.js services/tests/multilink-regression.test.js utils/tests/cidr.test.js",
+    "test:models": "jest models/tests --runInBand --setupFiles ./tools/test-models-setup.cjs"
   },
   "dependencies": {
     "async": "^3.2.3",
@@ -54,7 +55,7 @@
     "redis": "^3.1.2",
     "serialize-javascript": "^7.1.4",
     "swagger-ui-express": "^4.3.0",
-    "uuid": "^9.0.0",
+    "uuid": "^11.1.1",
     "valid-url": "^1.0.9",
     "validator": "^13.7.0",
     "winston": "^3.7.2",
@@ -91,6 +92,10 @@
     "decode-uri-component": "^0.5.1",
     "migrate-mongoose": {
       "mongoose": "^6.13.12"
-    }
+    },
+    "uuid": "$uuid",
+    "extend": "^3.0.2",
+    "pug": "^3.0.3",
+    "yargs": "^17.7.2"
   }
 }

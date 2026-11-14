@@ -8,18 +8,14 @@ with `npm ci` and `npm audit` when dependencies change.
 | Scope | Before | After |
 | --- | --- | --- |
 | Frontend, all dependencies | 72 (3 critical, 38 high) | 0 |
-| Backend, all dependencies | 113 (10 critical, 37 high) | 17 (6 low, 11 moderate) |
-| Backend, production dependencies | — | 10 moderate, no high or critical |
+| Backend, all dependencies | 113 (10 critical, 37 high) | 6 low |
+| Backend, production dependencies | — | 0 |
 
-Remaining production advisories are in the legacy queue/Redis scripting,
-EasyRSA/template and UUID argument parsing chains: easyrsa, extend, kue,
-node-redis-scripty, node-redis-warlock, pug, pug-code-gen, uuid, yargs and
-yargs-parser. They require upstream replacement or compatibility work; do not
-apply forced major upgrades without testing queue processing and VPN issuance.
-The backend CI gate rejects high/critical production findings and incomplete
-audit results. The frontend gate rejects moderate or higher findings. There are
-no blanket advisory exceptions. Full and production backend reports are CI
-artifacts. Audit counts are not a claim that application security is complete.
+Production dependencies now audit clean after explicit compatible UUID, extend,
+Pug and yargs overrides. VPN certificate issuance, Redis queue processing and
+queue template loading were validated. Backend CI rejects moderate or higher
+production advisories and incomplete audits; the frontend uses the same
+severity threshold. Full backend audit retains six low development advisories.
 
 ## Checks performed
 
@@ -34,8 +30,12 @@ artifacts. Audit counts are not a claim that application security is complete.
 - VPN CA/server/client certificate issuance and verification; actual Redis queue
   create/process/complete/remove using isolated queue names.
 
-The full historical backend `npm test` suite still uses obsolete Mongoose
-callback fixtures and is not the passing regression gate. No physical flexiEdge
+The model-validation suite now passes 402 tests across 13 suites with Promise
+validation, modern ObjectId constructors and structured cast-error assertions.
+Its setup uses disconnected Mongoose connections and native ESM loading; it
+never opens a live database connection. CI runs this suite in addition to the
+13 focused regressions. Other historical backend suites are not claimed as
+passing and remain a separate migration task. No physical flexiEdge
 is connected: device command acknowledgement, policy delivery, tunnels and
 packet forwarding require a later hardware integration test.
 

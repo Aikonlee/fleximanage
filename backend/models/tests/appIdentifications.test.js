@@ -28,7 +28,7 @@ describe('Minimal required rule policy schema', () => {
   it('Should be a valid rule model if only ip is present', () => {
     rule.ip = '192.168.0.1/24';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -36,7 +36,7 @@ describe('Minimal required rule policy schema', () => {
   it('Should be a valid rule model if only ports is present', () => {
     rule.ports = '42';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -45,7 +45,7 @@ describe('Minimal required rule policy schema', () => {
     rule.ip = '192.168.0.1/24';
     rule.ports = '42';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -55,7 +55,7 @@ describe('Minimal required rule policy schema', () => {
     rule.ports = '42';
     rule.protocol = 'udp';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -63,7 +63,7 @@ describe('Minimal required rule policy schema', () => {
   it('Should be invalid rule model if only protocol is present', () => {
     rule.protocol = 'udp';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(
         'Rules validation failed: ip|ports: Either ip or ports field must not be empty'
       );
@@ -76,7 +76,7 @@ describe('Rules policy schema fields validation', () => {
     rule.ip = '';
     rule.ports = '42';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(
         'Rules validation failed: ip: ip should be a valid ipv4 with mask type'
       );
@@ -86,7 +86,7 @@ describe('Rules policy schema fields validation', () => {
   it('Should be an invalid rule model if ip has no mask', () => {
     rule.ip = '192.168.0.1';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(
         'Rules validation failed: ip: ip should be a valid ipv4 with mask type'
       );
@@ -96,7 +96,7 @@ describe('Rules policy schema fields validation', () => {
   it('Should be an invalid rule model if ip is IPv6', () => {
     rule.ip = '2001:0db8:85a3:0000:0000:8a2e:0370:7334';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(
         'Rules validation failed: ip: ip should be a valid ipv4 with mask type'
       );
@@ -107,7 +107,7 @@ describe('Rules policy schema fields validation', () => {
     rule.ip = '192.168.0.1/24';
     rule.ports = 'fourty two';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(
         'Rules validation failed: ports: ports should be a valid ports range'
       );
@@ -119,7 +119,7 @@ describe('Rules policy schema fields validation', () => {
     rule.ports = '42';
     rule.protocol = 'gopher';
 
-    rule.validate((err) => {
+    return rule.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(
         'Rules validation failed: protocol: ' +
           '`gopher` is not a valid enum value for path `protocol`.'

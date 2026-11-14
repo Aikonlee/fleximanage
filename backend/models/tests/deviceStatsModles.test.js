@@ -23,15 +23,15 @@ let deviceStatsFullSchema;
 beforeEach(() => {
   // eslint-disable-next-line new-cap
   deviceStatsFullSchema = new deviceStats({
-    org: mongoose.Types.ObjectId('4edd40c86762e0fb12000001'),
-    device: mongoose.Types.ObjectId('4edd40c86762e0fb12000003'),
+    org: new mongoose.Types.ObjectId('4edd40c86762e0fb12000001'),
+    device: new mongoose.Types.ObjectId('4edd40c86762e0fb12000003'),
     time: 1
   });
 });
 
 describe('Minimal required deviceStats schema', () => {
   it('Should be a valid deviceStats model if all required fields are present', () => {
-    deviceStatsFullSchema.validate((err) => {
+    return deviceStatsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -39,7 +39,7 @@ describe('Minimal required deviceStats schema', () => {
   it('Should be an invalid deviceStats model if org field is missing', () => {
     deviceStatsFullSchema.org = null;
 
-    deviceStatsFullSchema.validate((err) => {
+    return deviceStatsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('deviceStats validation failed: org: Path `org` is required.');
     });
   });
@@ -47,7 +47,7 @@ describe('Minimal required deviceStats schema', () => {
 
 describe('Token schema', () => {
   it('Should be a valid deviceStats model if all required fields are valid', () => {
-    deviceStatsFullSchema.validate((err) => {
+    return deviceStatsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -55,9 +55,8 @@ describe('Token schema', () => {
   it('Should be an invalid deviceStats model if org field is invalid', () => {
     deviceStatsFullSchema.org = 'invalid-org';
 
-    deviceStatsFullSchema.validate((err) => {
-      expect(err.message).toBe('deviceStats validation failed: org: Cast to ObjectId failed ' +
-            'for value "invalid-org" (type string) at path "org"');
+    return deviceStatsFullSchema.validate().then(() => null, error => error).then((err) => {
+      expect(err.errors.org).toMatchObject({ name: 'CastError', kind: 'ObjectId', path: 'org', value: 'invalid-org' });
     });
   });
 });

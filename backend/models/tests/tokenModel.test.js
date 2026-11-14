@@ -23,7 +23,7 @@ let tokenFullSchema;
 beforeEach(() => {
   // eslint-disable-next-line new-cap
   tokenFullSchema = new tokens({
-    org: mongoose.Types.ObjectId('4edd40c86762e0fb12000001'),
+    org: new mongoose.Types.ObjectId('4edd40c86762e0fb12000001'),
     name: 'Token name',
     token: 'some JWT token'
   });
@@ -31,7 +31,7 @@ beforeEach(() => {
 
 describe('Minimal required token schema', () => {
   it('Should be a valid token model if all required fields are present', () => {
-    tokenFullSchema.validate((err) => {
+    return tokenFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -39,7 +39,7 @@ describe('Minimal required token schema', () => {
   it('Should be an invalid token model if org field is missing', () => {
     tokenFullSchema.org = null;
 
-    tokenFullSchema.validate((err) => {
+    return tokenFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('tokens validation failed: org: Path `org` is required.');
     });
   });
@@ -47,7 +47,7 @@ describe('Minimal required token schema', () => {
   it('Should be an invalid token model if token name field is missing', () => {
     tokenFullSchema.name = null;
 
-    tokenFullSchema.validate((err) => {
+    return tokenFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('tokens validation failed: name: Path `name` is required.');
     });
   });
@@ -55,7 +55,7 @@ describe('Minimal required token schema', () => {
   it('Should be an invalid token model if token field is missing', () => {
     tokenFullSchema.token = null;
 
-    tokenFullSchema.validate((err) => {
+    return tokenFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('tokens validation failed: token: Path `token` is required.');
     });
   });
@@ -63,7 +63,7 @@ describe('Minimal required token schema', () => {
 
 describe('Token schema', () => {
   it('Should be a valid token model if all required fields are valid', () => {
-    tokenFullSchema.validate((err) => {
+    return tokenFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -71,16 +71,15 @@ describe('Token schema', () => {
   it('Should be an invalid token model if org field is invalid', () => {
     tokenFullSchema.org = 'invalid-org';
 
-    tokenFullSchema.validate((err) => {
-      expect(err.message).toBe('tokens validation failed: org: Cast to ObjectId failed ' +
-            'for value "invalid-org" (type string) at path "org"');
+    return tokenFullSchema.validate().then(() => null, error => error).then((err) => {
+      expect(err.errors.org).toMatchObject({ name: 'CastError', kind: 'ObjectId', path: 'org', value: 'invalid-org' });
     });
   });
 
   it('Should be an invalid token model if token name field is invalid', () => {
     tokenFullSchema.name = 'invalid^token^name';
 
-    tokenFullSchema.validate((err) => {
+    return tokenFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('tokens validation failed: name: Token name format is invalid');
     });
   });

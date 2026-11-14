@@ -30,6 +30,7 @@ backend_validate:
     - cd backend
     - npm ci --ignore-scripts --cache .npm --prefer-offline
     - npm run test:regression
+    - npm run test:models
     - npm audit --json > audit-all.json || true
     - npm audit --omit=dev --json > audit-production.json || true
     - node tools/check-audit.cjs audit-production.json

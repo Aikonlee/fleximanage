@@ -37,7 +37,7 @@ beforeEach(() => {
 
 describe('Minimal required users schema', () => {
   it('Should be a valid users model if all required fields are present', () => {
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -45,7 +45,7 @@ describe('Minimal required users schema', () => {
   it('Should be an invalid users model if name field is missing', () => {
     userFullSchema.name = null;
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: name: Path `name` is required.');
     });
   });
@@ -53,7 +53,7 @@ describe('Minimal required users schema', () => {
   it('Should be an invalid users model if email field is missing', () => {
     userFullSchema.email = null;
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: email: Path `email` is required.');
     });
   });
@@ -61,7 +61,7 @@ describe('Minimal required users schema', () => {
   it('Should be an invalid users model if username field is missing', () => {
     userFullSchema.username = null;
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: username: Path `username` is required.');
     });
   });
@@ -69,7 +69,7 @@ describe('Minimal required users schema', () => {
   it('Should be an invalid users model if jobTitle field is missing', () => {
     userFullSchema.jobTitle = null;
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: jobTitle: Path `jobTitle` is required.');
     });
   });
@@ -77,7 +77,7 @@ describe('Minimal required users schema', () => {
 
 describe('Users schema', () => {
   it('Should be a valid users model if all required fields are valid', () => {
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -85,7 +85,7 @@ describe('Users schema', () => {
   it('Should be an invalid user model if name field is invalid', () => {
     userFullSchema.name = 'invalid*name';
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: name: should be a valid first name (English chars, digits, space or -.)');
     });
   });
@@ -93,7 +93,7 @@ describe('Users schema', () => {
   it('Should be an invalid user model if lastName field is invalid', () => {
     userFullSchema.lastName = 'invalid*Lastname';
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: lastName: should be a valid last name (English chars, digits, space or -.)');
     });
   });
@@ -101,7 +101,7 @@ describe('Users schema', () => {
   it('Should be an invalid user model if email field is invalid', () => {
     userFullSchema.email = 'invalid-email-address';
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: email: should be a valid email address');
     });
   });
@@ -109,7 +109,7 @@ describe('Users schema', () => {
   it('Should be an invalid user model if username field is invalid', () => {
     userFullSchema.username = 'invalid-user-name';
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: username: should be a valid user name as email');
     });
   });
@@ -117,7 +117,7 @@ describe('Users schema', () => {
   it('Should be an invalid user model if jobTitle field is invalid', () => {
     userFullSchema.jobTitle = 'invalid*jobTitle';
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: jobTitle: should contain letters digits space or dash characters');
     });
   });
@@ -125,7 +125,7 @@ describe('Users schema', () => {
   it('Should be an invalid user model if phoneNumber field is invalid', () => {
     userFullSchema.phoneNumber = '+1-208-797979';
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('users validation failed: phoneNumber: should be a valid phone number');
     });
   });
@@ -133,7 +133,7 @@ describe('Users schema', () => {
   it('Should be a valid user model if phoneNumber field is empty', () => {
     userFullSchema.phoneNumber = '';
 
-    userFullSchema.validate((err) => {
+    return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });

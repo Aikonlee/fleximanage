@@ -31,7 +31,7 @@ beforeEach(() => {
 
 describe('Minimal required path label schema', () => {
   it('Should be a valid path label model if all required fields are present', () => {
-    pathLabelsFullSchema.validate((err) => {
+    return pathLabelsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -39,7 +39,7 @@ describe('Minimal required path label schema', () => {
   it('Should be an invalid path label model if name field is missing', () => {
     pathLabelsFullSchema.name = null;
 
-    pathLabelsFullSchema.validate((err) => {
+    return pathLabelsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('PathLabels validation failed: name: Path `name` is required.');
     });
   });
@@ -47,7 +47,7 @@ describe('Minimal required path label schema', () => {
   it('Should be an invalid path label model if org field is missing', () => {
     pathLabelsFullSchema.org = null;
 
-    pathLabelsFullSchema.validate((err) => {
+    return pathLabelsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('PathLabels validation failed: org: Path `org` is required.');
     });
   });
@@ -55,7 +55,7 @@ describe('Minimal required path label schema', () => {
   it('Should be an invalid path label model if color field is missing', () => {
     pathLabelsFullSchema.color = null;
 
-    pathLabelsFullSchema.validate((err) => {
+    return pathLabelsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('PathLabels validation failed: color: Path `color` is required.');
     });
   });
@@ -63,7 +63,7 @@ describe('Minimal required path label schema', () => {
 
 describe('Path label schema', () => {
   it('Should be a valid path label model if all required fields are valid', () => {
-    pathLabelsFullSchema.validate((err) => {
+    return pathLabelsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -71,7 +71,7 @@ describe('Path label schema', () => {
   it('Should be an invalid path label model if name field is invalid', () => {
     pathLabelsFullSchema.name = 'invalid*Label*name';
 
-    pathLabelsFullSchema.validate((err) => {
+    return pathLabelsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('PathLabels validation failed: name: Path label name format is invalid');
     });
   });
@@ -79,7 +79,7 @@ describe('Path label schema', () => {
   it('Should be an invalid path label model if description field is invalid', () => {
     pathLabelsFullSchema.description = 'invalid*description';
 
-    pathLabelsFullSchema.validate((err) => {
+    return pathLabelsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('PathLabels validation failed: description: Path label description format is invalid');
     });
   });
@@ -87,7 +87,7 @@ describe('Path label schema', () => {
   it('Should be an invalid path label model if color field is invalid', () => {
     pathLabelsFullSchema.color = 'invalid color';
 
-    pathLabelsFullSchema.validate((err) => {
+    return pathLabelsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('PathLabels validation failed: color: Path label color is invalid');
     });
   });

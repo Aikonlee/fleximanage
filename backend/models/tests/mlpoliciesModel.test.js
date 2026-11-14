@@ -51,35 +51,35 @@ beforeEach(() => {
 
 describe('Minimal required multi link policy schema', () => {
   it('Should be a valid multi link policy model if all required fields are present', () => {
-    mLPolicyFullSchema.validate((err) => {
+    return mLPolicyFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
 
   it('Should be an invalid policy in policy name is missing', () => {
     mLPolicyFullSchema.name = null;
-    mLPolicyFullSchema.validate((err) => {
+    return mLPolicyFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('MultiLinkPolicies validation failed: name: Path `name` is required.');
     });
   });
 
   it('Should be an invalid policy if policy rule name is missing', () => {
     mLPolicyFullSchema.rules[0].name = null;
-    mLPolicyFullSchema.validate((err) => {
+    return mLPolicyFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('MultiLinkPolicies validation failed: rules.0.name: Path `name` is required.');
     });
   });
 
   it('Should be an invalid policy if policy rule priority is missing', () => {
     mLPolicyFullSchema.rules[0].priority = null;
-    mLPolicyFullSchema.validate((err) => {
+    return mLPolicyFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('MultiLinkPolicies validation failed: rules.0.priority: Path `priority` is required.');
     });
   });
 
   it('Should be an invalid policy if policy rule enabled field is missing', () => {
     mLPolicyFullSchema.rules[0].enabled = null;
-    mLPolicyFullSchema.validate((err) => {
+    return mLPolicyFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('MultiLinkPolicies validation failed: rules.0.enabled: Path `enabled` is required.');
     });
   });
@@ -87,7 +87,7 @@ describe('Minimal required multi link policy schema', () => {
   it('Should be an invalid policy if policy rule action order is missing', () => {
     mLPolicyFullSchema.rules[0].action.order = null;
     const msg = 'MultiLinkPolicies validation failed: rules.0.action.order: Path `action.order` is required.';
-    mLPolicyFullSchema.validate((err) => {
+    return mLPolicyFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(msg);
     });
   });
@@ -95,7 +95,7 @@ describe('Minimal required multi link policy schema', () => {
   it('Should be an invalid policy if policy rule action fallback is missing', () => {
     mLPolicyFullSchema.rules[0].action.fallback = null;
     const msg = 'MultiLinkPolicies validation failed: rules.0.action.fallback: Path `action.fallback` is required.';
-    mLPolicyFullSchema.validate((err) => {
+    return mLPolicyFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(msg);
     });
   });
@@ -103,7 +103,7 @@ describe('Minimal required multi link policy schema', () => {
   it('Should be an invalid policy if policy rule action link order is missing', () => {
     mLPolicyFullSchema.rules[0].action.links[0].order = null;
     const msg = 'MultiLinkPolicies validation failed: rules.0.action.links.0.order: Path `order` is required.';
-    mLPolicyFullSchema.validate((err) => {
+    return mLPolicyFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe(msg);
     });
   });

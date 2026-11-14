@@ -24,14 +24,14 @@ let tunnelIdsFullSchema;
 beforeEach(() => {
   // eslint-disable-next-line new-cap
   tunnelIdsFullSchema = new tunnelids({
-    org: mongoose.Types.ObjectId('4edd40c86762e0fb12000001'),
+    org: new mongoose.Types.ObjectId('4edd40c86762e0fb12000001'),
     nextAvailID: '1'
   });
 });
 
 describe('Minimal required tunnelids schema', () => {
   it('Should be a valid token model if all required fields are present', () => {
-    tunnelIdsFullSchema.validate((err) => {
+    return tunnelIdsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -39,7 +39,7 @@ describe('Minimal required tunnelids schema', () => {
   it('Should be an invalid tunnelID model if org field is missing', () => {
     tunnelIdsFullSchema.org = null;
 
-    tunnelIdsFullSchema.validate((err) => {
+    return tunnelIdsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('tunnelID validation failed: org: Path `org` is required.');
     });
   });
@@ -47,7 +47,7 @@ describe('Minimal required tunnelids schema', () => {
   it('Should be an invalid tunnelID model if nextAvailID field is missing', () => {
     tunnelIdsFullSchema.nextAvailID = null;
 
-    tunnelIdsFullSchema.validate((err) => {
+    return tunnelIdsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('tunnelID validation failed: nextAvailID: Next available number must be set');
     });
   });
@@ -55,7 +55,7 @@ describe('Minimal required tunnelids schema', () => {
 
 describe('TunnelIDs schema', () => {
   it('Should be a valid token model if all required fields are valid', () => {
-    tunnelIdsFullSchema.validate((err) => {
+    return tunnelIdsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);
     });
   });
@@ -63,16 +63,15 @@ describe('TunnelIDs schema', () => {
   it('Should be an invalid tunnelID model if org field is invalid', () => {
     tunnelIdsFullSchema.org = 'invalid-org';
 
-    tunnelIdsFullSchema.validate((err) => {
-      expect(err.message).toBe('tunnelID validation failed: org: Cast to ObjectId failed ' +
-            'for value "invalid-org" (type string) at path "org"');
+    return tunnelIdsFullSchema.validate().then(() => null, error => error).then((err) => {
+      expect(err.errors.org).toMatchObject({ name: 'CastError', kind: 'ObjectId', path: 'org', value: 'invalid-org' });
     });
   });
 
   it('Should be an invalid tunnelID model if nextAvailID field is not a number', () => {
     tunnelIdsFullSchema.nextAvailID = 'not a number';
 
-    tunnelIdsFullSchema.validate((err) => {
+    return tunnelIdsFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err.message).toBe('tunnelID validation failed: nextAvailID: Cast to Number failed ' +
                                'for value "not a number" (type string) at path "nextAvailID"');
     });

@@ -213,12 +213,13 @@ Listed in [OPENSOURCE.md](OPENSOURCE.md).
 Use Node 22.22.2 or newer in the 22.x series (`nvm use`). The frontend uses Vite/Vitest and still publishes to
 `frontend/build/`. GitHub Actions and GitLab CI both run frontend lint, tests,
 build and audit; backend CI runs `npm run test:regression` and records full and
-production-only dependency audits. High/critical production advisories fail the
+production-only dependency audits. Moderate/high/critical production advisories fail the
 backend gate. See `SECURITY.md` for remaining dependency work.
 
-The legacy backend model tests under `npm test` still contain Mongoose 5 callback
-fixtures. They are not represented as passing by the focused regression job;
-migrating those fixtures is separate from the security/policy regression suite.
+Backend model validation runs with `npm run test:models` (402 tests), using
+disconnected database connections. CI includes these tests and the 13 focused
+security/policy regressions. Other historical suites under `npm test` still
+need separate migration; the full suite is not claimed as passing.
 
 CAPTCHA requires backend `CAPTCHA_KEY` and `CAPTCHA_SITE_KEY`. Missing/invalid
 challenges fail closed. `CAPTCHA_ENFORCED=false` is an explicit development-only

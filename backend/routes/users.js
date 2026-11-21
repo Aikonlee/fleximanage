@@ -30,6 +30,10 @@ const authSessions = require('../authSessions');
 const cors = require('./cors');
 const mongoConns = require('../mongoConns.js')();
 const randomKey = require('../utils/random-key');
+const {
+  verifyIssuedAtQuery,
+  resetPasswordIssuedAtQuery
+} = require('../utils/emailTokenExpiry');
 const mailer = require('../utils/mailer')(
   configs.get('mailerHost'),
   configs.get('mailerPort'),
@@ -160,7 +164,12 @@ router.route('/register')
           phoneNumber: req.body.userPhoneNumber,
           admin: false,
           state: 'unverified',
-          emailTokens: { verify: validateKey, invite: '', resetPassword: '' },
+          emailTokens: {
+            verify: validateKey,
+            invite: '',
+            resetPassword: '',
+            verifyIssuedAt: new Date()
+          },
           defaultAccount: registerAccount._id,
           defaultOrg: null
         });
@@ -277,7 +286,10 @@ router.route('/reverify-account')
       // Query, use the email
       { email: req.body.email },
       // Update
-      { 'emailTokens.verify': validateKey },
+      {
+        'emailTokens.verify': validateKey,
+        'emailTokens.verifyIssuedAt': new Date()
+      },
       // Options
       { upsert: false, new: false }
     )
@@ -326,26 +338,33 @@ router.route('/verify-account')
     }
 
     User.findOneAndUpdate(
-      // Query, use the email and verification token
+      // Query, use the email and verification token. $gte rejects a missing
+      // or expired verifyIssuedAt (older than 24 hours) without consuming it.
       {
         _id: req.body.id,
-        'emailTokens.verify': req.body.token
+        'emailTokens.verify': req.body.token,
+        'emailTokens.verifyIssuedAt': verifyIssuedAtQuery()
       },
       // Update
       {
         state: 'verified',
-        'emailTokens.verify': ''
+        'emailTokens.verify': '',
+        'emailTokens.verifyIssuedAt': null
       },
       // Options
       { upsert: false, new: false }
     )
       .then(async (resp) => {
         if (resp) return res.status(200).json({ status: 'account verified' });
-        // No match on id+token - the link may have already been used to verify
-        // this same account (emailTokens.verify is cleared on first use), so
-        // check that case separately to give an accurate response instead of
-        // treating a legitimate repeat click as an error.
+        // No match. A token that is still stored failed the issued-at check
+        // (missing or older than 24 hours) and must be rejected. Only a cleared
+        // token on an already-verified account is a repeat click.
         const existing = await User.findById(req.body.id);
+        const tokenStillPresent = existing && existing.emailTokens &&
+          existing.emailTokens.verify === req.body.token;
+        if (tokenStillPresent) {
+          return next(createError(500, 'Verification Error'));
+        }
         if (existing && existing.state === 'verified') {
           return res.status(200).json({ status: 'account already verified' });
         }
@@ -400,7 +419,10 @@ const resetPassword = (req, res, next) => {
     // Query, use the email and make sure user is verified when reset password
     { email: req.body.email, state: 'verified' },
     // Update
-    { 'emailTokens.resetPassword': validateKey },
+    {
+      'emailTokens.resetPassword': validateKey,
+      'emailTokens.resetPasswordIssuedAt': new Date()
+    },
     // Options
     { upsert: false, new: false }
   )
@@ -458,15 +480,18 @@ const updatePassword = (req, res, next) => {
 
   let registerUser = null;
   User.findOneAndUpdate(
-    // Query, use the email and password reset token
+    // Query, use the id and password reset token. $gte rejects a missing
+    // or expired resetPasswordIssuedAt (older than 1 hour).
     {
       _id: req.body.id,
-      'emailTokens.resetPassword': req.body.token
+      'emailTokens.resetPassword': req.body.token,
+      'emailTokens.resetPasswordIssuedAt': resetPasswordIssuedAtQuery()
     },
     // Update
     {
       state: 'verified',
-      'emailTokens.resetPassword': ''
+      'emailTokens.resetPassword': '',
+      'emailTokens.resetPasswordIssuedAt': null
     },
     // Options
     { upsert: false, new: true }

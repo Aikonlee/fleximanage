@@ -630,7 +630,12 @@ class MembersService {
           phoneNumber: '',
           admin: false,
           state: 'unverified',
-          emailTokens: { verify: '', invite: '', resetPassword: resetPWKey },
+          emailTokens: {
+            verify: '',
+            invite: '',
+            resetPassword: resetPWKey,
+            resetPasswordIssuedAt: new Date()
+          },
           defaultAccount: user.defaultAccount._id,
           defaultOrg: memberRequest.userPermissionTo === 'organization'
             ? memberRequest.userEntity : null

@@ -7,6 +7,29 @@ import StatusBadge from '../../components/common/StatusBadge';
 import '../../styles/unified-table.css';
 import './Billing.css';
 
+const LOCAL_HTTP_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+// Invoice links come from flexibilling. Only https (or same-origin http on local dev) may be rendered.
+export function safeDownloadUrl(value) {
+  if (typeof value !== 'string') return null;
+  let parsed;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    return null;
+  }
+  if (parsed.protocol === 'https:') return parsed.href;
+  if (parsed.protocol === 'http:' && isSameOriginLocalDev(parsed)) return parsed.href;
+  return null;
+}
+
+function isSameOriginLocalDev(parsed) {
+  if (typeof window === 'undefined' || !window.location) return false;
+  if (window.location.protocol !== 'http:') return false;
+  if (!LOCAL_HTTP_HOSTS.has(parsed.hostname)) return false;
+  return parsed.host === window.location.host;
+}
+
 const AccountBilling = () => {
   const [invoices, setInvoices] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -98,16 +121,19 @@ const AccountBilling = () => {
         <table className="custom-table-template">
           <thead><tr><th>Date</th><th>Amount</th><th>Currency</th><th>Payment Method</th><th>Status</th><th>Download</th></tr></thead>
           <tbody>
-            {invoices.length > 0 ? invoices.map((inv) => (
-              <tr key={inv.id}>
-                <td>{inv.date ? new Date(inv.date * 1000).toLocaleDateString() : '-'}</td>
-                <td>{inv.amount}</td>
-                <td>{inv.base_currency_code}</td>
-                <td>{inv.payment_method}</td>
-                <td><StatusBadge status={inv.status === 'paid' ? 'running' : inv.status} label={inv.status} /></td>
-                <td>{inv.download_url ? <a href={inv.download_url} target="_blank" rel="noopener noreferrer">Download</a> : '-'}</td>
-              </tr>
-            )) : (
+            {invoices.length > 0 ? invoices.map((inv) => {
+              const downloadUrl = safeDownloadUrl(inv.download_url);
+              return (
+                <tr key={inv.id}>
+                  <td>{inv.date ? new Date(inv.date * 1000).toLocaleDateString() : '-'}</td>
+                  <td>{inv.amount}</td>
+                  <td>{inv.base_currency_code}</td>
+                  <td>{inv.payment_method}</td>
+                  <td><StatusBadge status={inv.status === 'paid' ? 'running' : inv.status} label={inv.status} /></td>
+                  <td>{downloadUrl ? <a href={downloadUrl} target="_blank" rel="noopener noreferrer">Download</a> : '-'}</td>
+                </tr>
+              );
+            }) : (
               <tr><td colSpan="6" className="text-center text-muted py-4">No invoices yet.</td></tr>
             )}
           </tbody>

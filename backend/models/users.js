@@ -45,6 +45,18 @@ const emailTokens = new Schema({
     maxlength: 50,
     required: false,
     default: ''
+  },
+  // When the verification token was issued. Missing means the token is unusable.
+  verifyIssuedAt: {
+    type: Date,
+    required: false,
+    default: null
+  },
+  // When the password-reset token was issued. Missing means the token is unusable.
+  resetPasswordIssuedAt: {
+    type: Date,
+    required: false,
+    default: null
   }
 });
 

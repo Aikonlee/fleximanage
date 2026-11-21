@@ -27,6 +27,7 @@ const mailer = require('../utils/mailer')(
 const issueSessionTokens = require('../sessionTokens');
 const authSessions = require('../authSessions');
 const randomKey = require('../utils/random-key');
+const { resetPasswordIssuedAtQuery } = require('../utils/emailTokenExpiry');
 const Users = require('../models/users');
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 
@@ -69,7 +70,10 @@ class UsersService {
         // Query, use the email and make sure user is verified when reset password
         { email: resetPasswordRequest.email, state: 'verified' },
         // Update
-        { 'emailTokens.resetPassword': validateKey },
+        {
+          'emailTokens.resetPassword': validateKey,
+          'emailTokens.resetPasswordIssuedAt': new Date()
+        },
         // Options
         { upsert: false, new: false }
       );
@@ -126,19 +130,25 @@ class UsersService {
       }
 
       const registerUser = await Users.findOneAndUpdate(
-        // Query, use the email and password reset token
+        // Query, use the email and password reset token. $gte rejects a missing
+        // or expired resetPasswordIssuedAt (older than 1 hour).
         {
           email: updatePasswordRequest.email,
-          'emailTokens.resetPassword': updatePasswordRequest.token
+          'emailTokens.resetPassword': updatePasswordRequest.token,
+          'emailTokens.resetPasswordIssuedAt': resetPasswordIssuedAtQuery()
         },
         // Update
         {
           state: 'verified',
-          'emailTokens.resetPassword': ''
+          'emailTokens.resetPassword': '',
+          'emailTokens.resetPasswordIssuedAt': null
         },
         // Options
         { upsert: false, new: true }
       );
+      if (!registerUser) {
+        throw new Error('Password Reset Error');
+      }
       await registerUser.setPassword(updatePasswordRequest.password);
       await registerUser.save();
       await authSessions.revokeAll(registerUser._id);

@@ -5,35 +5,52 @@
  * Masks secrets before data is written to logs.
  *
  * Any key that looks like a credential (password, secret, token, MFA recovery
- * codes, ...) is replaced by '[REDACTED]', at any depth. The input is never
- * modified, a redacted copy is returned. Mongoose documents and other objects
- * with toJSON() are serialized first, the same way JSON.stringify would.
+ * codes, ...) is replaced by '[REDACTED]', at any depth. Keys are normalized
+ * (lowercase, non-alphanumerics removed) and then matched by substring, so
+ * hyphenated names such as refresh-token and x-api-key are covered. The input
+ * is never modified, a redacted copy is returned. Mongoose documents and other
+ * objects with toJSON() are serialized first, the same way JSON.stringify would.
  */
 
+// Substrings of the normalized key. Longer names stay listed when a shorter
+// fragment already covers them, so the set is explicit. refreshjwt keeps the
+// previous exact key refresh-jwt, which none of the other fragments imply.
+const SENSITIVE_FRAGMENTS = [
+  'token',
+  'secret',
+  'password',
+  'passwd',
+  'pwd',
+  'pass',
+  'apikey',
+  'privatekey',
+  'authorization',
+  'cookie',
+  'recoverycode',
+  'captcha',
+  'salt',
+  'logintoken',
+  'refreshjwt'
+];
+
+// Compatibility export. Same names as the normalized substring check, including
+// separators between letters (refresh-token, x-api-key, Refresh-Token).
 const SENSITIVE_KEY = new RegExp(
-  '^(' + [
-    '.*passw(or)?d.*',
-    'pass',
-    'pwd',
-    '.*secrets?',
-    'recoveryCodes?',
-    'loginToken',
-    'salt',
-    'token',
-    'refreshToken',
-    'accessToken',
-    'refresh-jwt',
-    'authorization',
-    'cookie',
-    'captcha',
-    'apiKey',
-    'privateKey'
-  ].join('|') + ')$',
+  SENSITIVE_FRAGMENTS.map(fragment => {
+    return fragment.split('').join('[^a-z0-9]*');
+  }).join('|'),
   'i'
 );
 
 const REDACTED = '[REDACTED]';
 const MAX_DEPTH = 10;
+
+const normalizeKey = (key) => String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const isSensitiveKey = (key) => {
+  const normalized = normalizeKey(key);
+  return SENSITIVE_FRAGMENTS.some(fragment => normalized.includes(fragment));
+};
 
 const redact = (value, depth = 0, seen = new WeakSet()) => {
   if (value === null || typeof value !== 'object') return value;
@@ -51,7 +68,7 @@ const redact = (value, depth = 0, seen = new WeakSet()) => {
 
   const out = {};
   for (const [key, val] of Object.entries(value)) {
-    if (SENSITIVE_KEY.test(key) && val !== null && val !== undefined && val !== '') {
+    if (isSensitiveKey(key) && val !== null && val !== undefined && val !== '') {
       out[key] = REDACTED;
     } else {
       out[key] = redact(val, depth + 1, seen);

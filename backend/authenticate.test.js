@@ -25,7 +25,18 @@ jest.mock('./utils/membershipUtils', () => ({ orgUpdateFromNull: jest.fn(async (
 jest.mock('./configs', () => () => ({ get: (key) => key === 'userTokenSecretKey' ? mockSecret : false }));
 jest.mock('./utils/recaptcha', () => () => ({}));
 jest.mock('./logging/logging', () => () => ({ warn: jest.fn(), info: jest.fn(), debug: jest.fn() }));
-jest.mock('./tokens', () => ({ verifyToken: jest.fn((token) => mockJwt.verify(token, mockSecret)), getToken: jest.fn(async () => mockJwt.sign({ _id: 'user-a', account: 'account-a', perms: {} }, mockSecret)) }));
+jest.mock('./tokens', () => ({
+  verifyToken: jest.fn((token) => mockJwt.verify(token, mockSecret)),
+  getToken: jest.fn(async () => mockJwt.sign(
+    { _id: 'user-a', account: 'account-a', perms: {} },
+    mockSecret
+  )),
+  getRefreshToken: jest.fn(async () => 'next-refresh-jwt')
+}));
+jest.mock('./authSessions', () => ({
+  rotateRefresh: jest.fn(async (payload) => ({ sid: payload.sid, jti: 'new-jti' })),
+  validateAccess: jest.fn(async () => true)
+}));
 
 const auth = require('./authenticate');
 const Access = require('./models/accesstokens');
@@ -99,10 +110,21 @@ test('rejects an access JWT presented as a refresh token', async () => {
 });
 
 test('accepts a matching typed refresh token after access expiry', async () => {
-  const { req, res } = request({ type: 'refresh', _id: 'user-a' });
+  const session = {
+    _id: 'user-a',
+    account: 'account-a',
+    sid: 'session-a',
+    authVersion: 0,
+    mfaVerified: false
+  };
+  const { req, res } = request(
+    { ...session, jti: 'old-jti', type: 'refresh' },
+    session
+  );
   const next = jest.fn();
   auth.verifyUserJWT(req, res, next);
   await new Promise(setImmediate);
   expect(next).toHaveBeenCalledWith();
   expect(res.getHeaders()['refresh-jwt']).toBeTruthy();
+  expect(res.getHeaders()['refresh-token']).toBeTruthy();
 });

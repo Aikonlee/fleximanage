@@ -52,7 +52,7 @@ const { generateSecret, verifyCode } = require('../otp');
 const { createHash } = require('crypto');
 const SHA256 = value => createHash('sha256').update(value).digest('hex');
 const rateLimit = require('express-rate-limit');
-const RateLimitStore = require('../rateLimitStore');
+const MfaRateLimitStore = require('../utils/mfaRateLimitStore');
 const jwt = require('jsonwebtoken');
 
 router.use(bodyParser.json());
@@ -657,9 +657,10 @@ router.route('/mfa/getMfaConfigUri')
 
 // 2fa token is changed every 30 seconds.
 // Hence allow 5 times in 30 seconds to verify,
-const inMemoryStore = new RateLimitStore(1000 * 30); // 30 seconds
+const mfaRateLimitStore = new MfaRateLimitStore(1000 * 30); // 30 seconds
 const verifyMfaRateLimit = rateLimit({
-  store: inMemoryStore,
+  store: mfaRateLimitStore,
+  windowMs: 1000 * 30,
   max: 5, // Allow 5 times in token period. The 6th request will be blocked
   keyGenerator: (req) => {
     try {

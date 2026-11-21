@@ -151,7 +151,7 @@ const setUserPerms = async (user, jwtPayload, token = null) => {
 
     if (!userAccount) {
       logger.warn('Could not find account by jwt payload', {
-        params: { jwtPayload: jwtPayload }
+        params: { tokenId: jwtPayload.id, account: jwtPayload.account }
       });
 
       return false;
@@ -299,13 +299,11 @@ exports.verifyUserJWT = function (req, res, next) {
               }
             }
 
-            // Rotate before issuing a new access token when this refresh is session-bound.
-            // Legacy refresh tokens that pass the baseline checks still issue an access JWT.
-            let rotated = null;
-            if (decodedToken.sid && decodedToken.jti) {
-              rotated = await authSessions().rotateRefresh(decodedToken, userDetails);
-              userDetails.authSessionId = rotated.sid;
+            if (!decodedToken.sid || !decodedToken.jti) {
+              return next(createError(401, 'Invalid refresh session'));
             }
+            const rotated = await authSessions().rotateRefresh(decodedToken, userDetails);
+            userDetails.authSessionId = rotated.sid;
             req.user = userDetails;
             const token = await getToken(req, { mfaVerified: decodedToken.mfaVerified ?? false });
             const jwtPayload = jwt.decode(token);
@@ -313,14 +311,12 @@ exports.verifyUserJWT = function (req, res, next) {
               return next(createError(401, 'Two-factor authentication required'));
             }
             res.setHeader('Refresh-JWT', token);
-            if (rotated) {
-              const nextRefresh = await getRefreshToken(req, {
-                sid: rotated.sid,
-                jti: rotated.jti,
-                mfaVerified: decodedToken.mfaVerified
-              });
-              res.setHeader('Refresh-Token', nextRefresh);
-            }
+            const nextRefresh = await getRefreshToken(req, {
+              sid: rotated.sid,
+              jti: rotated.jti,
+              mfaVerified: decodedToken.mfaVerified
+            });
+            res.setHeader('Refresh-Token', nextRefresh);
             user = userDetails;
           } catch (err) {
             if (req.header('Origin') !== undefined) {

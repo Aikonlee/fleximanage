@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="OpenSource-OpenNetworking - Open SD-WAN Management Platform"
+    />
+    <link rel="manifest" href="/manifest.json" />
+    <!-- Bootstrap CSS -->
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
+    <!-- Leaflet CSS/JS are bundled via npm (see src/index.js) rather than loaded
+         from an external CDN, since that CDN can be slow or blocked entirely
+         depending on the deployment's network environment. -->
+  <title>OpenSource-OpenNetworking</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <script>
+    // Server configuration injected by backend via API endpoint
+    // Default empty object will be populated on page load
+    window.__FLEXIWAN_SERVER_CONFIG__ = {};
+  </script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/index.jsx"></script>
+    <!-- Bootstrap JS -->
+  </body>
+</html>

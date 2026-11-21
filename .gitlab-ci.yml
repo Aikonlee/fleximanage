@@ -1,0 +1,46 @@
+image: node:22
+stages: [test]
+
+frontend_validate:
+  stage: test
+  cache:
+    key:
+      files: [frontend/package-lock.json]
+    paths: [frontend/.npm/]
+  script:
+    - cd frontend
+    - npm ci --cache .npm --prefer-offline
+    - npm run lint -- --max-warnings=0
+    - npm test
+    - npm run build
+    - npm audit --audit-level=moderate
+    - test ! -e build/direct-login.html
+    - test ! -e build/fix-auth.html
+  artifacts:
+    paths: [frontend/build/]
+    expire_in: 7 days
+
+backend_validate:
+  stage: test
+  services:
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    TEST_REDIS_URL: redis://redis:6379/15
+  cache:
+    key:
+      files: [backend/package-lock.json]
+    paths: [backend/.npm/]
+  script:
+    - cd backend
+    - npm ci --ignore-scripts --cache .npm --prefer-offline
+    - npm run test:regression
+    - npm run test:models
+    - npm run test:historical
+    - npm audit --json > audit-all.json || true
+    - npm audit --omit=dev --json > audit-production.json || true
+    - node tools/check-audit.cjs audit-production.json
+  artifacts:
+    when: always
+    paths: [backend/audit-all.json, backend/audit-production.json]
+    expire_in: 14 days

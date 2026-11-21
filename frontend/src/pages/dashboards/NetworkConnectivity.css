@@ -1,0 +1,116 @@
+.network-legend {
+  display: flex;
+  gap: 1.25rem;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  align-items: center;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 3px solid var(--status-running);
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+.legend-swatch.dashed {
+  border-top-style: dashed;
+  border-top-color: var(--border-dark);
+}
+
+.network-graph-card {
+  position: relative;
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.network-graph-svg {
+  width: 100%;
+  height: 70vh;
+  min-height: 420px;
+  display: block;
+  cursor: grab;
+  background: #fbfcfc;
+}
+
+.network-graph-svg:active {
+  cursor: grabbing;
+}
+
+.network-graph-loading,
+.network-graph-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  z-index: 2;
+}
+
+.network-edge {
+  stroke: var(--status-running);
+  stroke-width: 2;
+  transition: stroke-width 0.15s ease;
+}
+
+.network-edge.dashed {
+  stroke: var(--border-dark);
+  stroke-dasharray: 6 5;
+}
+
+.network-edge.hovered {
+  stroke-width: 4;
+}
+
+.network-node {
+  cursor: pointer;
+}
+
+.network-node circle {
+  stroke-width: 2;
+  transition: r 0.15s ease;
+}
+
+.network-node:hover circle {
+  r: 25;
+}
+
+.node-connected {
+  fill: var(--primary-lighter);
+  stroke: var(--primary-color);
+}
+
+.node-disconnected {
+  fill: #f3f4f4;
+  stroke: var(--border-dark);
+}
+
+.network-node-icon {
+  font-size: 14px;
+  fill: var(--primary-color);
+}
+
+.network-node-label {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--text-primary);
+}
+
+.network-edge-tooltip {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  background: #1f2937;
+  color: #fff;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}

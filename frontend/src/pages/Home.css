@@ -1,0 +1,176 @@
+/* Home.css - flexiWAN-style dashboard layout */
+
+.home-page {
+  padding: 20px;
+}
+
+.home-page .breadcrumb-nav {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.home-page .page-title {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 1.25rem 0;
+}
+
+/* Panels (Network Status / Traffic / World Map cards) */
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: #f7f9f9;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.panel-body {
+  padding: 1.25rem;
+}
+
+.panel-body.p-0 {
+  padding: 0;
+}
+
+.panel-body.flex-row-center {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Network Status rows */
+.status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 0.75rem 0;
+}
+
+.status-row + .status-row {
+  border-top: 1px solid var(--border-light);
+}
+
+.row-label {
+  width: 90px;
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.status-group-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.status-group {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.dotted-line {
+  width: 28px;
+  border-top: 2px dotted var(--border-dark);
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.status-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.status-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding: 0 0.5rem;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  color: #fff;
+}
+
+.status-circle.success { background-color: var(--status-running); }
+.status-circle.danger { background-color: var(--status-disconnected); }
+.status-circle.warning { background-color: var(--status-pending); color: #7a5b00; }
+.status-circle.secondary { background-color: var(--status-stopped); }
+
+/* Traffic panel */
+.traffic-label {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.traffic-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dashboard-link {
+  color: var(--primary-color);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  margin-left: auto;
+}
+
+.dashboard-link:hover {
+  text-decoration: underline;
+}
+
+.dashboard-link.ml-4 {
+  margin-left: 1rem;
+}
+
+.dashboard-link.italic {
+  font-style: italic;
+}
+
+/* World map */
+#map {
+  width: 100%;
+  height: 360px;
+  z-index: 1; /* Ensure map stays below dropdowns/modals */
+}
+
+.device-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-card-item {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.status-card-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}

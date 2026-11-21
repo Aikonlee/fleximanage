@@ -1,0 +1,279 @@
+--- a/backend/authenticate.js
++++ b/backend/authenticate.js
+@@ -48,7 +48,7 @@
+ var opts = {};
+ opts.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
+ opts.secretOrKey = configs.get('userTokenSecretKey');
+-exports.jwtPassport = passport.use('jwt', new JwtStrategy(opts, async (jwtPayload, done) => {
++exports.jwtPassport = passport.use('jwt', new JwtStrategy({ ...opts, passReqToCallback: true }, async (req, jwtPayload, done) => {
+   // prevent access sensitive resources with login token
+   if (jwtPayload.type === 'login') {
+     return done(null, false, { message: 'A login token is unauthorized to access this resource' });
+@@ -61,8 +61,11 @@
+   let token = null;
+   if (jwtPayload.type === 'app_access_token' || jwtPayload.type === 'app_access_key') {
+     try {
++      if (!jwtPayload.id) return done(null, false, { message: 'Invalid token used' });
+       token = await Accesstoken.findOne({ _id: jwtPayload.id });
+-      if (!token) {
++      if (!token || token.isValid !== true ||
++          token.account?.toString() !== jwtPayload.account?.toString() ||
++          token.token !== opts.jwtFromRequest(req)) {
+         return done(null, false, { message: 'Invalid token used' });
+       }
+     } catch (error) {
+@@ -246,8 +249,14 @@
+                     req.headers['refresh-token']) {
+           try {
+             const refreshToken = req.headers['refresh-token'];
+-            await verifyToken(refreshToken);
+-            const decodedToken = jwt.decode(refreshToken);
++            const decodedToken = await verifyToken(refreshToken);
++            const expiredAccessToken = opts.jwtFromRequest(req);
++            const expiredPayload = expiredAccessToken && jwt.decode(expiredAccessToken);
++            if (decodedToken.type !== 'refresh' || !decodedToken._id ||
++                !expiredPayload?._id ||
++                decodedToken._id.toString() !== expiredPayload._id.toString()) {
++              return next(createError(401, 'Invalid refresh token'));
++            }
+             const userDetails = await User
+               .findOne({ _id: decodedToken._id })
+               .populate('defaultOrg')
+--- a/backend/tokens.js
++++ b/backend/tokens.js
+@@ -72,6 +72,7 @@
+ 
+ exports.getRefreshToken = async ({ user }, override = {}) => {
+   return jwt.sign({
++    type: 'refresh',
+     _id: user._id,
+     username: user.username,
+     admin: user.admin || false,
+--- a/backend/routes/interfaces-routing.js
++++ b/backend/routes/interfaces-routing.js
+@@ -3,6 +3,7 @@
+ const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
+ const { devices } = require('../models/devices');
+ const { verifyPermission } = require('../authenticate');
++const { getAccessTokenOrgList } = require('../utils/membershipUtils');
+ const { applyRoutingConfig, removeRoutingConfig } = require('../deviceLogic/routingHandler');
+ 
+ /**
+@@ -12,7 +13,8 @@
+   verifyPermission('devices', 'get'),
+   async (req, res) => {
+     try {
+-      const device = await devices.findById(req.params.deviceId);
++      const orgList = await getAccessTokenOrgList(req.user, req.query?.org, false);
++      const device = await devices.findOne({ _id: req.params.deviceId, org: { $in: orgList } });
+       if (!device) {
+         return res.status(404).json({ error: 'Device not found' });
+       }
+@@ -65,7 +67,8 @@
+         return res.status(400).json({ error: `Invalid protocol. Must be one of: ${validProtocols.join(', ')}` });
+       }
+ 
+-      const device = await devices.findById(req.params.deviceId);
++      const orgList = await getAccessTokenOrgList(req.user, req.query?.org, true, null, '', true);
++      const device = await devices.findOne({ _id: req.params.deviceId, org: { $in: orgList } });
+       if (!device) {
+         return res.status(404).json({ error: 'Device not found' });
+       }
+--- a/backend/services/AccessTokensService.js
++++ b/backend/services/AccessTokensService.js
+@@ -44,7 +44,6 @@
+         return {
+           _id: record.id,
+           name: record.name,
+-          token: record.token,
+           isValid: record.isValid,
+           group: record.group,
+           organization: record?.organization?.name || null,
+--- /dev/null
++++ b/backend/authenticate.test.js
+@@ -0,0 +1,108 @@
++const mockJwt = require('jsonwebtoken');
++const mockSecret = 'test-only-secret';
++let mockAuthenticateResult;
++let mockUser;
++let mockAccessRecord;
++let mockStrategies = {};
++
++jest.mock('passport', () => ({
++  use: jest.fn((name, strategy) => { mockStrategies[name] = strategy; return strategy; }),
++  serializeUser: jest.fn(), deserializeUser: jest.fn(),
++  authenticate: jest.fn((strategy, options, callback) => (req, res, next) => mockAuthenticateResult(callback, req, res, next))
++}));
++jest.mock('passport-jwt', () => ({
++  Strategy: class { constructor (opts, callback) { this.callback = callback; } },
++  ExtractJwt: { fromAuthHeaderAsBearerToken: () => (req) => req.headers.authorization?.split(' ')[1] }
++}));
++jest.mock('./models/users', () => ({
++  serializeUser: () => () => {}, deserializeUser: () => () => {}, authenticate: () => () => {},
++  findOne: jest.fn(() => ({ populate: jest.fn(() => ({ populate: async () => mockUser, then: (resolve, reject) => Promise.resolve(mockUser).then(resolve, reject) })) }))
++}));
++jest.mock('./models/accounts', () => ({ findOne: jest.fn(async () => ({ _id: 'account-a' })) }));
++jest.mock('./models/accesstokens', () => ({ findOne: jest.fn(async () => mockAccessRecord) }));
++jest.mock('./models/membership', () => ({ permissionMasks: {} }));
++jest.mock('./utils/membershipUtils', () => ({ orgUpdateFromNull: jest.fn(async () => {}), getUserOrgByID: jest.fn(async () => []) }));
++jest.mock('./configs', () => () => ({ get: (key) => key === 'userTokenSecretKey' ? mockSecret : false }));
++jest.mock('./utils/recaptcha', () => () => ({}));
++jest.mock('./logging/logging', () => () => ({ warn: jest.fn(), info: jest.fn(), debug: jest.fn() }));
++jest.mock('./tokens', () => ({ verifyToken: jest.fn((token) => mockJwt.verify(token, mockSecret)), getToken: jest.fn(async () => mockJwt.sign({ _id: 'user-a', account: 'account-a', perms: {} }, mockSecret)) }));
++
++const auth = require('./authenticate');
++const Access = require('./models/accesstokens');
++
++beforeEach(() => {
++
++  // Strategy registrations occur at module load, so reuse registered callbacks below.
++  mockUser = { _id: 'user-a', username: 'alice', defaultAccount: { _id: 'account-a' } };
++  mockAccessRecord = { account: 'account-a', isValid: true, permissions: {} };
++  jest.clearAllMocks();
++});
++const jwtStrategy = mockStrategies.jwt;
++const checkJwt = async (payload, storedToken) => {
++  const presented = mockJwt.sign(payload, mockSecret);
++  mockAccessRecord.token = storedToken === undefined ? presented : storedToken;
++  return new Promise((resolve, reject) => jwtStrategy.callback({ headers: { authorization: `Bearer ${presented}` } }, payload, (err, result, info) => err ? reject(err) : resolve({ result, info })));
++};
++const request = (refreshPayload, expiredPayload = { _id: 'user-a', account: 'account-a' }) => {
++  const expiredToken = mockJwt.sign(expiredPayload, mockSecret, { expiresIn: -1 });
++  const req = { method: 'GET', originalUrl: '/api/devices', headers: { authorization: `Bearer ${expiredToken}`, 'refresh-token': mockJwt.sign(refreshPayload, mockSecret) }, header: () => undefined };
++  const headers = {};
++  const res = { setHeader: (name, value) => { headers[name.toLowerCase()] = value; }, getHeaders: () => headers };
++  mockAuthenticateResult = (callback) => callback(null, false, { name: 'TokenExpiredError' });
++  return { req, res, headers };
++};
++
++test('rejects revoked access key', async () => {
++  mockAccessRecord.isValid = false;
++  expect((await checkJwt({ type: 'app_access_key', id: 'key-a', account: 'account-a', _id: 'user-a' })).result).toBe(false);
++});
++
++test('rejects access key used for a different account', async () => {
++  mockAccessRecord.account = 'account-b';
++  expect((await checkJwt({ type: 'app_access_key', id: 'key-a', account: 'account-a', _id: 'user-a' })).result).toBe(false);
++});
++
++test('rejects access key JWT lacking a token ID', async () => {
++  expect((await checkJwt({ type: 'app_access_key', account: 'account-a', _id: 'user-a' })).result).toBe(false);
++});
++
++test('rejects access token JWT with revoked record', async () => {
++  mockAccessRecord.isValid = false;
++  expect((await checkJwt({ type: 'app_access_token', id: 'key-a', account: 'account-a', _id: 'user-a' })).result).toBe(false);
++});
++
++test('rejects access key whose presented JWT differs from stored credential', async () => {
++  expect((await checkJwt({ type: 'app_access_key', id: 'key-a', account: 'account-a', _id: 'user-a' }, 'other-token')).result).toBe(false);
++});
++
++test('accepts valid bound access key', async () => {
++  expect((await checkJwt({ type: 'app_access_key', id: 'key-a', account: 'account-a', _id: 'user-a' })).result._id).toBe('user-a');
++});
++
++test('rejects refresh token from another user', async () => {
++  const { req, res } = request({ type: 'refresh', _id: 'user-b' });
++
++  const next = jest.fn();
++  await auth.verifyUserJWT(req, res, next);
++  await new Promise(setImmediate);
++  expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
++  expect(res.getHeaders()['refresh-jwt']).toBeUndefined();
++});
++
++test('rejects an access JWT presented as a refresh token', async () => {
++  const { req, res } = request({ _id: 'user-a', account: 'account-a' });
++  const next = jest.fn();
++  auth.verifyUserJWT(req, res, next);
++  await new Promise(setImmediate);
++  expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
++  expect(res.getHeaders()['refresh-jwt']).toBeUndefined();
++});
++
++test('accepts a matching typed refresh token after access expiry', async () => {
++  const { req, res } = request({ type: 'refresh', _id: 'user-a' });
++  const next = jest.fn();
++  auth.verifyUserJWT(req, res, next);
++  await new Promise(setImmediate);
++  expect(next).toHaveBeenCalledWith();
++  expect(res.getHeaders()['refresh-jwt']).toBeTruthy();
++});
+--- /dev/null
++++ b/backend/routes/interfaces-routing.test.js
+@@ -0,0 +1,50 @@
++/** @jest-environment node */
++jest.mock('../logging/logging', () => () => ({ error: jest.fn(), info: jest.fn() }));
++jest.mock('../models/devices', () => ({ devices: { findOne: jest.fn() } }));
++jest.mock('../authenticate', () => ({ verifyPermission: () => (req, res, next) => next() }));
++jest.mock('../utils/membershipUtils', () => ({ getAccessTokenOrgList: jest.fn() }));
++jest.mock('../deviceLogic/routingHandler', () => ({ applyRoutingConfig: jest.fn(), removeRoutingConfig: jest.fn() }));
++const router = require('./interfaces-routing');
++const { devices } = require('../models/devices');
++const { getAccessTokenOrgList } = require('../utils/membershipUtils');
++const route = router.stack.filter(layer => layer.route && layer.route.path.endsWith('/routing'));
++const handlers = Object.fromEntries(route.map(layer => [Object.keys(layer.route.methods)[0], layer.route.stack.at(-1).handle]));
++const org = '507f1f77bcf86cd799439011';
++const otherOrg = '507f1f77bcf86cd799439012';
++const iface = { routing: { protocol: 'none', ospf: { enabled: false }, bgp: { enabled: false } } };
++const device = { interfaces: { id: jest.fn(() => iface) }, save: jest.fn(), status: 'stopped' };
++const response = () => ({ status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() });
++const request = (method, user = { defaultOrg: { _id: org } }) => ({ params: { deviceId: 'device-id', interfaceId: 'iface-id' }, query: {}, user, body: method === 'put' ? { protocol: 'none' } : {} });
++beforeEach(() => {
++  jest.clearAllMocks();
++  devices.findOne.mockResolvedValue(null);
++  getAccessTokenOrgList.mockResolvedValue([org]);
++});
++for (const method of ['get', 'put']) {
++  test(`${method.toUpperCase()} scopes device lookup to authorized organizations`, async () => {
++    const res = response();
++    await handlers[method](request(method), res);
++    expect(devices.findOne).toHaveBeenCalledWith({ _id: 'device-id', org: { $in: [org] } });
++    expect(res.status).toHaveBeenCalledWith(404);
++    expect(device.save).not.toHaveBeenCalled();
++  });
++  test(`${method.toUpperCase()} allows an accessible device`, async () => {
++    devices.findOne.mockResolvedValue(device);
++    const res = response();
++    await handlers[method](request(method), res);
++    expect(res.status).toHaveBeenCalledWith(200);
++  });
++  test(`${method.toUpperCase()} rejects access when no organization is authorized`, async () => {
++    getAccessTokenOrgList.mockResolvedValue([]);
++    const res = response();
++    await handlers[method](request(method), res);
++    expect(devices.findOne).toHaveBeenCalledWith({ _id: 'device-id', org: { $in: [] } });
++    expect(res.status).toHaveBeenCalledWith(404);
++  });
++}
++test('PUT checks modify-level organization access for access tokens', async () => {
++  const req = request('put', { accessToken: true });
++  req.query.org = otherOrg;
++  await handlers.put(req, response());
++  expect(getAccessTokenOrgList).toHaveBeenCalledWith(req.user, otherOrg, true, null, '', true);
++});
+--- /dev/null
++++ b/backend/services/AccessTokensService.security.test.js
+@@ -0,0 +1,21 @@
++/** @jest-environment node */
++jest.mock('../models/accesstokens', () => ({ find: jest.fn() }));
++jest.mock('../models/organizations', () => ({}));
++jest.mock('../models/membership', () => ({ preDefinedPermissions: {}, validatePermissionCombination: jest.fn() }));
++jest.mock('../tokens', () => ({ getAccessKey: jest.fn() }));
++const AccessTokens = require('../models/accesstokens');
++const Service = require('./AccessTokensService');
++
++test('listing access keys returns metadata without reusable bearer credentials', async () => {
++  AccessTokens.find.mockReturnValue({
++    skip: () => ({ limit: () => ({ populate: async () => [{
++      id: 'key-id', name: 'a key', token: 'secret-jwt', isValid: true,
++      group: '', organization: null, to: 'account', role: 'viewer'
++    }] }) })
++  });
++  const result = await Service.accesstokensGET({}, { user: { defaultAccount: { _id: 'account-id' } } });
++  expect(result.code).toBe(200);
++  expect(result.payload).toHaveLength(1);
++  expect(result.payload[0]).not.toHaveProperty('token');
++  expect(result.payload[0].name).toBe('a key');
++});

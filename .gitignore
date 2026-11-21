@@ -1,0 +1,60 @@
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+logs/
+tmp/
+
+# Archives and builds
+*.tar.gz
+*.tgz
+build
+coverage/
+dist/
+
+# Dependencies
+node_modules/
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# IDE and Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.csr
+backend/bin/cert.*/
+cert.*/
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Build artifacts and generated files
+backend/public/
+debian/fleximanage
+
+# Backend temporary files
+backend/tmp/openvpn_pki*
+backend/logs/
+
+# Frontend build artifacts
+frontend/build/
+
+# myself readme
+docs/
+scripts/
+# Frontend CI cache and local integration credentials/results
+frontend/.npm/
+frontend/e2e/fixture-state.json*
+frontend/e2e/results.json

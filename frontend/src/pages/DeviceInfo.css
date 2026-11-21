@@ -1,0 +1,432 @@
+/* DeviceInfo.css - Replicated from devices_info_General_menu.html template */
+
+.device-info-page {
+  background-color: #ecf1f2;
+  min-height: calc(100vh - var(--header-height));
+  padding: 1.5rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Background Decoration */
+.bg-decoration {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: radial-gradient(circle at top right, #e2e8f0 0%, transparent 60%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Breadcrumb */
+.breadcrumb-nav {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+  position: relative;
+  z-index: 1;
+}
+.breadcrumb-nav span.active {
+  color: #374151;
+}
+
+/* Header Area */
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-back-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background-color: #374151;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  transition: background-color 0.2s;
+}
+.btn-back-circle:hover {
+  background-color: #1f2937;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+
+.status-badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.status-badge {
+  background-color: #ef4444;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.status-badge.success {
+  background-color: #16a34a;
+}
+
+/* Action Buttons Bar */
+.action-buttons-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.btn-template {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-orange { background-color: #fb923c; color: white; }
+.btn-orange:hover:not(:disabled) { background-color: #f97316; }
+
+.btn-gray { background-color: #374151; color: white; }
+.btn-gray:hover:not(:disabled) { background-color: #1f2937; }
+
+.btn-green { background-color: #16a34a; color: white; }
+.btn-green:hover:not(:disabled) { background-color: #15803d; }
+
+/* Tabs Navigation - Improved for dropdowns */
+.tabs-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+  color: #4b5563;
+  position: relative;
+  z-index: 100; /* Higher z-index for dropdowns */
+}
+
+.tab-item {
+  padding-bottom: 0.5rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+  position: relative;
+}
+.tab-item:hover { color: #111827; border-bottom-color: #d1d5db; }
+.tab-item.active {
+  border-bottom-color: #1f2937;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* While a dropdown is open, show its trigger as a pressed pill, like the
+   collapsed Status/Troubleshooting dropdowns do at rest */
+.tab-item.dropdown-open {
+  background-color: #e5e7eb;
+  border-radius: 0.375rem 0.375rem 0 0;
+  padding: 0.35rem 0.6rem 0.5rem;
+  margin: -0.35rem -0.6rem -2px;
+  color: #111827;
+}
+
+.tab-caret {
+  margin-left: 0.35rem;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+/* Dropdown Menu Styles - Fixed visibility and positioning */
+.tab-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 1000;
+  min-width: 180px;
+  padding: 0.5rem 0;
+  display: none;
+}
+
+.tab-dropdown-menu.show {
+  display: block;
+}
+
+/* Scoped under .tab-dropdown-menu: plain ".dropdown-item" collides with
+   Bootstrap's own global .dropdown-item class (loaded elsewhere on this
+   page), which was silently winning on shared properties like padding
+   since it appears later in the bundle at equal specificity. */
+.tab-dropdown-menu .dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 1.25rem 0.5rem 1.75rem;
+  font-size: 0.875rem;
+  color: #374151;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.tab-dropdown-menu .dropdown-item:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.tab-dropdown-menu .dropdown-item.active {
+  background-color: #e5e7eb;
+  color: #111827;
+  font-weight: 600;
+}
+
+/* Content Area */
+.content-area-template {
+  max-width: 56rem;
+  position: relative;
+  z-index: 1;
+}
+
+.grid-row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.grid-label {
+  grid-column: span 12;
+  font-size: 0.875rem;
+  color: #374151;
+}
+@media (min-width: 768px) {
+  .grid-label { grid-column: span 2; }
+}
+
+.grid-content {
+  grid-column: span 12;
+  position: relative;
+}
+@media (min-width: 768px) {
+  .grid-content { grid-column: span 10; }
+}
+
+.input-template {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: #374151;
+  background-color: white;
+}
+
+.input-valid { border-color: #28a745; padding-right: 2.5rem; }
+.valid-icon { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: #16a34a; }
+.input-readonly { background-color: #e9ecef; border-color: #ced4da; color: #495057; cursor: default; }
+
+/* Toggle Switch */
+.toggle-checkbox {
+  display: none !important;
+}
+.toggle-label {
+  width: 50px;
+  height: 26px;
+  background-color: #2d3748;
+  border-radius: 9999px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: block;
+}
+.toggle-label.checked { background-color: #16a34a; }
+.toggle-label:after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-checkbox:checked + .toggle-label:after { transform: translateX(24px); }
+
+/* Table Container */
+.table-container-template {
+  background: white;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  overflow-x: auto;
+}
+
+.custom-table-template {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.custom-table-template th {
+  background-color: white;
+  color: #1f2937;
+  font-weight: 700;
+  padding: 0.75rem;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #e5e7eb;
+}
+.custom-table-template td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  color: #4b5563;
+}
+
+/* Section header used by OSPF/BGP/Firewall/Routing config tabs */
+.section-header {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 1rem;
+}
+
+/* Card wrapper for a block of settings fields (OSPF/BGP global settings, etc.) */
+.global-settings-card {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.settings-field label {
+  display: block;
+  font-size: 0.8rem;
+  color: #4b5563;
+  margin-bottom: 0.35rem;
+}
+
+.btn-outline-gray {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.btn-outline-gray:hover { background: #f3f4f6; }
+
+.btn-save-gray {
+  background-color: #374151;
+  color: white;
+}
+.btn-save-gray:hover:not(:disabled) { background-color: #1f2937; }
+
+/* Small square icon-buttons used in row action clusters (Firewall rules etc.),
+   colors match the reference flexiWAN screenshots (yellow=settings, red=remove, teal=misc). */
+.btn-icon-action, .btn-icon-yellow, .btn-icon-red, .btn-icon-teal, .btn-icon-green {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border: none;
+  border-radius: 0.3rem;
+  color: white;
+  margin-right: 0.3rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.btn-icon-action { background-color: var(--secondary-color); }
+.btn-icon-action:hover { background-color: var(--secondary-hover); }
+.btn-icon-yellow { background-color: var(--action-yellow); }
+.btn-icon-yellow:hover { filter: brightness(0.92); }
+.btn-icon-red { background-color: var(--action-red); }
+.btn-icon-red:hover { background-color: var(--action-darkred); }
+.btn-icon-teal { background-color: var(--action-teal); }
+.btn-icon-teal:hover { filter: brightness(0.92); }
+.btn-icon-green { background-color: var(--action-green); }
+.btn-icon-green:hover { filter: brightness(0.92); }
+
+.btn-icon-action.text-danger { background-color: var(--action-red); }
+.btn-icon-action.text-danger:hover { background-color: var(--action-darkred); }
+
+/* Read-only key/value status panels used by Status/Troubleshooting tabs */
+.status-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.status-kv-item {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+}
+
+.status-kv-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.25rem;
+}
+
+.status-kv-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.device-logs-view {
+  background: #1f2937;
+  color: #e5e7eb;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  max-height: 420px;
+  overflow: auto;
+  font-size: 0.8rem;
+  margin: 0;
+}

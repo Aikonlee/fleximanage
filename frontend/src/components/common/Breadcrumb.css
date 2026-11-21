@@ -1,0 +1,24 @@
+.flexi-breadcrumb {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.flexi-breadcrumb-sep {
+  margin: 0 0.4rem;
+  color: var(--text-muted);
+}
+
+.flexi-breadcrumb-link {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.flexi-breadcrumb-link:hover {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
+.flexi-breadcrumb-current {
+  color: var(--text-muted);
+}

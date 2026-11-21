@@ -14,7 +14,8 @@ coverage/
 dist/
 
 # Dependencies
-node_modules/
+backend/public_backup/
+node_modules
 
 # Operating System
 .DS_Store

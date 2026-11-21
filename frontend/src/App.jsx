@@ -44,6 +44,7 @@ import TrafficDashboard from './pages/dashboards/TrafficDashboard';
 import ComingSoon from './pages/ComingSoon';
 import { useAuth } from './auth/AuthContext';
 import { clearSession } from './auth/session';
+import api from './services/api';
 import Forbidden from './components/Forbidden';
 import Register from './pages/Register';
 import './styles/App.css';
@@ -63,7 +64,16 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const handleLogin = () => navigate('/home', { replace: true });
-  const handleLogout = () => { clearSession(); navigate('/login', { replace: true }); };
+  const handleLogout = async () => {
+    try {
+      await api.get('/users/logout');
+    } catch (_error) {
+      // Best effort: a failed revocation must not keep the local session active.
+    } finally {
+      clearSession();
+      navigate('/login', { replace: true });
+    }
+  };
 
   // Sidebar toggle removed from header; keeping state & logic placeholder if reintroduced later.
   // const toggleSidebar = () => setSidebarCollapsed(!sidebarCollapsed);

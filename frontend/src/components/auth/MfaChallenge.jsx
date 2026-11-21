@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, Form } from 'react-bootstrap';
 import api from '../../services/api';
 import { decodeJwtPayload } from '../../auth/permissions';
-import { setSessionToken } from '../../auth/session';
+import { setSessionTokens } from '../../auth/session';
 
 export default function MfaChallenge({ loginToken, onAuthenticated, onCancel }) {
   const [methods, setMethods] = useState(null);
@@ -35,8 +35,9 @@ export default function MfaChallenge({ loginToken, onAuthenticated, onCancel }) 
       const response = await api.post(`/users/mfa/${recovery ? 'verifyRecoveryCode' : 'verify'}`,
         recovery ? { recoveryCode: code.trim() } : { token: code.trim() }, { headers, authFlow: true });
       const token = response.headers['refresh-jwt'];
-      if (!token || decodeJwtPayload(token)?.type === 'login' || decodeJwtPayload(token)?.mfaVerified !== true) throw new Error('No authenticated session returned');
-      setSessionToken(token); onAuthenticated();
+      const refreshToken = response.headers['refresh-token'];
+      if (!token || !refreshToken || decodeJwtPayload(token)?.type === 'login' || decodeJwtPayload(token)?.mfaVerified !== true) throw new Error('No authenticated session returned');
+      setSessionTokens(token, refreshToken); onAuthenticated();
     } catch (reason) {
       setError(reason.response?.data?.error || reason.message || 'Verification failed');
     } finally { setBusy(false); }

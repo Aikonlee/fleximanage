@@ -14,13 +14,14 @@ function methods({ enabled = true, recovery = 1 } = {}) {
 }
 test('interim login token never becomes a session; valid authenticator response completes login', async () => {
   methods(); const authenticated = vi.fn(); const session = token({ _id: 'user', account: 'account', mfaVerified: true });
-  api.post.mockResolvedValue({ headers: { 'refresh-jwt': session } });
+  api.post.mockResolvedValue({ headers: { 'refresh-jwt': session, 'refresh-token': 'mfa-refresh' } });
   render(<MfaChallenge loginToken={token({ type: 'login' })} onAuthenticated={authenticated} onCancel={() => {}} />);
   fireEvent.change(await screen.findByLabelText('Authenticator code'), { target: { value: '123456' } });
   expect(localStorage.getItem('token')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Verify', exact: true }));
   await waitFor(() => expect(authenticated).toHaveBeenCalledTimes(1));
   expect(localStorage.getItem('token')).toBe(session);
+  expect(localStorage.getItem('refreshToken')).toBe('mfa-refresh');
 });
 test('invalid OTP remains on verification screen and recovery uses its own endpoint', async () => {
   methods(); api.post.mockRejectedValueOnce({ response: { data: { error: 'Invalid Code' } } });

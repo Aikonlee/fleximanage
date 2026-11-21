@@ -119,6 +119,8 @@ const User = new Schema({
     required: true,
     default: 'unverified'
   },
+  // Monotonically incremented on password, role, or MFA policy changes.
+  authVersion: { type: Number, default: 0 },
   // tokens
   emailTokens: emailTokens,
   // Default user account

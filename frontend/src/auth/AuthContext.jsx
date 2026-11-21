@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
-import { getSessionToken, subscribeSession, validPayload, clearSession, scopeOf } from './session';
-import { hasPermission } from './permissions';
+import { getSessionToken, getRefreshToken, subscribeSession, validPayload, clearSession, scopeOf } from './session';
+import { hasPermission, decodeJwtPayload } from './permissions';
+import { refreshSession } from '../services/api';
 
 const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
@@ -8,12 +9,16 @@ export function AuthProvider({ children }) {
   const payload = useMemo(() => validPayload(token), [token]);
   useEffect(() => {
     if (!token) return undefined;
-    if (!payload) { clearSession(); return undefined; }
-    const remaining = payload.exp * 1000 - Date.now();
+    const claims = payload || decodeJwtPayload(token);
+    if (!claims || claims.type === 'login' || !Number.isFinite(claims.exp)) { clearSession(); return undefined; }
+    const remaining = claims.exp * 1000 - Date.now();
     let timer;
     const expire = () => {
-      const left = payload.exp * 1000 - Date.now();
-      if (left <= 0) clearSession();
+      const left = claims.exp * 1000 - Date.now();
+      if (left <= 0) {
+        if (getRefreshToken()) refreshSession().catch(() => { /* Refresh fails closed. */ });
+        else clearSession();
+      }
       else timer = setTimeout(expire, Math.min(left, 2147483647));
     };
     timer = setTimeout(expire, Math.max(0, Math.min(remaining, 2147483647)));

@@ -24,7 +24,9 @@ const User = require('../models/users');
 const Account = require('../models/accounts');
 const { membership, preDefinedPermissions } = require('../models/membership');
 const auth = require('../authenticate');
-const { getLoginProcessToken, getToken, getRefreshToken } = require('../tokens');
+const { getLoginProcessToken } = require('../tokens');
+const issueSessionTokens = require('../sessionTokens');
+const authSessions = require('../authSessions');
 const cors = require('./cors');
 const mongoConns = require('../mongoConns.js')();
 const randomKey = require('../utils/random-key');
@@ -48,47 +50,16 @@ const SHA256 = value => createHash('sha256').update(value).digest('hex');
 const rateLimit = require('express-rate-limit');
 const RateLimitStore = require('../rateLimitStore');
 const jwt = require('jsonwebtoken');
-const { verifyToken } = require('../tokens');
 
 router.use(bodyParser.json());
 
-// Manual JWT verification middleware for user verification endpoints
-const verifyAdminJWT = async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return next(createError(401, 'No authentication token provided'));
-    }
-
-    await verifyToken(token);
-    const decoded = jwt.decode(token);
-    
-    if (!decoded || !decoded._id) {
-      return next(createError(401, 'Invalid token'));
-    }
-
-    const user = await User.findById(decoded._id)
-      .populate('defaultOrg')
-      .populate('defaultAccount');
-    
-    if (!user) {
-      return next(createError(401, 'User not found'));
-    }
-
-    if ((user.mfa?.enabled || user.defaultAccount?.forceMfa) && decoded.mfaVerified !== true) {
-      return next(createError(401, 'Two-factor authentication required'));
-    }
-
-    if (user.admin !== true) {
-      return next(createError(403, 'Admin access required'));
-    }
-
-    req.user = user;
+// Admin routes share the revocable session check with other user APIs.
+const verifyAdminJWT = (req, res, next) => {
+  auth.verifyUserJWT(req, res, err => {
+    if (err) return next(err);
+    if (req.user?.admin !== true) return next(createError(403, 'Admin access required'));
     next();
-  } catch (err) {
-    logger.error('JWT verification failed', { params: { error: err.message } });
-    return next(createError(401, 'Authentication failed'));
-  }
+  });
 };
 
 // Error formatter
@@ -396,14 +367,19 @@ router.route('/change-password')
       }
 
       // Use passport-local-mongoose's changePassword
-      req.user.changePassword(req.body.oldPassword, req.body.newPassword, (err) => {
+      req.user.changePassword(req.body.oldPassword, req.body.newPassword, async (err) => {
         if (err) {
           if (err.name === 'IncorrectPasswordError') {
             return next(createError(403, 'Incorrect old password'));
           }
           return next(createError(500, err.message));
         }
-        res.status(200).json({ status: 'password changed' });
+        try {
+          await authSessions.revokeAll(req.user._id);
+          res.status(200).json({ status: 'password changed' });
+        } catch (error) {
+          next(error);
+        }
       });
     } catch (err) {
       return next(createError(500, err.message));
@@ -505,7 +481,8 @@ const updatePassword = (req, res, next) => {
     .then(() => {
       return registerUser.save();
     })
-    .then(() => {
+    .then(async () => {
+      await authSessions.revokeAll(registerUser._id);
       return res.status(200).json({ status: 'password reset' });
     })
     .catch((err) => {
@@ -611,11 +588,13 @@ router.route('/auth')
 // Passport exposes a function logout() on the req object which removes the req.user
 router.route('/logout')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .get(cors.corsWithOptions, (req, res) => {
-    req.logout();
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.json({ status: 'logged out' });
+  .get(cors.corsWithOptions, auth.verifyUserJWT, async (req, res, next) => {
+    try {
+      await authSessions.revokeCurrent(req.user._id, req.user.authSessionId);
+      res.status(200).json({ status: 'logged out' });
+    } catch (err) {
+      next(err);
+    }
   });
 
 // This endpoint checks if user enabled and verified 2FA for himself.
@@ -735,6 +714,9 @@ router.route('/mfa/verify')
           updateQuery,
           { upsert: false }
         );
+        if (updateQuery.$set['mfa.enabled']) {
+          req.user.authVersion = await authSessions.revokeAll(req.user._id);
+        }
       }
 
       return await sendJwtToken(req, res, validated !== null);
@@ -743,8 +725,7 @@ router.route('/mfa/verify')
 // This function generates the JWT after the authentication process is complete.
 // With this token, the user can access and receive the organization's information.
 const sendJwtToken = async (req, res, mfaVerified) => {
-  const token = await getToken(req, { mfaVerified });
-  const refreshToken = await getRefreshToken(req, { mfaVerified });
+  const { token, refreshToken } = await issueSessionTokens(req.user, mfaVerified);
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Refresh-JWT', token);
@@ -861,6 +842,29 @@ router.route('/:userId/verify')
     }
   });
 
+// Flip the admin flag only where it differs, then revoke just those users.
+// authSessions.revokeAll owns the single authVersion increment per changed user.
+const setAdminFlag = async (ids, admin) => {
+  const updated = await Promise.all([...new Set(ids.map(String))].map(async id => {
+    try {
+      return await User.findOneAndUpdate(
+        { _id: id, admin: admin ? { $ne: true } : true },
+        { admin },
+        { new: true }
+      );
+    } catch (err) {
+      if (err.name === 'CastError') return null; // malformed id: nothing to change
+      throw err;
+    }
+  }));
+  const changed = updated.filter(Boolean).map(user => user._id);
+  const results = await Promise.allSettled(changed.map(id => authSessions.revokeAll(id)));
+  const failure = results.find(result => result.status === 'rejected' &&
+    result.reason?.message !== 'User not found'); // user deleted concurrently: nothing to revoke
+  if (failure) throw failure.reason;
+  return changed;
+};
+
 // Batch promote/demote admin (must come before /:userId/admin to avoid route conflict)
 router.route('/admin/batch')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
@@ -869,28 +873,22 @@ router.route('/admin/batch')
       const { promote, demote } = req.body;
 
       if (promote && Array.isArray(promote) && promote.length > 0) {
-        const result = await User.updateMany(
-          { _id: { $in: promote } },
-          { admin: true }
-        );
+        const changed = await setAdminFlag(promote, true);
         logger.info('Batch user promotion', {
-          params: { count: result.modifiedCount, adminId: req.user._id }
+          params: { count: changed.length, adminId: req.user._id }
         });
         return res.status(200).json({
           status: 'batch promotion completed',
-          promotedCount: result.modifiedCount
+          promotedCount: changed.length
         });
       } else if (demote && Array.isArray(demote) && demote.length > 0) {
-        const result = await User.updateMany(
-          { _id: { $in: demote } },
-          { admin: false }
-        );
+        const changed = await setAdminFlag(demote, false);
         logger.info('Batch user demotion', {
-          params: { count: result.modifiedCount, adminId: req.user._id }
+          params: { count: changed.length, adminId: req.user._id }
         });
         return res.status(200).json({
           status: 'batch demotion completed',
-          demotedCount: result.modifiedCount
+          demotedCount: changed.length
         });
       } else {
         return next(createError(400, 'Invalid request: provide promote or demote array'));
@@ -918,6 +916,7 @@ router.route('/:userId/admin')
         return next(createError(404, 'User not found'));
       }
 
+      await authSessions.revokeAll(user._id);
       logger.info('User promoted to admin', {
         params: { userId: req.params.userId, adminId: req.user._id }
       });
@@ -942,6 +941,7 @@ router.route('/:userId/admin')
         return next(createError(404, 'User not found'));
       }
 
+      await authSessions.revokeAll(user._id);
       logger.info('User demoted from admin', {
         params: { userId: req.params.userId, adminId: req.user._id }
       });

@@ -24,7 +24,8 @@ const mailer = require('../utils/mailer')(
   configs.get('mailerPort'),
   configs.get('mailerBypassCert', 'boolean')
 );
-const { getToken, getRefreshToken } = require('../tokens');
+const issueSessionTokens = require('../sessionTokens');
+const authSessions = require('../authSessions');
 const randomKey = require('../utils/random-key');
 const Users = require('../models/users');
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
@@ -39,8 +40,7 @@ class UsersService {
   static async usersLoginPOST ({ loginRequest }, { user }, response) {
     try {
       // Create token with user id and username
-      const token = await getToken({ user });
-      const refreshToken = await getRefreshToken({ user });
+      const { token, refreshToken } = await issueSessionTokens(user, false);
 
       response.setHeader('Content-Type', 'application/json');
       response.setHeader('Refresh-JWT', token);
@@ -141,6 +141,7 @@ class UsersService {
       );
       await registerUser.setPassword(updatePasswordRequest.password);
       await registerUser.save();
+      await authSessions.revokeAll(registerUser._id);
 
       return Service.successResponse({ status: 'password reset' }, 201);
     } catch (e) {

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+src=/etc/letsencrypt/live/manage.miwide.com
+dst=/opt/fleximanage-stage/backend/bin/tls
+install -d -m 750 -o root -g fleximanage "$dst"
+install -m 640 -o root -g fleximanage "$src/privkey.pem" "$dst/domain.key"
+install -m 644 -o root -g fleximanage "$src/fullchain.pem" "$dst/certificate.pem"
+systemctl try-restart fleximanage-staging.service
+if systemctl is-active --quiet nginx.service; then
+    systemctl reload nginx.service
+fi

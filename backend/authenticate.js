@@ -22,7 +22,7 @@ var ExtractJwt = require('passport-jwt').ExtractJwt;
 var User = require('./models/users');
 const Accounts = require('./models/accounts');
 const Accesstoken = require('./models/accesstokens');
-const { verifyToken, getToken } = require('./tokens');
+const { verifyToken, getToken, getRefreshToken } = require('./tokens');
 const { permissionMasks } = require('./models/membership');
 const { orgUpdateFromNull, getUserOrgByID } = require('./utils/membershipUtils');
 var configs = require('./configs')();
@@ -48,10 +48,12 @@ exports.localPassport = passport.use(new LocalStrategy(User.authenticate()));
 var opts = {};
 opts.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
 opts.secretOrKey = configs.get('userTokenSecretKey');
+// Loaded on use so tests that never open a session do not connect to Mongo.
+const authSessions = () => require('./authSessions');
 exports.jwtPassport = passport.use('jwt', new JwtStrategy({ ...opts, passReqToCallback: true }, async (req, jwtPayload, done) => {
-  // prevent access sensitive resources with login token
-  if (jwtPayload.type === 'login') {
-    return done(null, false, { message: 'A login token is unauthorized to access this resource' });
+  // prevent access sensitive resources with login or refresh tokens
+  if (jwtPayload.type === 'login' || jwtPayload.type === 'refresh') {
+    return done(null, false, { message: 'This token type cannot access this resource' });
   }
 
   // check if account exists on payload
@@ -82,6 +84,13 @@ exports.jwtPassport = passport.use('jwt', new JwtStrategy({ ...opts, passReqToCa
       ]);
     
     if (user) {
+      // Application access keys and tokens are exempt from user-session checks.
+      if (!['app_access_key', 'app_access_token'].includes(jwtPayload.type)) {
+        if (!await authSessions().validateAccess(jwtPayload, user)) {
+          return done(null, false, { message: 'Session revoked' });
+        }
+        user.authSessionId = jwtPayload.sid;
+      }
       const res = await setUserPerms(user, jwtPayload, token);
       return res === true
         ? done(null, user)
@@ -109,6 +118,10 @@ passport.use('jwt-login', new JwtStrategy(opts, async (jwtPayload, done) => {
       ]);
     
     if (user) {
+      if (!Number.isInteger(jwtPayload.authVersion) ||
+          jwtPayload.authVersion !== (user.authVersion ?? 0)) {
+        return done(null, false, { message: 'Login token revoked' });
+      }
       return done(null, user);
     } else {
       done(null, false, { message: 'Invalid Token' });
@@ -257,6 +270,18 @@ exports.verifyUserJWT = function (req, res, next) {
                 decodedToken._id.toString() !== expiredPayload._id.toString()) {
               return next(createError(401, 'Invalid refresh token'));
             }
+            // Session-bound refresh must match the expired access token field for field.
+            // A typed bearer (including a refresh JWT) cannot be rotated.
+            const sessionBound = Boolean(decodedToken.sid || decodedToken.jti ||
+              expiredPayload.sid || expiredPayload.type);
+            if (sessionBound && (expiredPayload.type ||
+                !decodedToken.sid || !decodedToken.jti ||
+                expiredPayload.account !== decodedToken.account ||
+                expiredPayload.sid !== decodedToken.sid ||
+                expiredPayload.authVersion !== decodedToken.authVersion ||
+                expiredPayload.mfaVerified !== decodedToken.mfaVerified)) {
+              return next(createError(401, 'Invalid refresh session'));
+            }
             const userDetails = await User
               .findOne({ _id: decodedToken._id })
               .populate('defaultOrg')
@@ -274,18 +299,27 @@ exports.verifyUserJWT = function (req, res, next) {
               }
             }
 
-            // Attach the token to the headers and let
-            // the request continue to the next middleware.
+            // Rotate before issuing a new access token when this refresh is session-bound.
+            // Legacy refresh tokens that pass the baseline checks still issue an access JWT.
+            let rotated = null;
+            if (decodedToken.sid && decodedToken.jti) {
+              rotated = await authSessions().rotateRefresh(decodedToken, userDetails);
+              userDetails.authSessionId = rotated.sid;
+            }
             req.user = userDetails;
             const token = await getToken(req, { mfaVerified: decodedToken.mfaVerified ?? false });
-            res.setHeader('Refresh-JWT', token);
-
-            // Manually set the user details and permissions
-            // since passport's JWT strategy callback will not
-            // be called.
             const jwtPayload = jwt.decode(token);
             if (!await setUserPerms(userDetails, jwtPayload)) {
               return next(createError(401, 'Two-factor authentication required'));
+            }
+            res.setHeader('Refresh-JWT', token);
+            if (rotated) {
+              const nextRefresh = await getRefreshToken(req, {
+                sid: rotated.sid,
+                jti: rotated.jti,
+                mfaVerified: decodedToken.mfaVerified
+              });
+              res.setHeader('Refresh-Token', nextRefresh);
             }
             user = userDetails;
           } catch (err) {

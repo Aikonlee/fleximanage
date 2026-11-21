@@ -33,7 +33,7 @@ describe('Limiter functionally', () => {
     testLimiter = new Limiter('test', 5, 10, 10);
   });
 
-  it('should not be blocked before the sixth time', async (done) => {
+  it('should not be blocked before the sixth time', async () => {
     for (let i = 0; i < 5; i++) {
       await sleep(1);
       await testLimiter.use(key);
@@ -41,10 +41,9 @@ describe('Limiter functionally', () => {
 
     const res = await testLimiter.isBlocked(key);
     expect(res).toBe(false);
-    done();
   });
 
-  it('should be blocked at the sixth time', async (done) => {
+  it('should be blocked at the sixth time', async () => {
     for (let i = 0; i < 6; i++) {
       await sleep(1);
       await testLimiter.use(key);
@@ -52,10 +51,9 @@ describe('Limiter functionally', () => {
 
     const res = await testLimiter.isBlocked(key);
     expect(res).toBe(true);
-    done();
   });
 
-  it('should be released after 10 seconds', async (done) => {
+  it('should be released after 10 seconds', async () => {
     for (let i = 0; i < 6; i++) {
       await sleep(1);
       await testLimiter.use(key);
@@ -68,10 +66,9 @@ describe('Limiter functionally', () => {
 
     res = await testLimiter.isBlocked(key);
     expect(res).toBe(false);
-    done();
   });
 
-  it('should be expired after 10 seconds without activity', async (done) => {
+  it('should be expired after 10 seconds without activity', async () => {
     for (let i = 0; i < 6; i++) {
       await sleep(1);
       await testLimiter.use(key);
@@ -84,11 +81,10 @@ describe('Limiter functionally', () => {
 
     res = await testLimiter.limiter.get(key);
     expect(res).toBe(null);
-    done();
   });
 
   // test the secondary limiter
-  it('should not be released after 10 seconds if still error', async (done) => {
+  it('should not be released after 10 seconds if still error', async () => {
     // block it quickly
     for (let i = 0; i < 8; i++) {
       await testLimiter.use(key);
@@ -111,11 +107,10 @@ describe('Limiter functionally', () => {
     // isBlocked should return true
     res = await testLimiter.isBlocked(key);
     expect(res).toBe(true);
-    done();
   });
 
   // test the release functionally
-  it('should not be released totally from both limiters', async (done) => {
+  it('should not be released totally from both limiters', async () => {
     // block both limiters quickly
     for (let i = 0; i < 12; i++) {
       await testLimiter.use(key);
@@ -131,6 +126,5 @@ describe('Limiter functionally', () => {
 
     res = await testLimiter.limiter.get(key);
     expect(res).toBe(null);
-    done();
   });
 });

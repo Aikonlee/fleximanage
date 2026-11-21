@@ -36,6 +36,7 @@ const MultiLinkPolicies = require('../models/mlpolicies');
 const PathLabels = require('../models/pathlabels');
 const { deviceStats, deviceAggregateStats } = require('../models/analytics/deviceStats');
 const { membership } = require('../models/membership');
+const authSessions = require('../authSessions');
 const QosPolicies = require('../models/qosPolicies');
 const Connections = require('../websocket/Connections')();
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
@@ -63,6 +64,39 @@ const { checkOverlapping } = require('../utils/networks');
 const ObjectId = require('mongoose').Types.ObjectId;
 
 const notificationsMgr = require('../notifications/notifications')();
+
+// revokeAll owns the single authVersion increment per user.
+const distinctIds = (ids) => {
+  const seen = new Set();
+  const unique = [];
+  for (const id of ids) {
+    if (id == null) continue;
+    const key = String(id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(id);
+  }
+  return unique;
+};
+
+const revokeDistinctUsers = async (userIds) => {
+  for (const userId of distinctIds(userIds)) {
+    await authSessions.revokeAll(userId);
+  }
+};
+
+// Group membership grants access to every organization in that group.
+const revokeGroupMembers = async (accountId, previousGroup, nextGroup) => {
+  const groups = [previousGroup, nextGroup]
+    .filter(name => name !== undefined && name !== null);
+  if (groups.length === 0) return;
+  const rows = await membership.find({
+    account: accountId,
+    to: 'group',
+    group: { $in: groups }
+  });
+  await revokeDistinctUsers((rows || []).map(row => row.user));
+};
 
 class OrganizationsService {
   /**
@@ -186,6 +220,7 @@ class OrganizationsService {
     let orgDevices;
     let deviceCount;
     let deviceOrgCount;
+    let affectedUserIds = [];
 
     try {
       await mongoConns.mainDBwithTransaction(async (session) => {
@@ -217,7 +252,14 @@ class OrganizationsService {
           { _id: id, account: user.defaultAccount },
           { session: session });
 
-        // Remove all memberships that belong to the organization, but keep group even if empty
+        // Remove all memberships that belong to the organization, but keep group even if empty.
+        // Capture members first so their sessions can be revoked after the commit.
+        const memberRows = await membership.find(
+          { organization: id },
+          { user: 1 },
+          { session }
+        );
+        affectedUserIds = distinctIds((memberRows || []).map(row => row.user));
         await membership.deleteMany({ organization: id }, { session: session });
 
         // Remove organization inventory (devices, tokens, tunnelIds, tunnels, etc.)
@@ -261,6 +303,9 @@ class OrganizationsService {
         }, session);
       });
 
+      // Transaction committed. Invalidate sessions for users whose memberships were removed.
+      await revokeDistinctUsers(affectedUserIds);
+
       // If successful, Disconnect all devices
       orgDevices.forEach((device) => Connections.deviceDisconnect(device.machineId));
 
@@ -298,6 +343,7 @@ class OrganizationsService {
       if (!org) {
         throw new Error('Organization ID is incorrect');
       }
+      const origGroup = org.group;
       const origVxlanPort = org.vxlanPort;
       const origTunnelRange = org.tunnelRange;
       const orgDevices = await Devices.devices
@@ -385,6 +431,13 @@ class OrganizationsService {
 
       // now, save
       const updatedOrg = await org.save({ validateBeforeSave: true });
+
+      // Group-derived access changes without a membership write. Revoke after the save
+      // so a failed save does not drop sessions, and a later device-job error cannot
+      // roll the revocation back (this update is not in a transaction).
+      if (origGroup !== updatedOrg.group) {
+        await revokeGroupMembers(org.account, origGroup, updatedOrg.group);
+      }
 
       // after save, send jobs to devices
       if (isVxlanPortChanged) {

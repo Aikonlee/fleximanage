@@ -94,7 +94,11 @@ class FwLimiter {
   async isBlocked (key) {
     const res = await this.limiter.get(key);
 
-    if (res !== null && res.remainingPoints < 0) {
+    // rate-limiter-flexible 2.4.2 clamps remainingPoints to >= 0, so the old
+    // `remainingPoints < 0` check never sees a block. block() stores
+    // consumedPoints as points + 1 (and later over-limit consumes increase it).
+    // A key that has only used its allowance stays at exactly maxCount.
+    if (res !== null && res.consumedPoints > this.maxCount) {
       return true;
     }
 

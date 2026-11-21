@@ -24,7 +24,7 @@ describe('Initialization', () => {
     roleSelector.shutDown();
   });
 
-  test('Initialize selector role1test and role2test', async (done) => {
+  test('Initialize selector role1test and role2test', async () => {
     let err;
     try {
       roleSelector.initializeSelector('role1test');
@@ -33,10 +33,9 @@ describe('Initialization', () => {
       err = e;
     }
     expect(err).toEqual(undefined);
-    done();
   });
 
-  test('Elect role for role2test', async (done) => {
+  test('Elect role for role2test', async () => {
     roleSelector.selectorSetActive('role2test');
     let isActive = false;
     // Give set active time to finish as its sync
@@ -46,25 +45,21 @@ describe('Initialization', () => {
       });
     }, 100);
     // Give runIfActive time to finish
-    setTimeout(function () {
-      expect(isActive).toEqual(true);
-      done();
-    }, 200);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(isActive).toEqual(true);
   });
 
-  test('Check if role1test active without election', async (done) => {
+  test('Check if role1test active without election', async () => {
     let isActive = false;
     roleSelector.runIfActive('role1test', () => {
       isActive = true;
     });
     // Give runIfActive time to finish as its sync
-    setTimeout(function () {
-      expect(isActive).toEqual(false);
-      done();
-    }, 100);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(isActive).toEqual(false);
   });
 
-  test('Elect role for role1test', async (done) => {
+  test('Elect role for role1test', async () => {
     roleSelector.selectorSetActive('role1test');
     let isActive = false;
     // Give set active time to finish as its sync
@@ -74,9 +69,7 @@ describe('Initialization', () => {
       });
     }, 100);
     // Give runIfActive time to finish
-    setTimeout(function () {
-      expect(isActive).toEqual(true);
-      done();
-    }, 200);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(isActive).toEqual(true);
   });
 });

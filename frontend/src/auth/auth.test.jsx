@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { setSessionToken, clearSession, validPayload } from './session';
 import { hasPermission } from './permissions';
 import PermissionButton from '../components/common/PermissionButton';
+import api from '../services/api';
 
 const token = (claims = {}) => `eyJhbGciOiJIUzI1NiJ9.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600, ...claims }))}.signature`;
 function SessionProbe() {
@@ -42,6 +43,21 @@ test('expired/malformed tokens never authenticate and active sessions expire aut
   render(<AuthProvider><SessionProbe /></AuthProvider>);
   act(() => vi.advanceTimersByTime(2100));
   expect(screen.getByTestId('session').textContent).toBe('false::false');
+});
+test('access expiry proactively rotates a refreshable session without logging out', async () => {
+  const soon = token({ _id: 'user', account: 'account', org: 'A', exp: Math.floor(Date.now() / 1000) + 2 });
+  const renewed = token({ _id: 'user', account: 'account', org: 'A', exp: Math.floor(Date.now() / 1000) + 3600 });
+  setSessionToken(soon); localStorage.setItem('refreshToken', 'initial-refresh');
+  const adapter = vi.fn(async config => ({ config, status: 200, headers: { 'refresh-jwt': renewed, 'refresh-token': 'next-refresh' }, data: {} }));
+  api.defaults.adapter = adapter;
+  vi.useFakeTimers();
+  render(<AuthProvider><SessionProbe /></AuthProvider>);
+  await act(async () => { await vi.advanceTimersByTimeAsync(2100); });
+  expect(adapter).toHaveBeenCalledTimes(1);
+  expect(adapter.mock.calls[0][0].url).toBe('/users/me');
+  expect(localStorage.getItem('token')).toBe(renewed);
+  expect(localStorage.getItem('refreshToken')).toBe('next-refresh');
+  expect(screen.getByTestId('session').textContent).toMatch(/^true:/);
 });
 test('permission bits match backend including PATCH, deny unknown or missing domains', () => {
   expect(hasPermission({ devices: 1 }, 'devices', 'post')).toBe(false);

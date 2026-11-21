@@ -50,6 +50,8 @@ exports.getToken = async function ({ user }, override = {}, shouldExpire = true)
         : null,
       perms: perms,
       mfaVerified,
+      sid: user.authSessionId,
+      authVersion: user.authVersion ?? 0,
       ...override
     },
     configs.get('userTokenSecretKey'),
@@ -71,11 +73,14 @@ exports.getAccessKey = async ({ user }, override = {}, shouldExpire = true) => {
 };
 
 exports.getRefreshToken = async ({ user }, override = {}) => {
+  if (!override.sid || !override.jti) throw new Error('Active session required');
   return jwt.sign({
     type: 'refresh',
     _id: user._id,
     username: user.username,
     admin: user.admin || false,
+    account: user.defaultAccount?._id,
+    authVersion: user.authVersion ?? 0,
     ...override
   }, configs.get('userTokenSecretKey'), {
     expiresIn: configs.get('userRefreshTokenExpiration', 'number')
@@ -91,6 +96,7 @@ exports.getLoginProcessToken = async (user) => {
     {
       type: 'login',
       userId: user._id,
+      authVersion: user.authVersion ?? 0,
       mfaEnabled: user?.mfa?.enabled ?? false
     },
     configs.get('userTokenSecretKey'),

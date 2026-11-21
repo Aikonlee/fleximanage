@@ -1,8 +1,7 @@
 import { decodeJwtPayload } from '../auth/permissions';
 import TurnstileChallenge from '../components/auth/TurnstileChallenge';
 import MfaChallenge from '../components/auth/MfaChallenge';
-import { clearSession } from '../auth/session';
-import { setSessionToken } from '../auth/session';
+import { clearSession, setSessionTokens } from '../auth/session';
 import React, { useState, useEffect } from 'react';
 import { BRAND_NAME } from '../constants/branding';
 import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
@@ -70,7 +69,7 @@ const Login = ({ onLogin }) => {
         username: credentials.username,
         password: credentials.password,
         captcha: captchaToken || undefined
-      });
+      }, { authFlow: true });
 
       const hasProcessTokenOnly = decodeJwtPayload(response.data?.token)?.type === 'login';
       if (hasProcessTokenOnly) {
@@ -80,11 +79,9 @@ const Login = ({ onLogin }) => {
       }
 
       const finalToken = response.data?.token || response.headers['refresh-jwt'] || response.headers['Refresh-JWT'];
-      if (finalToken) {
-        setSessionToken(finalToken);
-        if (response.data?.refreshToken) {
-          localStorage.setItem('refreshToken', response.data.refreshToken);
-        }
+      const refreshToken = response.headers['refresh-token'];
+      if (finalToken && refreshToken) {
+        setSessionTokens(finalToken, refreshToken);
         onLogin();
         navigate('/home', { replace: true });
       } else {

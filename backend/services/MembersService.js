@@ -33,7 +33,7 @@ const mailer = require('../utils/mailer')(
   configs.get('mailerBypassCert', 'boolean')
 );
 const webHooks = require('../utils/webhooks')();
-const { getToken } = require('../tokens');
+const authSessions = require('../authSessions');
 const Users = require('../models/users');
 const Accounts = require('../models/accounts');
 const Organizations = require('../models/organizations');
@@ -304,17 +304,20 @@ class MembersService {
         _id: id,
         account: user.defaultAccount._id
       });
+      if (!targetUserMembership) throw createError(404, 'Member not found');
+      // The affected user is the one recorded on the membership, never the request body.
+      const targetUserId = targetUserMembership.user;
 
       // avoid giving the same user different roles in the same resource level
       const userMembershipInfo = await membership.findOne(
         MembersService.getMembershipQueryParams(
-          memberRequest.userId,
+          targetUserId,
           user,
           memberRequest,
           null,
           false)
       );
-      if (userMembershipInfo && (userMembershipInfo._id.toString()) !== memberRequest._id) {
+      if (userMembershipInfo && userMembershipInfo._id.toString() !== String(id)) {
         const errMsg = `This user already has a role in this ${memberRequest.userPermissionTo},
          please delete or edit the existing role.`;
         throw createError(400, errMsg);
@@ -336,7 +339,7 @@ class MembersService {
 
       // Update
       const member = await membership.findOneAndUpdate(
-        { _id: memberRequest._id, account: user.defaultAccount._id },
+        { _id: id, account: user.defaultAccount._id },
         {
           $set: {
             group: memberRequest.userPermissionTo === 'group' ? memberRequest.userEntity : '',
@@ -358,9 +361,13 @@ class MembersService {
         throw (new Error('Member not found'));
       }
 
+      // Permissions changed: invalidate every session of the membership's user.
+      const memberUserId = member.user?._id ?? targetUserId;
+      await authSessions.revokeAll(memberUserId);
+
       // Verify if default organization still accessible by the
       // user after the change, if not switch to another org
-      const _user = await Users.findOne({ _id: memberRequest.userId })
+      const _user = await Users.findOne({ _id: memberUserId })
         .populate('defaultAccount');
       if (!_user) {
         throw (new Error('User not found'));
@@ -373,7 +380,7 @@ class MembersService {
         if (!org) {
           // Get the first org available for this user
           const org0 = orgs[Object.keys(orgs)[0]] || null;
-          await Users.updateOne({ _id: memberRequest.userId }, { defaultOrg: org0._id });
+          await Users.updateOne({ _id: memberUserId }, { defaultOrg: org0._id });
         }
       }
 
@@ -536,6 +543,10 @@ class MembersService {
         account: membershipData.account
       });
 
+      // The membership (and possibly defaultAccount) changed: revoke every session of
+      // the user, including sessions bound to the account they were removed from.
+      if (userToDelete) await authSessions.revokeAll(userToDeleteId);
+
       const userDoc = await users.findOne({ _id: userToDeleteId });
       const userOrgList = await getUserOrganizations(userDoc);
       const userOrgsIds = Object.keys(userOrgList);
@@ -697,6 +708,9 @@ class MembersService {
       await session.commitTransaction();
       session = null;
 
+      // An existing user gained a membership: drop sessions carrying the old privileges.
+      if (existingUser) await authSessions.revokeAll(existingUser._id);
+
       // Send webhooks only for users invited as account owners
       // changing the user role later will not send another hook
       if (memberRequest.userPermissionTo === 'account' &&
@@ -748,45 +762,58 @@ class MembersService {
    * id String numeric ID of the user to reset MFA for
    * returns 204
    */
-  static async membersIdResetMfaGET ({ id }, { user }, response) {
-    // user can reset MFA for himself only.
-    // Account owner can reset 2fa for all users in his account.
-    let allowedToReset = user._id.toString() === id; // user for himself.
-    if (!allowedToReset) {
-      // if user tried to reset someone else - make sure he is account owner.
-      const isAccountOwner = await membership.findOne({
-        user: user._id,
-        account: user.defaultAccount._id,
-        to: 'account',
-        role: 'owner'
-      });
-      allowedToReset = isAccountOwner !== null;
-    }
-    if (!allowedToReset) {
-      return Service.rejectResponse(
-        'No sufficient permissions for this operation', 400);
-    }
-
-    // reset user mfa settings
-    await Users.findOneAndUpdate(
-      { _id: id },
-      {
-        $set: {
-          mfa: {
-            enabled: false,
-            secret: null,
-            unverifiedSecrets: [],
-            recoveryCodes: []
-          }
+  static async membersIdResetMfaGET ({ id }, { user }) {
+    try {
+      // user can reset MFA for himself only.
+      // Account owner can reset 2fa for users that are members of the account he owns.
+      const isSelf = user._id.toString() === String(id);
+      if (!isSelf) {
+        const accountId = user.defaultAccount?._id;
+        if (!accountId || !mongoose.isValidObjectId(id)) {
+          return Service.rejectResponse('No sufficient permissions for this operation', 400);
         }
-      },
-      { upsert: false }
-    );
+        // The caller must own the account AND the target must belong to that same account.
+        const [isAccountOwner, targetMembership] = await Promise.all([
+          membership.findOne({
+            user: user._id,
+            account: accountId,
+            to: 'account',
+            role: 'owner'
+          }),
+          membership.findOne({ user: id, account: accountId })
+        ]);
+        if (!isAccountOwner || !targetMembership) {
+          return Service.rejectResponse('No sufficient permissions for this operation', 400);
+        }
+      }
 
-    const token = await getToken({ user }, { mfaVerified: false });
-    response.setHeader('Refresh-JWT', token);
+      // reset user mfa settings
+      const target = await Users.findOneAndUpdate(
+        { _id: id },
+        {
+          $set: {
+            mfa: {
+              enabled: false,
+              secret: null,
+              unverifiedSecrets: [],
+              recoveryCodes: []
+            }
+          }
+        },
+        { upsert: false }
+      );
+      if (!target) return Service.rejectResponse('User not found', 404);
 
-    return Service.successResponse(null, 204);
+      // Invalidate all sessions of the target; no replacement token is issued.
+      await authSessions.revokeAll(target._id);
+
+      return Service.successResponse(null, 204);
+    } catch (e) {
+      return Service.rejectResponse(
+        e.message || 'Internal Server Error',
+        e.status || 500
+      );
+    }
   }
 
   static async membersOptionsTypeGET ({ type }, { user }) {

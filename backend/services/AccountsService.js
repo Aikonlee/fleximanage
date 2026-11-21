@@ -19,12 +19,28 @@ const Service = require('./Service');
 
 const Accounts = require('../models/accounts');
 const Users = require('../models/users');
+const { membership } = require('../models/membership');
+const authSessions = require('../authSessions');
 const pick = require('lodash/pick');
 const { getToken } = require('../tokens');
+const issueSessionTokens = require('../sessionTokens');
 const {
   getUserAccounts,
   orgUpdateFromNull
 } = require('../utils/membershipUtils');
+
+// revokeAll owns the single authVersion increment per user.
+const revokeAccountMembers = async (accountId) => {
+  const rows = await membership.find({ account: accountId });
+  const seen = new Set();
+  for (const row of rows || []) {
+    if (row?.user == null) continue;
+    const key = String(row.user);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await authSessions.revokeAll(row.user);
+  }
+};
 
 class AccountsService {
   /**
@@ -144,14 +160,45 @@ class AccountsService {
         name, companyType, companyDesc, country, forceMfa
       } = accountRequest;
 
+      const existing = await Accounts.findOne({ _id: id });
+      const previousForceMfa = existing ? existing.forceMfa : undefined;
+
       const account = await Accounts.findOneAndUpdate(
         { _id: id },
         { $set: { name, companyType, companyDesc, country, forceMfa } },
         { upsert: false, new: true, runValidators: true });
 
-      // Update token
-      const token = await getToken({ user }, { accountName: account.name });
-      response.setHeader('Refresh-JWT', token);
+      // A forceMfa change (especially turning it on) invalidates member sessions.
+      // Do not increment authVersion here; revokeAll does that once per user.
+      // Revocation bumps the caller's authVersion in the database, so the in-memory
+      // user is stale. Re-read it and issue a new session; otherwise the response
+      // JWT is already revoked.
+      if (account && previousForceMfa !== forceMfa) {
+        await revokeAccountMembers(id);
+        const fresh = await Users.findOne({ _id: user._id })
+          .populate('defaultAccount')
+          .populate('defaultOrg');
+        if (!fresh) {
+          return Service.rejectResponse('User not found', 401);
+        }
+        if (!fresh.defaultAccount || fresh.defaultAccount._id == null) {
+          fresh.defaultAccount = { ...user.defaultAccount };
+        }
+        if (String(fresh.defaultAccount._id) === String(id)) {
+          fresh.defaultAccount.name = account.name;
+        }
+        if (!fresh.defaultOrg || fresh.defaultOrg._id == null) {
+          fresh.defaultOrg = user.defaultOrg;
+        }
+        const { token, refreshToken } = await issueSessionTokens(
+          fresh, user.isLoggedInWithMfa === true);
+        response.setHeader('Refresh-JWT', token);
+        response.setHeader('Refresh-Token', refreshToken);
+      } else {
+        // Update token. Unchanged forceMfa keeps the caller's current session.
+        const token = await getToken({ user }, { accountName: account.name });
+        response.setHeader('Refresh-JWT', token);
+      }
 
       const result = AccountsService.selectAccountParams(account);
       return Service.successResponse(result);

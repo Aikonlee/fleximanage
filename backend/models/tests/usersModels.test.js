@@ -36,6 +36,10 @@ beforeEach(() => {
 });
 
 describe('Minimal required users schema', () => {
+  it('defaults the authentication version for existing and new accounts', () => {
+    expect(userFullSchema.authVersion).toBe(0);
+  });
+
   it('Should be a valid users model if all required fields are present', () => {
     return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);

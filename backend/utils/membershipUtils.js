@@ -420,6 +420,7 @@ module.exports = {
   getUserOrganizations: getUserOrganizations,
   getUserOrgByID: getUserOrgByID,
   getAccessTokenOrgList: getAccessTokenOrgList,
+  validateOrgAccess: validateOrgAccess,
   getUserAccounts: getUserAccounts,
   orgUpdateFromNull: orgUpdateFromNull
 };

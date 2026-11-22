@@ -39,7 +39,7 @@ const { membership } = require('../models/membership');
 const authSessions = require('../authSessions');
 const QosPolicies = require('../models/qosPolicies');
 const Connections = require('../websocket/Connections')();
-const { getAccessTokenOrgList } = require('../utils/membershipUtils');
+const { getAccessTokenOrgList, validateOrgAccess } = require('../utils/membershipUtils');
 const Flexibilling = require('../flexibilling');
 const {
   getUserOrganizations,
@@ -245,7 +245,7 @@ class OrganizationsService {
         // Only allow to delete current default org,
         // this is required to make sure the API permissions
         // are set properly for updating this organization
-        const orgList = await getAccessTokenOrgList(user, undefined, false);
+        const orgList = await validateOrgAccess(user, 'organization', id, true);
         if (!orgList.includes(id)) {
           throw new Error('Please select an organization to delete it');
         }

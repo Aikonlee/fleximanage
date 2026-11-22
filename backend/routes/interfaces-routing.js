@@ -44,7 +44,11 @@ router.get('/api/devices/:deviceId/interfaces/:interfaceId/routing',
       });
     } catch (error) {
       logger.error('Failed to get routing configuration', {
-        params: { deviceId: req.params.deviceId, interfaceId: req.params.interfaceId, error: error.message }
+        params: {
+          deviceId: req.params.deviceId,
+          interfaceId: req.params.interfaceId,
+          error: error.message
+        }
       });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -76,6 +80,9 @@ router.put('/api/devices/:deviceId/interfaces/:interfaceId/routing',
         return res.status(404).json({ error: 'Interface not found' });
       }
 
+      // Snapshot before in-place mutation so modifyDevice can diff pre vs newDevice.
+      const origDevice = device.toObject ? device.toObject() : { ...device };
+
       if (normalizedProtocol) {
         iface.routing = normalizedProtocol;
       }
@@ -88,11 +95,8 @@ router.put('/api/devices/:deviceId/interfaces/:interfaceId/routing',
 
       await device.save();
 
-      // modifyDevice diffs the pre-image in the array against data.newDevice.
-      // This route only has the document after in-place mutation, so both sides
-      // are the saved device. A no-op job is preferable to the missing routingHandler.
       if (device.status === 'running') {
-        await dispatcher.apply([device], 'modify', req.user, {
+        await dispatcher.apply([origDevice], 'modify', req.user, {
           org: orgList[0],
           newDevice: device
         });

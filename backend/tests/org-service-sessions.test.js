@@ -15,6 +15,7 @@ jest.mock('../websocket/Connections', () => () => ({ deviceDisconnect: jest.fn()
 jest.mock('../notifications/notifications', () => () => ({}));
 jest.mock('../utils/membershipUtils', () => ({
   getAccessTokenOrgList: jest.fn(),
+  validateOrgAccess: jest.fn(),
   getUserOrganizations: jest.fn(),
   getUserOrgByID: jest.fn(),
   orgUpdateFromNull: jest.fn()
@@ -83,7 +84,11 @@ const Accounts = require('../models/accounts');
 const Organizations = require('../models/organizations');
 const Devices = require('../models/devices');
 const Flexibilling = require('../flexibilling');
-const { getAccessTokenOrgList, orgUpdateFromNull } = require('../utils/membershipUtils');
+const {
+  getAccessTokenOrgList,
+  validateOrgAccess,
+  orgUpdateFromNull
+} = require('../utils/membershipUtils');
 const { getToken } = require('../tokens');
 const authSessions = require('../authSessions');
 const mongo = require('../mongoConns.js')();
@@ -134,6 +139,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   events = [];
   getAccessTokenOrgList.mockResolvedValue(['org-id']);
+  validateOrgAccess.mockResolvedValue(['org-id']);
   orgUpdateFromNull.mockResolvedValue(undefined);
   getToken.mockResolvedValue('jwt');
   Accounts.findOneAndUpdate.mockResolvedValue({ _id: 'acct-id' });
@@ -190,6 +196,7 @@ describe('organizationsIdDELETE', () => {
 
   test('does not revoke when the caller cannot delete the organization', async () => {
     getAccessTokenOrgList.mockResolvedValue(['other-org']);
+    validateOrgAccess.mockResolvedValue(['other-org']);
     const result = await OrganizationsService.organizationsIdDELETE(
       { id: 'org-id' }, { user }, response());
     expect(result.code).toBe(500);
@@ -263,6 +270,7 @@ describe('organizationsIdPUT', () => {
 
   test('does not revoke when the caller cannot update the organization', async () => {
     getAccessTokenOrgList.mockResolvedValue([]);
+    validateOrgAccess.mockResolvedValue([]);
     const result = await OrganizationsService.organizationsIdPUT(
       putRequest('beta'), { user }, response());
     expect(result.code).toBe(500);

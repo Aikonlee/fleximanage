@@ -6,6 +6,7 @@ import { AuthProvider } from './auth/AuthContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'leaflet/dist/leaflet.css';
 import './styles/theme.css';
+import './styles/table-system.css';
 import './styles/animations.css';
 import './styles/index.css';
 

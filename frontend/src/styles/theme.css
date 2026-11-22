@@ -515,69 +515,7 @@ body {
   gap: var(--spacing-md);
 }
 
-/* ========================================
-   统一表格样式增强
-   ======================================== */
-
-.table {
-  width: 100%;
-  margin-bottom: 0;
-  color: var(--text-primary);
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.table thead th {
-  background: #f7f9f9;
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: var(--font-size-sm);
-  text-align: left;
-  vertical-align: middle;
-  padding: 0.875rem 0.75rem;
-  border: none;
-  border-bottom: 2px solid var(--border-light);
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.table tbody td {
-  padding: 0.75rem;
-  vertical-align: middle;
-  border-top: 1px solid var(--border-light);
-  font-size: var(--font-size-sm);
-}
-
-.table tbody tr {
-  transition: background-color var(--transition-fast);
-}
-
-.table tbody tr:hover {
-  background-color: var(--primary-lighter);
-}
-
-.table tbody tr:nth-of-type(even) {
-  background-color: #fbfcfc;
-}
-
-.table tbody tr:nth-of-type(even):hover {
-  background-color: var(--primary-lighter);
-}
-
-/* Table Container */
-.table-container {
-  background: var(--card-bg);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-.table-responsive {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
+/* Table styles are defined canonically in ./table-system.css */
 
 /* ========================================
    统一加载动画

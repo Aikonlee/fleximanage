@@ -1,0 +1,261 @@
+/* ==========================================================================
+   Canonical Table System — flexiManage
+   ==========================================================================
+   Single source of truth for feature-page table visuals across the app.
+
+   Covered legacy class families (add any new table/container selectors here):
+   - Tables:
+       .table
+       .unified-table
+       .custom-table-template
+       .datatable-table
+       .profile-table
+       table.notif-rules-table / .notif-rules-table table
+       .admin-orgs-devices table
+   - Containers & responsive wrappers:
+       .table-container
+       .unified-table-container
+       .datatable-container
+       .table-container-template
+       .table-responsive
+       .unified-table-responsive
+   - Shared states:
+       .datatable-empty / .unified-table-empty
+       .datatable-row-selected / .unified-table tbody tr.selected
+   ========================================================================== */
+
+:root {
+  /* Surface & typography (backed by theme.css tokens) */
+  --table-bg: var(--card-bg);
+  --table-color: var(--text-primary);
+  --table-font-size: var(--font-size-sm);
+
+  /* Header */
+  --table-header-bg: #f7f9f9;
+  --table-header-color: var(--text-primary);
+  --table-header-border: var(--border-light);
+  --table-header-hover-bg: var(--body-bg);
+  --table-header-padding: 0.875rem 0.75rem;
+
+  /* Cells & rows */
+  --table-cell-padding: 0.75rem;
+  --table-cell-padding-sm: 0.5rem 0.625rem;
+  --table-border-color: var(--border-light);
+  --table-row-hover-bg: var(--primary-lighter);
+  --table-row-selected-bg: var(--primary-lighter);
+  --table-zebra-bg: #fbfcfc;
+
+  /* Container */
+  --table-container-bg: var(--card-bg);
+  --table-container-border: var(--border-light);
+  --table-container-radius: var(--radius-md);
+  --table-container-shadow: var(--shadow-sm);
+
+  /* Empty state */
+  --table-empty-color: var(--text-muted);
+  --table-empty-padding: 2rem;
+
+  /* Sticky header */
+  --table-sticky-top: 0;
+  --table-sticky-z: 10;
+
+  /* Motion */
+  --table-transition: var(--transition-fast);
+}
+
+/* --------------------------------------------------------------------------
+   Table Containers & Responsive Wrappers
+   -------------------------------------------------------------------------- */
+
+.table-container,
+.unified-table-container,
+.datatable-container,
+.table-container-template {
+  background: var(--table-container-bg);
+  border: 1px solid var(--table-container-border);
+  border-radius: var(--table-container-radius);
+  box-shadow: var(--table-container-shadow);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive,
+.unified-table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* --------------------------------------------------------------------------
+   Base Table Element
+   -------------------------------------------------------------------------- */
+
+.table,
+.unified-table,
+.custom-table-template,
+.datatable-table,
+.profile-table,
+table.notif-rules-table,
+.notif-rules-table table,
+.admin-orgs-devices table {
+  width: 100%;
+  margin-bottom: 0;
+  background-color: var(--table-bg);
+  color: var(--table-color);
+  font-size: var(--table-font-size);
+  border-collapse: separate;
+  border-spacing: 0;
+  /* Align Bootstrap 5 .table custom properties so Bootstrap cell rules
+     do not mask canonical zebra, hover, or selected-row surfaces. */
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--table-color);
+  --bs-table-border-color: var(--table-border-color);
+  --bs-table-striped-bg: transparent;
+  --bs-table-striped-color: var(--table-color);
+  --bs-table-hover-bg: var(--table-row-hover-bg);
+  --bs-table-hover-color: var(--table-color);
+}
+
+/* --------------------------------------------------------------------------
+   Header Cells (with Sticky Header)
+   -------------------------------------------------------------------------- */
+
+.table thead th,
+.unified-table thead th,
+.custom-table-template thead th,
+.datatable-table thead th,
+.profile-table thead th,
+.notif-rules-table thead th,
+.admin-orgs-devices table thead th {
+  background-color: var(--table-header-bg);
+  color: var(--table-header-color);
+  font-weight: 700;
+  font-size: var(--table-font-size);
+  text-align: left;
+  vertical-align: middle;
+  padding: var(--table-header-padding);
+  border: none;
+  border-bottom: 2px solid var(--table-header-border);
+  white-space: nowrap;
+  position: sticky;
+  top: var(--table-sticky-top);
+  z-index: var(--table-sticky-z);
+  box-shadow: none;
+}
+
+/* --------------------------------------------------------------------------
+   Body Cells
+   -------------------------------------------------------------------------- */
+
+.table tbody td,
+.unified-table tbody td,
+.custom-table-template tbody td,
+.datatable-table tbody td,
+.profile-table tbody td,
+.notif-rules-table tbody td,
+.admin-orgs-devices table tbody td {
+  padding: var(--table-cell-padding);
+  vertical-align: middle;
+  color: var(--table-color);
+  font-size: var(--table-font-size);
+  border: none;
+  border-top: 1px solid var(--table-border-color);
+  text-align: left;
+}
+
+.table tbody tr:first-child td,
+.unified-table tbody tr:first-child td,
+.custom-table-template tbody tr:first-child td,
+.datatable-table tbody tr:first-child td,
+.profile-table tbody tr:first-child td,
+.notif-rules-table tbody tr:first-child td,
+.admin-orgs-devices table tbody tr:first-child td {
+  border-top: none;
+}
+
+/* Compact table modifier (.table-sm) */
+.table.table-sm thead th,
+.table.table-sm tbody td,
+.unified-table.table-sm thead th,
+.unified-table.table-sm tbody td,
+.admin-orgs-devices table.table-sm thead th,
+.admin-orgs-devices table.table-sm tbody td {
+  padding: var(--table-cell-padding-sm);
+}
+
+/* Preserve single-line rule cells on notification rules table */
+.notif-rules-table tbody td {
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Row Transitions, Zebra Striping & Hover
+   -------------------------------------------------------------------------- */
+
+.table tbody tr,
+.unified-table tbody tr,
+.custom-table-template tbody tr,
+.datatable-table tbody tr,
+.profile-table tbody tr,
+.notif-rules-table tbody tr,
+.admin-orgs-devices table tbody tr {
+  transition: background-color var(--table-transition);
+}
+
+.table tbody tr:nth-of-type(even),
+.unified-table tbody tr:nth-of-type(even),
+.custom-table-template tbody tr:nth-of-type(even),
+.datatable-table tbody tr:nth-of-type(even),
+.profile-table tbody tr:nth-of-type(even),
+.notif-rules-table tbody tr:nth-of-type(even),
+.admin-orgs-devices table tbody tr:nth-of-type(even) {
+  background-color: var(--table-zebra-bg);
+}
+
+.table tbody tr:hover,
+.unified-table tbody tr:hover,
+.custom-table-template tbody tr:hover,
+.datatable-table tbody tr:hover,
+.profile-table tbody tr:hover,
+.notif-rules-table tbody tr:hover,
+.admin-orgs-devices table tbody tr:hover,
+.table tbody tr:nth-of-type(even):hover,
+.unified-table tbody tr:nth-of-type(even):hover,
+.custom-table-template tbody tr:nth-of-type(even):hover,
+.datatable-table tbody tr:nth-of-type(even):hover,
+.profile-table tbody tr:nth-of-type(even):hover,
+.notif-rules-table tbody tr:nth-of-type(even):hover,
+.admin-orgs-devices table tbody tr:nth-of-type(even):hover {
+  background-color: var(--table-row-hover-bg);
+}
+
+/* Expanded nested-device drawer row in AdminOrganizations: keep subtle header
+   tint on the drawer cell so hovering a nested device row only highlights that
+   inner row rather than the whole drawer. */
+.admin-orgs-devices > td {
+  background-color: var(--table-header-bg);
+}
+
+.admin-orgs-devices:hover,
+.admin-orgs-devices:nth-of-type(even):hover {
+  background-color: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Selected Rows & Empty States
+   -------------------------------------------------------------------------- */
+
+.datatable-row-selected,
+.datatable-table tbody tr.datatable-row-selected,
+.unified-table tbody tr.selected {
+  background-color: var(--table-row-selected-bg);
+  --bs-table-bg: var(--table-row-selected-bg);
+}
+
+.datatable-empty,
+.unified-table-empty,
+.datatable-table tbody td.datatable-empty,
+.unified-table tbody td.unified-table-empty {
+  text-align: center;
+  padding: var(--table-empty-padding);
+  color: var(--table-empty-color);
+}

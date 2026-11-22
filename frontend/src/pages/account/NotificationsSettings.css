@@ -1,7 +1,4 @@
-.notif-rules-table th,
-.notif-rules-table td {
-  white-space: nowrap;
-}
+/* .notif-rules-table visuals live in styles/table-system.css */
 
 .notif-webhook-card {
   background: var(--card-bg);

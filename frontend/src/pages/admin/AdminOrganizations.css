@@ -38,10 +38,4 @@
   cursor: pointer;
 }
 
-.admin-orgs-devices > td {
-  background: #f8f9fa;
-}
-
-.admin-orgs-devices table {
-  background: transparent;
-}
+/* .admin-orgs-devices nested table visuals live in styles/table-system.css */

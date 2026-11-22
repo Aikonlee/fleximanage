@@ -22,17 +22,8 @@
   background: var(--card-bg);
 }
 
-.datatable-container {
-  background: var(--card-bg);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-.datatable-table {
-  margin-bottom: 0;
-}
+/* Base container, table, empty-state, and selected-row visuals live in
+   styles/table-system.css. Functional sorting and checkbox sizing remain here. */
 
 .datatable-sortable {
   cursor: pointer;
@@ -40,7 +31,7 @@
 }
 
 .datatable-sortable:hover {
-  background: #eef2f1 !important;
+  background: var(--table-header-hover-bg);
 }
 
 .datatable-sort-arrow {
@@ -48,19 +39,10 @@
   color: var(--primary-color);
 }
 
-.datatable-checkbox-col {
+.datatable-checkbox-col,
+.datatable-table .datatable-checkbox-col {
   width: 2.5rem;
   text-align: center;
-}
-
-.datatable-empty {
-  text-align: center;
-  padding: 2rem;
-  color: var(--text-muted);
-}
-
-.datatable-row-selected {
-  background-color: var(--primary-lighter);
 }
 
 .datatable-footer {

@@ -289,35 +289,7 @@
 }
 .toggle-checkbox:checked + .toggle-label:after { transform: translateX(24px); }
 
-/* Table Container */
-.table-container-template {
-  background: white;
-  border: 1px solid #d1d5db;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  overflow-x: auto;
-}
-
-.custom-table-template {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: 0.875rem;
-}
-
-.custom-table-template th {
-  background-color: white;
-  color: #1f2937;
-  font-weight: 700;
-  padding: 0.75rem;
-  border-bottom: 1px solid #d1d5db;
-  border-right: 1px solid #e5e7eb;
-}
-.custom-table-template td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
-  border-right: 1px solid #e5e7eb;
-  color: #4b5563;
-}
+/* Table Container & .custom-table-template visuals live in styles/table-system.css */
 
 /* Section header used by OSPF/BGP/Firewall/Routing config tabs */
 .section-header {

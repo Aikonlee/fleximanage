@@ -1,44 +1,11 @@
-/* Unified Table Styles - Based on DeviceInfo Interfaces Configuration */
+/* Unified Table Functional Extensions
+   Base table/header/cell/row/container visuals live in ./table-system.css */
 
-/* Standard Table Styles */
-.unified-table {
-  font-size: 0.9rem;
-}
-
+/* Sticky header positioning (functional) */
 .unified-table th {
-  font-weight: 700;
-  font-size: var(--font-size-sm);
-  text-align: left;
-  vertical-align: middle;
-  white-space: nowrap;
-  background: #f7f9f9 !important;
-  color: var(--text-primary) !important;
-  border: none !important;
-  border-bottom: 2px solid var(--border-light) !important;
-  padding: 1rem 0.75rem;
   position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.unified-table th:last-child {
-  border-right: none !important;
-}
-
-.unified-table td {
-  text-align: center;
-  vertical-align: middle;
-  padding: 0.75rem 0.5rem;
-  border-right: 1px solid #dee2e6;
-}
-
-.unified-table td:last-child {
-  border-right: none;
-}
-
-.unified-table td:first-child {
-  text-align: left;
-  font-weight: 600;
+  top: var(--table-sticky-top, 0);
+  z-index: var(--table-sticky-z, 10);
 }
 
 .unified-table code {
@@ -54,17 +21,7 @@
   font-weight: 500;
 }
 
-.unified-table tbody tr {
-  transition: all var(--transition-fast);
-}
-
-.unified-table tbody tr:hover {
-  background-color: var(--primary-lighter);
-  transform: scale(1.01);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* Sortable Header Styles */
+/* Sortable Header Styles (functional) */
 .unified-table th.sortable {
   cursor: pointer;
   user-select: none;
@@ -72,21 +29,12 @@
 }
 
 .unified-table th.sortable:hover {
-  background-color: #eef2f1 !important;
+  background-color: var(--table-header-hover-bg);
 }
 
-/* Table Container Styles */
+/* Container clipping for paired header/footer bars (functional; visuals in table-system.css) */
 .unified-table-container {
-  background: var(--card-bg);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
   overflow: hidden;
-  border: 1px solid var(--border-light);
-  transition: box-shadow var(--transition-base);
-}
-
-.unified-table-container:hover {
-  box-shadow: var(--shadow-lg);
 }
 
 /* Action Button Styles within Tables */
@@ -108,16 +56,9 @@
   font-size: 0.75rem;
 }
 
-/* Responsive table wrapper */
+/* Responsive table wrapper (functional) */
 .unified-table-responsive {
   overflow-x: auto;
-}
-
-/* Small table variant */
-.unified-table.table-sm th,
-.unified-table.table-sm td {
-  padding: 0.5rem 0.375rem;
-  font-size: 0.85rem;
 }
 
 /* Status indicators */
@@ -172,25 +113,19 @@
   align-items: center;
 }
 
-/* Loading and empty states */
-.unified-table-empty {
-  text-align: center;
-  padding: 2rem;
-  color: #6c757d;
-}
-
+/* Loading state (empty state visuals live in table-system.css) */
 .unified-table-loading {
   text-align: center;
   padding: 2rem;
 }
 
-/* Row selection styles */
+/* Row selection styles (functional) */
 .unified-table .row-checkbox {
   transform: scale(1.1);
 }
 
 .unified-table tr.selected {
-  background-color: #e3f2fd !important;
+  background-color: var(--table-row-selected-bg);
 }
 
 /* Bulk actions bar */

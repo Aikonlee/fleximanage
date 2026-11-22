@@ -408,7 +408,7 @@ class QOSPoliciesService {
       // To each policy, attach the installation status of
       // each of the devices the policy is installed on.
       const qosPoliciesMeta = await QOSPolicies.aggregate([
-        { $match: { org: { $in: orgList.map(org => ObjectId(org)) } } },
+        { $match: { org: { $in: orgList.map(org => new ObjectId(org)) } } },
         {
           $project: {
             _id: 1,

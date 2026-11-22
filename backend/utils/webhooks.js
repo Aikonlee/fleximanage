@@ -2,6 +2,8 @@
  * This module sends info to web hooks
  */
 const dns = require('dns');
+const http = require('http');
+const https = require('https');
 const net = require('net');
 const fetch = require('fetch-with-proxy').default;
 const logger = require('../logging/logging')({
@@ -10,12 +12,15 @@ const logger = require('../logging/logging')({
 });
 
 const blockedWebhookTargets = new net.BlockList();
+blockedWebhookTargets.addSubnet('0.0.0.0', 8, 'ipv4');
 blockedWebhookTargets.addSubnet('127.0.0.0', 8, 'ipv4');
 blockedWebhookTargets.addSubnet('10.0.0.0', 8, 'ipv4');
+blockedWebhookTargets.addSubnet('100.64.0.0', 10, 'ipv4');
 blockedWebhookTargets.addSubnet('172.16.0.0', 12, 'ipv4');
 blockedWebhookTargets.addSubnet('192.168.0.0', 16, 'ipv4');
 blockedWebhookTargets.addSubnet('169.254.0.0', 16, 'ipv4');
 blockedWebhookTargets.addAddress('::1', 'ipv6');
+blockedWebhookTargets.addSubnet('fc00::', 7, 'ipv6');
 blockedWebhookTargets.addSubnet('fe80::', 10, 'ipv6');
 
 const WEBHOOK_TARGET_ERROR =
@@ -54,17 +59,58 @@ function webhookHost (value) {
  * @param {string} urlOrHostname webhook URL, hostname, or IP
  * @return {boolean} true when the destination must be rejected
  */
+/**
+ * IPv4-mapped IPv6 literals (::ffff:a.b.c.d) are judged as IPv4.
+ * @param {string} host normalized hostname or address
+ * @return {{address: string, family: 'ipv4'|'ipv6'}|null}
+ */
+function addressForBlockCheck (host) {
+  if (host.startsWith('::ffff:')) {
+    const mapped = host.slice('::ffff:'.length);
+    if (net.isIP(mapped) === 4) return { address: mapped, family: 'ipv4' };
+  }
+  const family = net.isIP(host);
+  if (family === 4) return { address: host, family: 'ipv4' };
+  if (family === 6) return { address: host, family: 'ipv6' };
+  return null;
+}
+
 function isBlockedWebhookTarget (urlOrHostname) {
   const host = webhookHost(urlOrHostname);
   if (!host) return false;
   if (host === 'localhost' || host.endsWith('.localhost')) return true;
-  const family = net.isIP(host);
-  if (family === 0) return false;
+  const parsed = addressForBlockCheck(host);
+  if (!parsed) return false;
   try {
-    return blockedWebhookTargets.check(host, family === 4 ? 'ipv4' : 'ipv6');
+    return blockedWebhookTargets.check(parsed.address, parsed.family);
   } catch (err) {
     return false;
   }
+}
+
+/**
+ * DNS lookup that always returns the address already accepted by the guard.
+ * @param {string} address validated IP
+ * @return {Function} lookup(hostname, options, callback)
+ */
+function lookupPinnedTo (address) {
+  const family = net.isIP(address) === 6 ? 6 : 4;
+  return (hostname, options, callback) => {
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    }
+    if (options && options.all) {
+      callback(null, [{ address, family }]);
+      return;
+    }
+    callback(null, address, family);
+  };
+}
+
+function agentPinnedTo (url, address) {
+  const Agent = String(url).startsWith('https:') ? https.Agent : http.Agent;
+  return new Agent({ lookup: lookupPinnedTo(address) });
 }
 
 function forbiddenWebhookError (detail) {
@@ -77,7 +123,7 @@ function forbiddenWebhookError (detail) {
  * Reject loopback, link-local (including cloud metadata), and RFC1918 targets
  * before any outbound request. Hostnames are resolved with dns.promises.lookup.
  * @param {string} url destination passed to sendToWebHook
- * @return {Promise<void>}
+ * @return {Promise<string|null>} address to pin into the fetch lookup, or null for an IP literal
  */
 async function assertWebhookTargetAllowed (url) {
   if (isBlockedWebhookTarget(url)) {
@@ -92,7 +138,7 @@ async function assertWebhookTargetAllowed (url) {
     error.code = 'WEBHOOK_TARGET_FORBIDDEN';
     throw error;
   }
-  if (!host || net.isIP(host)) return;
+  if (!host || net.isIP(host)) return null;
 
   let records;
   try {
@@ -104,12 +150,16 @@ async function assertWebhookTargetAllowed (url) {
   }
 
   const list = Array.isArray(records) ? records : [records];
+  let pinned = null;
   for (const record of list) {
     const address = typeof record === 'string' ? record : record && record.address;
-    if (address && isBlockedWebhookTarget(address)) {
+    if (!address) continue;
+    if (isBlockedWebhookTarget(address)) {
       throw forbiddenWebhookError(`${host} resolves to ${address}`);
     }
+    if (!pinned) pinned = address;
   }
+  return pinned;
 }
 
 class WebHooks {
@@ -130,9 +180,18 @@ class WebHooks {
   async sendToWebHook (url, message, secret = null, msgTitle = null) {
     // For an empty url (development), return true
     if (url === '') return Promise.resolve(true);
+    let pinnedAddress = null;
     try {
-      await assertWebhookTargetAllowed(url);
+      pinnedAddress = await assertWebhookTargetAllowed(url);
     } catch (error) {
+      // Configuration-time checks stay strict. A delivery that cannot resolve
+      // the name is a background failure: log it and skip the request.
+      if (error.code === 'WEBHOOK_TARGET_UNRESOLVED') {
+        logger.error('Webhook delivery skipped because the target domain did not resolve', {
+          params: { url, error: error.message }
+        });
+        return false;
+      }
       logger.error('Rejected webhook target', {
         params: { url, error: error.message }
       });
@@ -179,11 +238,14 @@ class WebHooks {
       'User-Agent': 'flexiWAN webhook plugin'
     };
 
-    return fetch(url, {
+    const fetchOptions = {
       method: 'POST',
       headers,
       body: data
-    })
+    };
+    if (pinnedAddress) fetchOptions.agent = agentPinnedTo(url, pinnedAddress);
+
+    return fetch(url, fetchOptions)
       .then(response => {
         return response.json()
           .then(json => {
@@ -219,4 +281,5 @@ function webHooks (secretKey) {
   return webHooksHandler;
 }
 webHooks.isBlockedWebhookTarget = isBlockedWebhookTarget;
+webHooks.lookupPinnedTo = lookupPinnedTo;
 module.exports = webHooks;

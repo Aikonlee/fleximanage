@@ -68,7 +68,7 @@ class ApplicationsUpdateManager {
     const oldVersionsDevices = await applications.aggregate([
       {
         $match: {
-          appStoreApp: ObjectId(appStoreApp._id),
+          appStoreApp: new ObjectId(appStoreApp._id),
           installedVersion: { $ne: appStoreApp.latestVersion },
           pendingToUpgrade: { $ne: true }
         }

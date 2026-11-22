@@ -31,6 +31,7 @@ const flexibilling = require('../flexibilling');
 const { deviceAggregateStats } = require('../models/analytics/deviceStats');
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 const keyBy = require('lodash/keyBy');
+const escapeRegExp = require('lodash/escapeRegExp');
 
 const adminRouter = express.Router();
 adminRouter.use(bodyParser.json());
@@ -44,59 +45,63 @@ adminRouter
 // When options message received, reply origin based on whitelist
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .get(cors.corsWithOptions, auth.verifyAdmin, async (req, res, next) => {
-    // users
-    const registeredUsers = await getRegisteredUsers();
-
-    // monthly traffic from the first time of the system
-    const monthlyStats = await getMonthlyStats();
-
-    // traffic per organizations (last 6 months)
-    const bytesPerOrg = await getDevicesTraffic();
-
-    // account data
-    const accounts = await getAccountsData(req);
-
-    // !!! IMPORTANT INFORMATION !!!!
-    // three databases are involved here - flexiManage, flexiBilling, and flexiwanAnalytics
-    // When an organization is removed from flexiManage DB,
-    // we don't remove it from billing and analytics.
-    // If an organizations doesn't include in the `accounts` array,
-    // but exists in `summary` (flexiBilling) or in `bytesPerOrg` (flexiwanAnalytics) -
-    // it means that this org is removed from flexiManage.
-    // In such a case, we fill the accounts array with this deleted organization and mark it
-    // with `deleted=true`.
-    // The reason is to let the admin know about the traffic and devices count.
-    // `createDefaultOrg()` is the template for organization based on the pipeline above
-
-    // mapping orgs to account - orgId -> accountId
-    const orgs = { /* orgId -> accountId */ };
-
-    // get billing summary
-    const billing = {};
-    const accountsCopy = [...accounts.data];
-    do {
-      const AccountsForProcessing = accountsCopy.splice(0, 500);
-      const ids = AccountsForProcessing.map(a => a.account_id);
-      const summary = await flexibilling.getMaxDevicesRegisteredSummmaryByAccounts(ids);
-      const featuresSummary = await flexibilling.getFeaturesSummaryByAccounts(ids);
-      for (const s of summary) {
-        billing[s.account] = s;
-      };
-
-      for (const s of featuresSummary) {
-        if (!(s.account in billing)) {
-          continue;
-        }
-
-        if (!('features' in billing[s.account])) {
-          billing[s.account].features = {};
-        }
-
-        billing[s.account].features[s.feature] = s;
-      };
-    } while (accountsCopy.length > 0);
-
+    let registeredUsers;
+    let monthlyStats;
+    let bytesPerOrg;
+    let accounts;
     try {
+    // users
+      registeredUsers = await getRegisteredUsers();
+
+      // monthly traffic from the first time of the system
+      monthlyStats = await getMonthlyStats();
+
+      // traffic per organizations (last 6 months)
+      bytesPerOrg = await getDevicesTraffic();
+
+      // account data
+      accounts = await getAccountsData(req);
+
+      // !!! IMPORTANT INFORMATION !!!!
+      // three databases are involved here - flexiManage, flexiBilling, and flexiwanAnalytics
+      // When an organization is removed from flexiManage DB,
+      // we don't remove it from billing and analytics.
+      // If an organizations doesn't include in the `accounts` array,
+      // but exists in `summary` (flexiBilling) or in `bytesPerOrg` (flexiwanAnalytics) -
+      // it means that this org is removed from flexiManage.
+      // In such a case, we fill the accounts array with this deleted organization and mark it
+      // with `deleted=true`.
+      // The reason is to let the admin know about the traffic and devices count.
+      // `createDefaultOrg()` is the template for organization based on the pipeline above
+
+      // mapping orgs to account - orgId -> accountId
+      const orgs = { /* orgId -> accountId */ };
+
+      // get billing summary
+      const billing = {};
+      const accountsCopy = [...accounts.data];
+      do {
+        const AccountsForProcessing = accountsCopy.splice(0, 500);
+        const ids = AccountsForProcessing.map(a => a.account_id);
+        const summary = await flexibilling.getMaxDevicesRegisteredSummmaryByAccounts(ids);
+        const featuresSummary = await flexibilling.getFeaturesSummaryByAccounts(ids);
+        for (const s of summary) {
+          billing[s.account] = s;
+        };
+
+        for (const s of featuresSummary) {
+          if (!(s.account in billing)) {
+            continue;
+          }
+
+          if (!('features' in billing[s.account])) {
+            billing[s.account].features = {};
+          }
+
+          billing[s.account].features[s.feature] = s;
+        };
+      } while (accountsCopy.length > 0);
+
       for (const account of accounts.data) {
         const accountId = account.account_id;
         const accountOrgs = { /* orgId -> index in account.organizations */ };
@@ -254,13 +259,13 @@ adminRouter
       }
     } catch (err) {
       logger.error('Error in processing accounts data', { params: { error: err.message } });
-      return res.status(500).send('Failed to process accounts data');
+      return next(err);
     }
 
     // Return  static info from:
     const result = {
       ...registeredUsers[0],
-      monthlyStats: monthlyStats,
+      monthlyStats,
       connectedDevices: [],
       accounts
     };
@@ -685,7 +690,7 @@ const getAccountsData = async req => {
       const filters = {};
       for (const key in parsed) {
         if (key in mapping) {
-          filters[mapping[key]] = { $regex: parsed[key], $options: 'i' };
+          filters[mapping[key]] = { $regex: escapeRegExp(String(parsed[key])), $options: 'i' };
         }
       }
 
@@ -739,7 +744,7 @@ const getAccountsData = async req => {
     // run pipeline
     const accountsData = await accountsModel.aggregate(accountPipeline).allowDiskUse(true);
 
-    accounts.all = accountsData[0].all[0].account_id;
+    accounts.all = accountsData[0]?.all?.[0]?.account_id ?? 0;
     accounts.data = accountsData[0].data;
   } catch (e) { }
 
@@ -753,6 +758,6 @@ const createDefaultOrg = (id = '', name = '', billingInfo = { current: 0, max: 0
     organization_name: name,
     num_devices: 0,
     num_tunnels: 0,
-    billingInfo: billingInfo
+    billingInfo
   };
 };

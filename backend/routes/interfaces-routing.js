@@ -4,7 +4,20 @@ const logger = require('../logging/logging')({ module: module.filename, type: 'r
 const { devices } = require('../models/devices');
 const { verifyPermission } = require('../authenticate');
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
-const { applyRoutingConfig, removeRoutingConfig } = require('../deviceLogic/routingHandler');
+const dispatcher = require('../deviceLogic/dispatcher');
+
+const ROUTING_PROTOCOLS = ['NONE', 'OSPF', 'BGP', 'OSPF,BGP'];
+
+const normalizeRoutingProtocol = (protocol) => {
+  if (protocol === undefined || protocol === null || protocol === '') return null;
+  const normalized = String(protocol).trim().toUpperCase().replace('-', ',');
+  return ROUTING_PROTOCOLS.includes(normalized) ? normalized : null;
+};
+
+const plainSubdoc = (value) => {
+  if (!value) return {};
+  return typeof value.toObject === 'function' ? value.toObject() : value;
+};
 
 /**
  * Get routing configuration for a specific interface
@@ -25,24 +38,9 @@ router.get('/api/devices/:deviceId/interfaces/:interfaceId/routing',
       }
 
       res.status(200).json({
-        routing: iface.routing || {
-          protocol: 'none',
-          ospf: {
-            enabled: false,
-            area: '0.0.0.0',
-            cost: 10,
-            priority: 1,
-            networkType: 'broadcast',
-            passive: false
-          },
-          bgp: {
-            enabled: false,
-            advertise: true,
-            asPath: '',
-            localPref: 100,
-            med: 0
-          }
-        }
+        routing: iface.routing || 'NONE',
+        ospf: iface.ospf || { area: '0', keyId: '', key: '' },
+        bgp: device.bgp || { enable: false }
       });
     } catch (error) {
       logger.error('Failed to get routing configuration', {
@@ -60,11 +58,11 @@ router.put('/api/devices/:deviceId/interfaces/:interfaceId/routing',
   async (req, res) => {
     try {
       const { protocol, ospf, bgp } = req.body;
-
-      // Validate protocol
-      const validProtocols = ['none', 'ospf', 'bgp', 'ospf-bgp'];
-      if (protocol && !validProtocols.includes(protocol)) {
-        return res.status(400).json({ error: `Invalid protocol. Must be one of: ${validProtocols.join(', ')}` });
+      const normalizedProtocol = protocol ? normalizeRoutingProtocol(protocol) : null;
+      if (protocol && !normalizedProtocol) {
+        return res.status(400).json({
+          error: `Invalid protocol. Must be one of: ${ROUTING_PROTOCOLS.join(', ')}`
+        });
       }
 
       const orgList = await getAccessTokenOrgList(req.user, req.query?.org, true, null, '', true);
@@ -78,81 +76,41 @@ router.put('/api/devices/:deviceId/interfaces/:interfaceId/routing',
         return res.status(404).json({ error: 'Interface not found' });
       }
 
-      // Update routing configuration
-      if (!iface.routing) {
-        iface.routing = {
-          protocol: 'none',
-          ospf: {
-            enabled: false,
-            area: '0.0.0.0',
-            cost: 10,
-            priority: 1,
-            networkType: 'broadcast',
-            passive: false
-          },
-          bgp: {
-            enabled: false,
-            advertise: true,
-            asPath: '',
-            localPref: 100,
-            med: 0
-          }
-        };
+      if (normalizedProtocol) {
+        iface.routing = normalizedProtocol;
+      }
+      if (ospf && typeof ospf === 'object') {
+        iface.ospf = { ...plainSubdoc(iface.ospf), ...ospf };
+      }
+      if (bgp && typeof bgp === 'object') {
+        device.bgp = { ...plainSubdoc(device.bgp), ...bgp };
       }
 
-      // Update protocol
-      if (protocol) {
-        iface.routing.protocol = protocol;
-
-        // Enable/disable protocols based on selection
-        if (protocol === 'none') {
-          iface.routing.ospf.enabled = false;
-          iface.routing.bgp.enabled = false;
-        } else if (protocol === 'ospf') {
-          iface.routing.ospf.enabled = true;
-          iface.routing.bgp.enabled = false;
-        } else if (protocol === 'bgp') {
-          iface.routing.ospf.enabled = false;
-          iface.routing.bgp.enabled = true;
-        } else if (protocol === 'ospf-bgp') {
-          iface.routing.ospf.enabled = true;
-          iface.routing.bgp.enabled = true;
-        }
-      }
-
-      // Update OSPF settings
-      if (ospf) {
-        iface.routing.ospf = { ...iface.routing.ospf, ...ospf };
-      }
-
-      // Update BGP settings
-      if (bgp) {
-        iface.routing.bgp = { ...iface.routing.bgp, ...bgp };
-      }
-
-      // Save device
       await device.save();
 
-      // Apply configuration to device
+      // modifyDevice diffs the pre-image in the array against data.newDevice.
+      // This route only has the document after in-place mutation, so both sides
+      // are the saved device. A no-op job is preferable to the missing routingHandler.
       if (device.status === 'running') {
-        if (protocol === 'none') {
-          await removeRoutingConfig(device, iface);
-        } else {
-          await applyRoutingConfig(device, iface);
-        }
+        await dispatcher.apply([device], 'modify', req.user, {
+          org: orgList[0],
+          newDevice: device
+        });
       }
 
       logger.info('Routing configuration updated', {
         params: {
           deviceId: req.params.deviceId,
           interfaceId: req.params.interfaceId,
-          protocol: iface.routing.protocol
+          protocol: iface.routing
         }
       });
 
       res.status(200).json({
         message: 'Routing configuration updated successfully',
-        routing: iface.routing
+        routing: iface.routing,
+        ospf: iface.ospf,
+        bgp: device.bgp
       });
     } catch (error) {
       logger.error('Failed to update routing configuration', {

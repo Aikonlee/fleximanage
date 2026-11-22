@@ -1411,8 +1411,15 @@ class Connections {
       // Check if config was modified on the device
       this.reconfigCheck(origDevice, deviceInfo);
 
+      // tunnels can carry preshared keys; omit them from the log copy
+      const loggedDeviceInfo = { ...deviceInfo };
+      if (loggedDeviceInfo.message && typeof loggedDeviceInfo.message === 'object') {
+        loggedDeviceInfo.message = { ...loggedDeviceInfo.message };
+        delete loggedDeviceInfo.message.tunnels;
+      }
+
       logger.info('Device info message response received', {
-        params: { deviceId: deviceId, message: deviceInfo }
+        params: { deviceId: deviceId, message: loggedDeviceInfo }
       });
 
       if (isNewConnection) {

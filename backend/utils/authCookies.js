@@ -10,12 +10,12 @@ const seconds = (key) => {
 };
 
 const cookieFlags = (req) => {
-  const forwarded = req.headers && req.headers['x-forwarded-proto'];
   return {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
-    secure: Boolean(req.secure || forwarded === 'https')
+    // req.secure follows Express trust proxy. The raw forwarded header is not a signal.
+    secure: Boolean(req.secure)
   };
 };
 

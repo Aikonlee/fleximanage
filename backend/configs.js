@@ -115,7 +115,7 @@ const configEnv = {
     // HTTP port of the node server. On production we usually forward port 80 to this port using:
     // sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-port 3000
     httpPort: parseInt(process.env.HTTP_PORT || '3000', 10),
-    listenHost: '',
+    listenHost: '127.0.0.1',
     // HTTPS port of the node server. On production we usually forward port 443 to this port using:
     // sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 443 -j REDIRECT --to-port 3443
     httpsPort: parseInt(process.env.HTTPS_PORT || '3443', 10),
@@ -295,6 +295,9 @@ const configEnv = {
     mailerPort: 1025
   },
   testing: {
+    // Jest loads this module at import time. These are not production secrets.
+    userTokenSecretKey: 'test-only-token-secret-key-32b!!',
+    deviceTokenSecretKey: 'test-only-device-secret-key-32b!',
     // Mgmt-Agent protocol version for testing purposes
     agentApiVersion: '6.0.0',
     // Kue prefix
@@ -440,6 +443,27 @@ function redactConfigForLogging (config) {
   return redacted;
 }
 
+const PLACEHOLDER_TOKEN_SECRET = 'CHANGE_ME_IN_PRODUCTION';
+const MIN_TOKEN_SECRET_BYTES = 32;
+
+function tokenSecretIsWeak (value) {
+  if (value === null || value === undefined) return true;
+  const text = String(value);
+  if (!text || text === PLACEHOLDER_TOKEN_SECRET) return true;
+  return Buffer.byteLength(text) < MIN_TOKEN_SECRET_BYTES;
+}
+
+function assertTokenSecrets (config) {
+  const weak = ['userTokenSecretKey', 'deviceTokenSecretKey'].filter((name) => {
+    return tokenSecretIsWeak(config[name]);
+  });
+  if (!weak.length) return;
+  throw new Error(
+    'Refusing to start: ' + weak.join(' and ') +
+    ' must be set to a unique value of at least 32 bytes'
+  );
+}
+
 class Configs {
   constructor (env) {
     const environment = env || this.getEnv();
@@ -492,6 +516,12 @@ class Configs {
     this.config_values.nodeVersion = process.version;
 
     console.log('Configuration used:\n' + JSON.stringify(redactConfigForLogging(this.config_values), null, 2));
+
+    // Automated tests import Configs while argv identifies Jest. Every other
+    // startup must present unique token secrets and must not print them.
+    if (this.config_values.environment !== 'testing') {
+      assertTokenSecrets(this.config_values);
+    }
   }
 
   getEnv () {

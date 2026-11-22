@@ -92,9 +92,17 @@ class PathLabelsService {
     try {
       // Don't allow to delete a label which is being used
       const orgList = await getAccessTokenOrgList(user, org, true);
-      const devCount = await devices.countDocuments({ 'interfaces.pathlabels': id });
-      const tunCount = await tunnels.countDocuments({ isActive: true, pathlabel: id });
+      const devCount = await devices.countDocuments({
+        org: { $in: orgList },
+        'interfaces.pathlabels': id
+      });
+      const tunCount = await tunnels.countDocuments({
+        org: { $in: orgList },
+        isActive: true,
+        pathlabel: id
+      });
       const polCount = await MultiLinkPolicies.countDocuments({
+        org: { $in: orgList },
         'rules.action.links.pathlabels': id
       });
 
@@ -208,9 +216,17 @@ class PathLabelsService {
         // Type change is only allowed for labels
         // that are not being used by any other entity
         if (origPathLabel.type !== type) {
-          const devCount = await devices.countDocuments({ 'interfaces.pathlabels': id });
-          const tunCount = await tunnels.countDocuments({ isActive: true, pathlabel: id });
+          const devCount = await devices.countDocuments({
+            org: { $in: orgList },
+            'interfaces.pathlabels': id
+          });
+          const tunCount = await tunnels.countDocuments({
+            org: { $in: orgList },
+            isActive: true,
+            pathlabel: id
+          });
           const polCount = await MultiLinkPolicies.countDocuments({
+            org: { $in: orgList },
             'rules.action.links.pathlabels': id
           });
 

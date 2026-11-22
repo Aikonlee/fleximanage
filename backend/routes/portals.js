@@ -45,6 +45,7 @@ router.route('/')
       return res.status(200).json({ access_url: result.access_url });
     } catch (error) {
       console.error(error);
+      return next(createError(500, 'Failed to create portal session'));
     }
   });
 

@@ -32,7 +32,20 @@ const SENSITIVE_FRAGMENTS = [
   'captcha',
   'salt',
   'logintoken',
-  'refreshjwt'
+  'refreshjwt',
+  'presharedkey',
+  'tunnelkey',
+  'cakey',
+  'serverkey',
+  'clientkey',
+  'tlskey',
+  'dhkey',
+  'key1',
+  'key2',
+  'key3',
+  'key4',
+  'pin',
+  'puk'
 ];
 
 // Compatibility export. Same names as the normalized substring check, including

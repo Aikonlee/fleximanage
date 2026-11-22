@@ -41,7 +41,7 @@ const createRequestEntry = (req) => {
       user: req.userId || '',
       ip: req.ip,
       method: req.method,
-      url: req.url
+      url: redact(req.url)
     }
     : {};
 };

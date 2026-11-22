@@ -436,7 +436,7 @@ class ExpressServer {
             status: err.status,
             message: err.message || err.error || '',
             method: req.method,
-            url: req.originalUrl || req.url,
+            url: redact(req.originalUrl || req.url),
             user: req.userId || (req.user && req.user.email) || '',
             query: redact(req.query || {}),
             body: redact(req.body || {})

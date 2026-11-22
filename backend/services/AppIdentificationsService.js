@@ -169,7 +169,7 @@ class AppIdentificationsService {
       if (appIdentIndex !== -1) {
         appIdentsRes.appIdentifications[appIdentIndex] = appIdentification;
       } else {
-        appIdentsRes.appIdentifications.push(appIdentification);
+        return Service.rejectResponse('Requested object was not found', 404);
       }
       const updateResult =
         await appIdentifications.updateOne({ 'meta.org': { $in: orgList } }, appIdentsRes);
@@ -393,15 +393,18 @@ class AppIdentificationsService {
       }
 
       const firewallPoliciesUsed = await firewallPoliciesModel.find({
+        org: { $in: orgList },
         $or: [
           { 'rules.classification.source.trafficId': id },
           { 'rules.classification.destination.trafficId': id }
         ]
       }, { name: 1 });
       const multiLinkPoliciesUsed = await multiLinkPoliciesModel.find({
+        org: { $in: orgList },
         'rules.classification.application.appId': id
       }, { name: 1 });
       const devicesUsed = await devices.find({
+        org: { $in: orgList },
         $or: [
           { 'firewall.rules.classification.source.trafficId': id },
           { 'firewall.rules.classification.destination.trafficId': id }

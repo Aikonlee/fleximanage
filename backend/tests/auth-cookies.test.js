@@ -180,7 +180,7 @@ describe('setAuthCookies', () => {
       'access',
       'refresh'
     );
-    expect(forwarded.cookies.every(cookie => cookie.options.secure === true)).toBe(true);
+    expect(forwarded.cookies.every(cookie => cookie.options.secure === false)).toBe(true);
 
     const direct = response();
     setAuthCookies({ secure: true, headers: { 'x-forwarded-proto': 'http' } }, direct, 'a', 'r');

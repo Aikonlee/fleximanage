@@ -566,7 +566,25 @@ class OrganizationsService {
     try {
       const orgList = await getAccessTokenOrgList(user, org, true);
       if (!orgList || orgList.length === 0) {
-        return Service.rejectResponse('Organization not found or access denied', 404);
+        return Service.successResponse({
+          devices: { connected: 0, approved: 0, running: 0, warning: 0, total: 0 },
+          tunnels: {
+            total: 0,
+            active: 0,
+            connected: 0,
+            notConnected: 0,
+            pending: 0,
+            warning: 0,
+            unknown: 0
+          },
+          traffic: {
+            total: 0,
+            unit: 'bytes',
+            totalBytes: 0,
+            lastUpdate: null,
+            monthly: []
+          }
+        }, 200);
       }
 
       const devicesPipeline = [
@@ -740,16 +758,26 @@ class OrganizationsService {
       // Query traffic data from deviceAggregateStats (monthly aggregated data)
       // This returns an array of { month, bytes, deviceCount } objects
       const bytesRes = await deviceAggregateStats.aggregate(bytesPipeline);
+      const totalBytes = bytesRes.reduce((sum, row) => sum + (Number(row.bytes) || 0), 0);
 
       const response = {
         devices: { connected, approved, running, warning, total },
         tunnels: {
+          total: tunTotal,
+          active: tunTotal,
           connected: tunConnected,
+          notConnected: tunUnknown,
+          pending: tunWarning,
           warning: tunWarning,
-          unknown: tunUnknown,
-          total: tunTotal
+          unknown: tunUnknown
         },
-        traffic: bytesRes  // Array of monthly traffic data
+        traffic: {
+          total: totalBytes,
+          unit: 'bytes',
+          totalBytes,
+          lastUpdate: bytesRes.length > 0 ? bytesRes[0].month : null,
+          monthly: bytesRes
+        }
       };
 
       logger.debug('Final response object', { 
@@ -854,6 +882,9 @@ class OrganizationsService {
         to: 'account',
         role: 'owner'
       });
+      if (ownerMembership.length === 0) {
+        throw new Error('Account owner membership is missing');
+      }
       let accountOwners = [];
       if (ownerMembership.length > 1) {
         ownerMembership.forEach(owner => {
@@ -869,22 +900,24 @@ class OrganizationsService {
         signedToWarning: [],
         signedToDaily: accountOwners,
         webHookSettings: { webhookURL: '', sendCriticalAlerts: false, sendWarningAlerts: false }
-      });
+      }, { session });
       if (!setNotificationsConf) {
         throw new Error('Error adding default notifications settings');
       }
-      session.commitTransaction();
+      await session.commitTransaction();
 
       const token = await getToken({ user }, { org: org._id, orgName: org.name });
       response.setHeader('Refresh-JWT', token);
 
       return Service.successResponse(OrganizationsService.selectOrganizationParams(org), 201);
     } catch (e) {
-      if (session) session.abortTransaction();
+      if (session) await session.abortTransaction();
       return Service.rejectResponse(
         e.message || 'Internal Server Error',
         e.status || 500
       );
+    } finally {
+      if (session) await session.endSession();
     }
   }
 }

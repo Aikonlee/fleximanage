@@ -263,7 +263,7 @@ class VrrpService {
       const pipeline = [
         {
           $match: {
-            org: { $in: orgList.map(o => ObjectId(o)) }
+            org: { $in: orgList.map(o => new ObjectId(o)) }
           }
         },
         {
@@ -350,7 +350,7 @@ class VrrpService {
           _id: device._id.toString()
         });
       }
-      return result;
+      return Service.successResponse(result);
     } catch (e) {
       return Service.rejectResponse(
         e.message || 'Internal Server Error',

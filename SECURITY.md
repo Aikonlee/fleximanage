@@ -58,3 +58,36 @@ Queue tests use a unique prefix in a dedicated Redis database and close all
 clients, removing only their own keys. CI supplies a disposable Redis service.
 Physical policy delivery and forwarding remain unverified: no flexiEdge is
 currently connected.
+
+## Tunnel deletion semantics and maintenance purge
+
+Tunnel deletion in flexiManage is intentionally a **soft delete**:
+
+- UI/API deletion (`backend/deviceLogic/tunnels.js` `delTunnel` and
+  `backend/services/TunnelsService.js` `tunnelsDELETE`) sets `isActive: false`,
+  clears `tunnelKeys: null` on device removal, and retains the document in the
+  `tunnels` collection.
+- Tunnel creation (`backend/deviceLogic/tunnels.js` `generateTunnelPromise`)
+  first claims an existing inactive record (`{ isActive: false, org }`) to reuse
+  its unique `num` before allocating a new counter value from `tunnelids`
+  (`backend/models/tunnelids.js`, bounded by `MAX_TUNNELS_PER_ORG`). Retaining
+  inactive records prevents premature exhaustion of per-organization tunnel
+  numbers; runtime API/UI behavior remains soft-delete and `tunnelids` counters
+  must never be modified during cleanup.
+- **No automatic purge exists.** Inactive records stay in MongoDB until reused
+  or removed by an authorized manual maintenance action.
+- **Historical cleanup note:** One previously authorized maintenance purge
+  physically removed exactly seven inactive tunnel records after a full DB
+  backup. That cleanup was a one-off historical event; subsequent UI/API
+  deletions continue to soft-delete.
+- **Prerequisites for any future physical purge:** Any physical removal of
+  inactive tunnel documents requires explicit change-control authorization, a
+  verified full MongoDB backup, and an isolated restore rehearsal prior to
+  modifying production data.
+- **Safe purge utility:** `backend/tools/purge-inactive-tunnels.js` is
+  read-only by default (prints aggregate candidate counts only, never document
+  contents), excludes recent soft deletes by default (`--older-than-days=30`),
+  resolves `MONGO_URL` only from the service environment config, filters
+  strictly on `{ isActive: false, updatedAt: { $lte: cutoff } }` in `tunnels`
+  without touching active records or `tunnelids`, and requires both `--apply`
+  and an exact matching `--confirm=<expected-count>` before deleting.

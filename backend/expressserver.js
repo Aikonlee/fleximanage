@@ -16,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const { version } = require('./package.json');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -54,6 +55,12 @@ function escapeHtml (value) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+const CSP_NONCE_PATTERN = /^[A-Za-z0-9+/=]+$/;
+const SCRIPT_TAG_PATTERN = /<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi;
+const NONCE_ATTR_PATTERN = /\snonce=(?:"[^"]*"|'[^']*'|[^\s>]+)/i;
+const PLACEHOLDER_NONCE_PATTERN =
+  /\bnonce=(?:"__CSP_NONCE__"|'__CSP_NONCE__'|__CSP_NONCE__(?=\s|$))/i;
 
 // periodic tasks
 const deviceStatus = require('./periodic/deviceStatus')();
@@ -158,6 +165,12 @@ class ExpressServer {
     configureProxyTrust(this.app);
 
     // Security Middleware
+    // Generate a cryptographically random per-request nonce before helmet sets CSP.
+    this.app.use((req, res, next) => {
+      res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
+      next();
+    });
+
     // Default helmet CSP blocks external scripts; allow Cloudflare Turnstile so the
     // frontend can dynamically load the captcha widget (https://challenges.cloudflare.com)
     this.app.use(helmet({
@@ -166,14 +179,15 @@ class ExpressServer {
           defaultSrc: ["'self'"],
           scriptSrc: [
             "'self'",
-            // index.html assigns window.__FLEXIWAN_SERVER_CONFIG__ from an inline script.
-            "'unsafe-inline'",
+            // Allow only the per-request nonced inline config script in index.html.
+            (req, res) => `'nonce-${res.locals.cspNonce}'`,
             'https://challenges.cloudflare.com',
             'https://cdn.jsdelivr.net'
           ],
           styleSrc: [
             "'self'",
             'https:',
+            // Inline styles from UI/charting dependencies still require 'unsafe-inline'.
             "'unsafe-inline'",
             'https://cdn.jsdelivr.net',
             'https://cdnjs.cloudflare.com'
@@ -361,6 +375,8 @@ class ExpressServer {
   sendIndexFile (req, res) {
     // get client config based on request object
     const clientConfig = configs.getClientConfig(req);
+    const cspNonce = res && res.locals ? res.locals.cspNonce : null;
+    const hasValidNonce = typeof cspNonce === 'string' && CSP_NONCE_PATTERN.test(cspNonce);
 
     const transformIndex = (origIndex) => {
       let modifiedIndex = configs.get('removeBranding', 'boolean')
@@ -368,41 +384,57 @@ class ExpressServer {
           `<title>${escapeHtml(configs.get('companyName'))} Management</title>`)
         : origIndex;
 
-      // Try to match the old format first
-      let m = modifiedIndex.match(/const __FLEXIWAN_SERVER_CONFIG__=({.*?});?/);
+      modifiedIndex = modifiedIndex.replace(
+        SCRIPT_TAG_PATTERN,
+        (fullMatch, attrs = '', body = '') => {
+          // Try to match the old format first
+          let m = body.match(/const __FLEXIWAN_SERVER_CONFIG__=({.*?});?/);
 
-      // If not found, try the new window format
-      if (!m || m.length === 0) {
-        m = modifiedIndex.match(/window\.__FLEXIWAN_SERVER_CONFIG__\s*=\s*({.*?});?/);
-      }
+          // If not found, try the new window format
+          if (!m || m.length === 0) {
+            m = body.match(/window\.__FLEXIWAN_SERVER_CONFIG__\s*=\s*({.*?});?/);
+          }
 
-      if (m instanceof Array && m.length > 0) { // successful match
-        try {
-          const newConfig = JSON.parse(m[1]);
-          if (!newConfig || typeof newConfig !== 'object' || Array.isArray(newConfig)) {
-            throw new Error('Embedded server config is not a JSON object');
+          const hasPlaceholder = PLACEHOLDER_NONCE_PATTERN.test(attrs);
+          if ((!m || m.length === 0) && !hasPlaceholder) {
+            return fullMatch;
           }
-          // Update default config with backend variables
-          for (const c in clientConfig) {
-            newConfig[c] = clientConfig[c];
-          }
-          const serialized = serialize(newConfig, { isJSON: true });
 
-          // Replace with new format (window object)
-          if (m[0].includes('window.')) {
-            modifiedIndex = modifiedIndex.replace(
-              m[0], 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';'
-            );
-          } else {
-            // Replace old const format with new window format
-            modifiedIndex = modifiedIndex.replace(
-              m[0], 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';'
-            );
+          // Fail closed: never render the inline script un-nonced.
+          if (!hasValidNonce) {
+            logger.error('Missing CSP nonce when serving index.html; omitting inline script');
+            return '';
           }
-        } catch (e) {
-          logger.warn('Failed to parse/replace server config:', { error: e.message });
+
+          let updatedBody = body;
+          if (m instanceof Array && m.length > 0) { // successful match
+            try {
+              const newConfig = JSON.parse(m[1]);
+              if (!newConfig || typeof newConfig !== 'object' || Array.isArray(newConfig)) {
+                throw new Error('Embedded server config is not a JSON object');
+              }
+              // Update default config with backend variables
+              for (const c in clientConfig) {
+                newConfig[c] = clientConfig[c];
+              }
+              const serialized = serialize(newConfig, { isJSON: true });
+
+              // Replace with new format (window object)
+              updatedBody = updatedBody.replace(
+                m[0], () => 'window.__FLEXIWAN_SERVER_CONFIG__ = ' + serialized + ';'
+              );
+            } catch (e) {
+              logger.warn('Failed to parse/replace server config:', { error: e.message });
+            }
+          }
+
+          const updatedAttrs = NONCE_ATTR_PATTERN.test(attrs)
+            ? attrs.replace(NONCE_ATTR_PATTERN, ` nonce="${cspNonce}"`)
+            : `${attrs} nonce="${cspNonce}"`;
+          return `<script${updatedAttrs}>${updatedBody}</script>`;
         }
-      }
+      );
+
       return modifiedIndex;
     };
 

@@ -48,17 +48,34 @@ const rotateRefresh = async (payload, user) => {
     throw new Error('Invalid refresh session');
   }
   const jti = randomId();
+  const presented = hashJti(payload.jti);
   const expiresAt = new Date(Date.now() +
     configs.get('userRefreshTokenExpiration', 'number') * 1000);
-  const updated = await Sessions.findOneAndUpdate({
+  const base = {
     sid: payload.sid,
     user: user._id,
     account: user.defaultAccount._id,
     authVersion: payload.authVersion,
-    refreshHash: hashJti(payload.jti),
     revokedAt: null,
     expiresAt: { $gt: new Date() }
-  }, { $set: { refreshHash: hashJti(jti), expiresAt } }, { new: true });
+  };
+  const rotation = {
+    $set: {
+      refreshHash: hashJti(jti),
+      expiresAt,
+      graceHash: presented,
+      graceUntil: Date.now() + 15000
+    }
+  };
+  let updated = await Sessions.findOneAndUpdate(
+    { ...base, refreshHash: presented }, rotation, { new: true });
+  if (!updated) {
+    updated = await Sessions.findOneAndUpdate({
+      ...base,
+      graceHash: presented,
+      graceUntil: { $gt: Date.now() }
+    }, rotation, { new: true });
+  }
   if (!updated) {
     await Sessions.updateOne({ sid: payload.sid, user: user._id, revokedAt: null },
       { $set: { revokedAt: new Date() } });

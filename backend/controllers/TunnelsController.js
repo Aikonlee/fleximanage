@@ -12,6 +12,10 @@ class TunnelsController {
   async tunnelsNotificationsPUT (request, response) {
     await Controller.handleRequest(request, response, this.service.tunnelsNotificationsPUT);
   }
+
+  async tunnelsDELETE (request, response) {
+    await Controller.handleRequest(request, response, this.service.tunnelsDELETE);
+  }
 }
 
 module.exports = TunnelsController;

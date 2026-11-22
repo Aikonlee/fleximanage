@@ -42,7 +42,7 @@ const authSessions = require('../authSessions');
 const Users = require('../models/users');
 const Accounts = require('../models/accounts');
 const Organizations = require('../models/organizations');
-const { getUserOrganizations } = require('../utils/membershipUtils');
+const { getUserOrganizations, getAccessTokenOrgList } = require('../utils/membershipUtils');
 const mongoConns = require('../mongoConns.js')();
 const NotificationsConf = require('../models/notificationsConf');
 const users = require('../models/users');
@@ -249,6 +249,21 @@ class MembersService {
    * limit Integer The numbers of items to return (optional)
    * returns List
    **/
+  static async memberScopeQuery (user, id) {
+    const query = {};
+    if (id !== undefined) query._id = id;
+    // App access keys are scoped to the key, not the creator's selected organization.
+    if (user.accessToken) {
+      const orgIds = await getAccessTokenOrgList(user, undefined, false);
+      query.account = user.defaultAccount._id;
+      query.$or = [
+        { to: 'organization', organization: { $in: orgIds || [] } }
+      ];
+      return query;
+    }
+    return null;
+  }
+
   static async membersGET ({ offset, limit }, { user }) {
     try {
       let userPromise = null;
@@ -257,7 +272,10 @@ class MembersService {
       // Account owners or members should be able to see all account users + groups +
       // all organizations users. Organization members should be
       // able to see all organization users
-      if (user.admin === true) {
+      const accessScope = await MembersService.memberScopeQuery(user);
+      if (accessScope) {
+        userPromise = membership.find(accessScope);
+      } else if (user.admin === true) {
         // Super admin: show all users from all accounts
         userPromise = membership.find({});
       } else if (user.perms.accounts & permissionMasks.get) {
@@ -416,8 +434,12 @@ class MembersService {
     // Check the user permission:
     // Account owners or members should be able to see all account users
     // + groups + all organizations users. Organization members should
-    //  be able to see all organization users
-    if (user.perms.accounts & permissionMasks.get) {
+    //  be able to see all organization users.
+    // An app access key uses its own org list, not the creator's defaultOrg.
+    const accessScope = await MembersService.memberScopeQuery(user, id);
+    if (accessScope) {
+      userPromise = membership.find(accessScope);
+    } else if (user.perms.accounts & permissionMasks.get) {
       userPromise = membership.find({
         _id: id,
         account: user.defaultAccount._id

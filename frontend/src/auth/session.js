@@ -23,7 +23,10 @@ export const clearSession = () => setSessionToken(null);
 export function subscribeSession(listener) {
   listeners.add(listener);
   const onStorage = (event) => {
-    if (event.key === TOKEN_KEY || event.key === null) listener();
+    if (event.key === TOKEN_KEY || event.key === null) {
+      refreshTokenMemory = null;
+      listener();
+    }
   };
   window.addEventListener('storage', onStorage);
   return () => {

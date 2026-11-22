@@ -24,6 +24,7 @@ const authSessions = require('../authSessions');
 const pick = require('lodash/pick');
 const { getToken } = require('../tokens');
 const issueSessionTokens = require('../sessionTokens');
+const { setAuthCookies } = require('../utils/authCookies');
 const {
   getUserAccounts,
   orgUpdateFromNull
@@ -149,7 +150,8 @@ class AccountsService {
    * accountRequest AccountRequest  (optional)
    * returns Account
    **/
-  static async accountsIdPUT ({ id, ...accountRequest }, { user }, response) {
+  static async accountsIdPUT ({ id, ...accountRequest }, req, response) {
+    const user = req.user;
     try {
       if (user.defaultAccount._id.toString() !== id) {
         return Service.rejectResponse(
@@ -194,6 +196,7 @@ class AccountsService {
           fresh, user.isLoggedInWithMfa === true);
         response.setHeader('Refresh-JWT', token);
         response.setHeader('Refresh-Token', refreshToken);
+        setAuthCookies(req, response, token, refreshToken);
       } else {
         // Update token. Unchanged forceMfa keeps the caller's current session.
         const token = await getToken({ user }, { accountName: account.name });
@@ -223,6 +226,10 @@ class AccountsService {
     const { account } = accountSelectRequest;
 
     try {
+      // A scoped app access key or token cannot switch the caller's account.
+      if (user.accessToken) {
+        return Service.rejectResponse('No permission to access this account', 403);
+      }
       if (!user.defaultAccount || !user.defaultAccount._id || !user._id) {
         return Service.rejectResponse('Error in selecting account', 500);
       }

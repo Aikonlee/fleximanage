@@ -512,6 +512,21 @@ class RemoteVpn extends IApplication {
     const keysExist = configuration.keys && 1; // "&& 1" to return a boolean, not the keys object.
     const res = omit(configuration, secretFields);
     res.keysExist = keysExist;
+    const domains = res.authentications &&
+      res.authentications.gsuite &&
+      res.authentications.gsuite.domains;
+    if (Array.isArray(domains)) {
+      res.authentications = {
+        ...res.authentications,
+        gsuite: {
+          ...res.authentications.gsuite,
+          domains: domains.map(domain => {
+            if (!domain || typeof domain !== 'object') return domain;
+            return omit(domain, 'privateKey');
+          })
+        }
+      };
+    }
     return res;
   };
 
@@ -554,7 +569,6 @@ const allowedFields = [
 
 const secretFields = [
   'keys'
-  // TODO: what about private key of gsuite service account?
 ];
 const vpnConfigSchema = Joi.object().keys({
   networkId: Joi.string().pattern(/^[A-Za-z0-9]+$/).min(3).max(20)

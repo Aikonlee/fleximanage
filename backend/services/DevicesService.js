@@ -158,7 +158,6 @@ class DevicesService {
       const retDevice = pick(item, [
         'org',
         'description',
-        'deviceToken',
         'machineId',
         'site',
         'hostname',
@@ -595,7 +594,6 @@ class DevicesService {
         const respFields = [
           'org',
           'description',
-          'deviceToken',
           'machineId',
           'site',
           'hostname',
@@ -971,7 +969,7 @@ class DevicesService {
    **/
   static async devicesIdRecoveryInfoGET ({ id, org }, { user }) {
     try {
-      const orgList = await getAccessTokenOrgList(user, org, true);
+      const orgList = await getAccessTokenOrgList(user, org, true, null, '', true);
 
       // Find device for ID
       const deviceObject = await devices.findOne({

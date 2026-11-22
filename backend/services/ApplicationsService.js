@@ -29,6 +29,25 @@ const { getMatchFilters } = require('../utils/filterUtils');
 const appsLogic = require('../applicationLogic/applications')();
 const deviceStatus = require('../periodic/deviceStatus')();
 
+// Drop credential material after app-specific shaping (which may set keysExist).
+function stripExposedConfigurationSecrets (item) {
+  if (!item || !item.configuration || typeof item.configuration !== 'object') {
+    return item;
+  }
+  delete item.configuration.keys;
+  const gsuite = item.configuration.authentications &&
+    item.configuration.authentications.gsuite;
+  if (gsuite && Array.isArray(gsuite.domains)) {
+    gsuite.domains = gsuite.domains.map(domain => {
+      if (!domain || typeof domain !== 'object') return domain;
+      const cleaned = { ...domain };
+      delete cleaned.privateKey;
+      return cleaned;
+    });
+  }
+  return item;
+}
+
 class ApplicationsService {
   /**
    * Select the API fields from application Object
@@ -36,7 +55,7 @@ class ApplicationsService {
    */
   static selectApplicationStoreParams (item) {
     item._id = item._id.toString();
-    return item;
+    return stripExposedConfigurationSecrets(item);
   }
 
   /**
@@ -68,7 +87,7 @@ class ApplicationsService {
     item.configuration = await appsLogic.selectConfigurationParams(
       item.appStoreApp.identifier, item.configuration);
 
-    return item;
+    return stripExposedConfigurationSecrets(item);
   }
 
   /**
@@ -95,9 +114,17 @@ class ApplicationsService {
       }
 
       if (pipeline.length > 0) {
+        pipeline.push({
+          $unset: [
+            'configuration.keys',
+            'configuration.authentications.gsuite.domains.privateKey'
+          ]
+        });
         appsList = await appStore.aggregate(pipeline).allowDiskUse(true);
       } else {
-        appsList = await appStore.find().lean();
+        appsList = await appStore.find()
+          .select('-configuration.keys -configuration.authentications.gsuite.domains.privateKey')
+          .lean();
       }
 
       const mapped = appsList.map(app => {
@@ -133,6 +160,7 @@ class ApplicationsService {
 
       const app = await applications
         .findOne({ org: { $in: orgList }, _id: id })
+        .select('-configuration.authentications.gsuite.domains.privateKey')
         .populate('appStoreApp').lean();
 
       const parsed = await ApplicationsService.selectApplicationParams(app);
@@ -223,6 +251,10 @@ class ApplicationsService {
           });
         }
       }
+
+      pipeline.push({
+        $unset: 'configuration.authentications.gsuite.domains.privateKey'
+      });
 
       const installed = await applications.aggregate(pipeline).allowDiskUse(true);
 

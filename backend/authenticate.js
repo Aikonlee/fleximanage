@@ -170,6 +170,8 @@ const setUserPerms = async (user, jwtPayload, token = null) => {
     }
 
     user.defaultAccount = userAccount;
+    // A scoped app access key or token must not inherit its creator's global admin.
+    user.admin = false;
 
     // retrieve permissions from token
     if (jwtPayload.type === 'app_access_key') {
@@ -186,6 +188,7 @@ const setUserPerms = async (user, jwtPayload, token = null) => {
 
   return true;
 };
+exports.setUserPerms = setUserPerms;
 
 // const extractUserFromToken = (req) => {
 //     if (!req.headers || !req.headers.authorization) return "";
@@ -270,8 +273,9 @@ exports.verifyUserJWT = function (req, res, next) {
         // and attach a new token to the response.
         // TBD: Maintain refresh tokens in database and add
         // check also if the refresh token hasn't been revoked.
-        // Header stays authoritative during rollout. The cookie is the fallback.
-        const presentedRefresh = req.headers['refresh-token'] || req.cookies?.refreshToken;
+        // The refresh cookie is authoritative for browsers. The header remains
+        // the fallback for non-browser clients.
+        const presentedRefresh = req.cookies?.refreshToken || req.headers['refresh-token'];
         if (info && info.name === 'TokenExpiredError' && presentedRefresh) {
           try {
             const refreshToken = presentedRefresh;
@@ -377,9 +381,12 @@ exports.verifyUserJWT = function (req, res, next) {
 };
 
 exports.verifyAdmin = function (req, res, next) {
-  // Allow access to admin users only
-  return !req.user.admin
-    ? next(createError(403, 'You are not authorized for this operation')) : next();
+  // Allow access to admin users only. An app access key or token never qualifies,
+  // even if the creator user document is a global admin.
+  if (req.user?.accessToken || !req.user?.admin) {
+    return next(createError(403, 'You are not authorized for this operation'));
+  }
+  return next();
 };
 
 /**

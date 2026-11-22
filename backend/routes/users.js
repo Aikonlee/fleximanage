@@ -62,7 +62,10 @@ router.use(bodyParser.json());
 const verifyAdminJWT = (req, res, next) => {
   auth.verifyUserJWT(req, res, err => {
     if (err) return next(err);
-    if (req.user?.admin !== true) return next(createError(403, 'Admin access required'));
+    // App access keys and tokens are scoped credentials and cannot act as admin.
+    if (req.user?.accessToken || req.user?.admin !== true) {
+      return next(createError(403, 'Admin access required'));
+    }
     next();
   });
 };
@@ -419,6 +422,7 @@ router.route('/change-password')
         }
         try {
           await authSessions.revokeAll(req.user._id);
+          clearAuthCookies(res);
           // Route unit tests stub this model as a plain object; production always has updateOne.
           if (typeof User.updateOne === 'function') {
             await User.updateOne(

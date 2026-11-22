@@ -32,8 +32,7 @@ api.interceptors.request.use(async (config) => {
     const token = getSessionToken();
     const claims = decodeJwtPayload(token);
     if (token && claims?.type !== 'login' && !validPayload(token)) {
-      if (getRefreshToken()) await refreshSession();
-      else { clearSession(); throw new axios.CanceledError('Session expired'); }
+      try { await refreshSession(); } catch (error) { clearSession(); throw error; }
     } else if (refreshFlight && refreshFlight.token === token) await refreshFlight.promise;
   }
   const token = getSessionToken();

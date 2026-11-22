@@ -261,7 +261,7 @@ describe('expired access token refresh', () => {
     expect(res.cookies.every(cookie => cookie.options.httpOnly === true)).toBe(true);
   });
 
-  test('prefers the refresh-token header over the cookie', async () => {
+  test('prefers the refresh cookie over the refresh-token header', async () => {
     const headerToken = refreshFor();
     const cookieToken = refreshFor({ jti: 'cookie-id' });
     const { error } = await runRefresh({
@@ -276,8 +276,8 @@ describe('expired access token refresh', () => {
       header () { return undefined; }
     });
     expect(error).toBeUndefined();
-    expect(tokens.verifyToken).toHaveBeenCalledWith(headerToken);
-    expect(tokens.verifyToken).not.toHaveBeenCalledWith(cookieToken);
+    expect(tokens.verifyToken).toHaveBeenCalledWith(cookieToken);
+    expect(tokens.verifyToken).not.toHaveBeenCalledWith(headerToken);
   });
 
   test('rejects an expired access token with no refresh header or cookie', async () => {

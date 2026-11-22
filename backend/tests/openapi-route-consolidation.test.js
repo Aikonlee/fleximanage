@@ -46,6 +46,7 @@ jest.mock('redis', () => ({
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 const Tunnels = require('../models/tunnels');
 const TunnelsService = require('../services/TunnelsService');
+const TunnelsController = require('../controllers/TunnelsController');
 
 const expressServerSource = fs.readFileSync(
   path.join(__dirname, '..', 'expressserver.js'),
@@ -86,8 +87,30 @@ test('legacy organization and tunnel mounts are removed', () => {
   expect(expressServerSource).toMatch(/this\.app\.use\(\s*['"]\/api\/connect['"]/);
 });
 
-test('TunnelsService.tunnelsDELETE exists', () => {
+test('TunnelsService.tunnelsDELETE exists', async () => {
   expect(typeof TunnelsService.tunnelsDELETE).toBe('function');
+
+  const tunnelsDELETE = jest.fn().mockResolvedValue({ code: 200, payload: { ok: true } });
+  const controller = new TunnelsController({ tunnelsDELETE });
+  const request = {
+    openapi: { schema: {} },
+    protocol: 'https',
+    get: jest.fn(() => 'localhost'),
+    url: `/api/tunnels/${tunnelId}`,
+    method: 'DELETE',
+    body: {}
+  };
+  const response = {
+    status: jest.fn(),
+    json: jest.fn(),
+    end: jest.fn()
+  };
+
+  await controller.tunnelsDELETE(request, response);
+
+  expect(tunnelsDELETE).toHaveBeenCalledWith({}, request, response);
+  expect(response.status).toHaveBeenCalledWith(200);
+  expect(response.json).toHaveBeenCalledWith({ ok: true });
 });
 
 test('tunnelsDELETE rejects when the org list is empty', async () => {

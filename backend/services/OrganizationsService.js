@@ -63,6 +63,18 @@ const { validateOverlappingSubnets } = require('../deviceLogic/validators');
 const { checkOverlapping } = require('../utils/networks');
 const ObjectId = require('mongoose').Types.ObjectId;
 
+// Metadata an organization member may edit. account, group, tunnelRange, and
+// vxlanPort stay off this list and require account or group modify rights.
+const ORG_METADATA_FIELDS = ['name', 'description', 'encryptionMethod'];
+
+const sameValue = (left, right) => {
+  if (left === right) return true;
+  if (left === null || left === undefined || right === null || right === undefined) {
+    return false;
+  }
+  return String(left) === String(right);
+};
+
 const notificationsMgr = require('../notifications/notifications')();
 
 // revokeAll owns the single authVersion increment per user.
@@ -151,6 +163,10 @@ class OrganizationsService {
 
   static async organizationsSelectPOST (organizationSelectRequest, { user }, res) {
     try {
+      // A scoped app access key or token cannot switch the caller's organization.
+      if (user.accessToken) {
+        return Service.rejectResponse('No permission to access this organization', 403);
+      }
       if (!user._id || !user.defaultAccount) {
         return Service.rejectResponse('Error in selecting organization', 500);
       }
@@ -182,6 +198,7 @@ class OrganizationsService {
         const result = OrganizationsService.selectOrganizationParams(updUser.defaultOrg);
         return Service.successResponse(result, 201);
       }
+      return Service.rejectResponse('Organization not found', 404);
     } catch (e) {
       return Service.rejectResponse(
         e.message || 'Internal Server Error',
@@ -331,14 +348,24 @@ class OrganizationsService {
     try {
       const { id } = organizationRequest;
       // Only allow to update current default org, this is required to make sure the API permissions
-      // are set properly for updating this organization
-      const orgList = await getAccessTokenOrgList(user, undefined, false);
-      if (!orgList.includes(id)) {
+      // are set properly for updating this organization.
+      // isModify with no entity is rejected by getAccessTokenOrgList ("Modification with no
+      // entity is not allowed"). Fall back to the selected-org list so a normal name or
+      // description edit still succeeds.
+      let orgList;
+      try {
+        orgList = await getAccessTokenOrgList(user, undefined, false, null, '', true);
+      } catch (err) {
+        if (!err || err.message !== 'Modification with no entity is not allowed') throw err;
+        orgList = await getAccessTokenOrgList(user, undefined, false);
+      }
+      if (!orgList || !orgList.includes(id)) {
         throw new Error('Please select an organization to update it');
       }
 
-      const { name, description, group, encryptionMethod, vxlanPort, tunnelRange } =
-        organizationRequest;
+      const body = (organizationRequest && typeof organizationRequest === 'object')
+        ? organizationRequest
+        : {};
       const org = await Organizations.findOne({ _id: id });
       if (!org) {
         throw new Error('Organization ID is incorrect');
@@ -346,21 +373,68 @@ class OrganizationsService {
       const origGroup = org.group;
       const origVxlanPort = org.vxlanPort;
       const origTunnelRange = org.tunnelRange;
+
+      // Name, description, and encryptionMethod stay editable without account or group rights.
+      for (const field of ORG_METADATA_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(body, field)) org[field] = body[field];
+      }
+
+      const changed = (field) => {
+        return Object.prototype.hasOwnProperty.call(body, field) &&
+          !sameValue(org[field], body[field]);
+      };
+      const wantsAccount = changed('account');
+      const wantsGroup = changed('group');
+      const wantsTunnel = changed('tunnelRange');
+      const wantsVxlan = changed('vxlanPort');
+
+      if (wantsAccount || wantsGroup || wantsTunnel || wantsVxlan) {
+        let accountModify = null;
+        const hasAccountModify = async () => {
+          if (accountModify !== null) return accountModify;
+          const accountId = user.defaultAccount && user.defaultAccount._id;
+          if (!accountId) {
+            accountModify = false;
+            return false;
+          }
+          // validateOrgAccess at account scope (modify). Empty list means denied.
+          const allowed = await getAccessTokenOrgList(
+            user, null, false, String(accountId), '', true
+          );
+          accountModify = Array.isArray(allowed) && allowed.length > 0;
+          return accountModify;
+        };
+        const hasGroupModify = async (groupName) => {
+          if (typeof groupName !== 'string' || groupName.length === 0) return false;
+          // validateOrgAccess at group scope (modify).
+          const allowed = await getAccessTokenOrgList(
+            user, null, false, null, groupName, true
+          );
+          return Array.isArray(allowed) && allowed.length > 0;
+        };
+        const accountOk = await hasAccountModify();
+        if (wantsAccount && accountOk) org.account = body.account;
+        if (wantsTunnel || wantsVxlan) {
+          const groupOk = accountOk || await hasGroupModify(origGroup);
+          if (groupOk) {
+            if (wantsTunnel) org.tunnelRange = body.tunnelRange;
+            if (wantsVxlan) org.vxlanPort = body.vxlanPort;
+          }
+        }
+        if (wantsGroup) {
+          const sourceOk = accountOk || await hasGroupModify(origGroup);
+          const targetOk = accountOk || await hasGroupModify(body.group);
+          if (sourceOk && targetOk) org.group = body.group;
+        }
+      }
+
       const orgDevices = await Devices.devices
         .find({ org: id })
         .populate('org')
         .populate('policies.firewall.policy', '_id name rules');
 
-      // update org, don't save
-      org.name = name;
-      org.description = description;
-      org.group = group;
-      org.encryptionMethod = encryptionMethod;
-      org.vxlanPort = vxlanPort ?? origVxlanPort; // if not specified by user, set the orig value
-      org.tunnelRange = tunnelRange ?? origTunnelRange;
-
-      const isVxlanPortChanged = origVxlanPort !== vxlanPort;
-      const isTunnelRangeChanged = origTunnelRange !== tunnelRange;
+      const isVxlanPortChanged = origVxlanPort !== org.vxlanPort;
+      const isTunnelRangeChanged = origTunnelRange !== org.tunnelRange;
       if (isVxlanPortChanged) {
         validateVxlanPortChange(orgDevices, org);
       }
@@ -369,7 +443,7 @@ class OrganizationsService {
         // check that no config used the old range
         const staticRoutesDevice = await Devices.devices.aggregate([
           // only device with static routes
-          { $match: { org: ObjectId(id), 'staticroutes.0': { $exists: true } } },
+          { $match: { org: new ObjectId(id), 'staticroutes.0': { $exists: true } } },
           { $project: { _id: 1, name: 1, staticroutes: 1 } },
           {
             $addFields: {
@@ -404,7 +478,7 @@ class OrganizationsService {
             'Remove it first');
         }
 
-        const tunnelRangeWithMask = `${tunnelRange}/${configs.get('tunnelRangeMask')}`;
+        const tunnelRangeWithMask = `${org.tunnelRange}/${configs.get('tunnelRangeMask')}`;
         const overlappingSubnets = await validateOverlappingSubnets(org, [tunnelRangeWithMask]);
         for (const overlappingSubnet of overlappingSubnets) {
           const { type, overlappingWith, meta } = overlappingSubnet;
@@ -451,7 +525,7 @@ class OrganizationsService {
         if (devices.length > 0) {
           await handleVxlanPortTunnelRangeChange(
             updatedOrg,
-            vxlanPort,
+            org.vxlanPort,
             devices,
             user,
             isVxlanPortChanged,
@@ -461,7 +535,7 @@ class OrganizationsService {
       } else if (isTunnelRangeChanged) {
         await handleVxlanPortTunnelRangeChange(
           updatedOrg,
-          vxlanPort,
+          org.vxlanPort,
           orgDevices,
           user,
           isVxlanPortChanged,

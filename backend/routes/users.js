@@ -79,6 +79,15 @@ const formatErr = (err, msg) => {
   }
 };
 
+// Per-account cooldown so a caller cannot rotate an email token indefinitely.
+const EMAIL_TOKEN_COOLDOWN_MS = 60 * 1000;
+
+const issuedWithinCooldown = (issuedAt) => {
+  if (!issuedAt) return false;
+  const issuedMs = new Date(issuedAt).getTime();
+  return !Number.isNaN(issuedMs) && (Date.now() - issuedMs) < EMAIL_TOKEN_COOLDOWN_MS;
+};
+
 // register user
 router.route('/register')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
@@ -282,18 +291,31 @@ router.route('/reverify-account')
       return next(createError(400, 'Invalid email format'));
     }
     const validateKey = randomKey(30);
-    User.findOneAndUpdate(
-      // Query, use the email
-      { email: req.body.email },
-      // Update
-      {
-        'emailTokens.verify': validateKey,
-        'emailTokens.verifyIssuedAt': new Date()
-      },
-      // Options
-      { upsert: false, new: false }
-    )
+    let blocked = false;
+    return User.findOne({ email: req.body.email })
+      .then((current) => {
+        const verifyIssuedAt = current && current.emailTokens
+          ? current.emailTokens.verifyIssuedAt
+          : null;
+        if (issuedWithinCooldown(verifyIssuedAt)) {
+          blocked = true;
+          next(createError(429, 'Please wait before requesting another verification email'));
+          return null;
+        }
+        return User.findOneAndUpdate(
+          // Query, use the email
+          { email: req.body.email },
+          // Update
+          {
+            'emailTokens.verify': validateKey,
+            'emailTokens.verifyIssuedAt': new Date()
+          },
+          // Options
+          { upsert: false, new: false }
+        );
+      })
       .then((resp) => {
+        if (blocked) return null;
         const uiServerUrl = getUiServerUrl(req);
         // Send email if user found
         if (resp) {
@@ -320,6 +342,7 @@ router.route('/reverify-account')
         }
       })
       .then(() => {
+        if (blocked) return null;
         // In case of re-verification, always return OK to not expose email addresses
         return res.status(200).json({ status: 'account reverified' });
       })
@@ -395,6 +418,18 @@ router.route('/change-password')
         }
         try {
           await authSessions.revokeAll(req.user._id);
+          // Route unit tests stub this model as a plain object; production always has updateOne.
+          if (typeof User.updateOne === 'function') {
+            await User.updateOne(
+              { _id: req.user._id },
+              {
+                $set: {
+                  'emailTokens.resetPassword': '',
+                  'emailTokens.resetPasswordIssuedAt': null
+                }
+              }
+            );
+          }
           res.status(200).json({ status: 'password changed' });
         } catch (error) {
           next(error);
@@ -415,18 +450,31 @@ const resetPassword = (req, res, next) => {
   if (!req.body.email) return next(createError(500, 'Password Reset Error'));
 
   const validateKey = randomKey(30);
-  User.findOneAndUpdate(
-    // Query, use the email and make sure user is verified when reset password
-    { email: req.body.email, state: 'verified' },
-    // Update
-    {
-      'emailTokens.resetPassword': validateKey,
-      'emailTokens.resetPasswordIssuedAt': new Date()
-    },
-    // Options
-    { upsert: false, new: false }
-  )
+  let blocked = false;
+  return User.findOne({ email: req.body.email, state: 'verified' })
+    .then((current) => {
+      const issuedAt = current && current.emailTokens
+        ? current.emailTokens.resetPasswordIssuedAt
+        : null;
+      if (issuedWithinCooldown(issuedAt)) {
+        blocked = true;
+        next(createError(429, 'Please wait before requesting another password reset email'));
+        return null;
+      }
+      return User.findOneAndUpdate(
+        // Query, use the email and make sure user is verified when reset password
+        { email: req.body.email, state: 'verified' },
+        // Update
+        {
+          'emailTokens.resetPassword': validateKey,
+          'emailTokens.resetPasswordIssuedAt': new Date()
+        },
+        // Options
+        { upsert: false, new: false }
+      );
+    })
     .then((resp) => {
+      if (blocked) return null;
       // Send email if user found
       if (resp) {
         const uiServerUrl = getUiServerUrl(req);
@@ -454,6 +502,7 @@ const resetPassword = (req, res, next) => {
       }
     })
     .then(() => {
+      if (blocked) return null;
       // In case of password reset, always return OK to not expose email addresses
       return res.status(200).json({ status: 'password reset initiated' });
     })
@@ -685,9 +734,9 @@ const verifyMfaRateLimit = rateLimit({
 router.route('/mfa/verify')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .post(
-    verifyMfaRateLimit,
     cors.corsWithOptions,
     auth.verifyUserOrLoginJWT,
+    verifyMfaRateLimit,
     async (req, res, next) => {
       if (!req.body.token) {
         return next(createError(401, 'Token is required'));
@@ -790,7 +839,7 @@ router.route('/mfa/generateRecoveryCodes')
 
 router.route('/mfa/verifyRecoveryCode')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .post(verifyMfaRateLimit, cors.corsWithOptions, auth.verifyUserOrLoginJWT,
+  .post(cors.corsWithOptions, auth.verifyUserOrLoginJWT, verifyMfaRateLimit,
     async (req, res, next) => {
       const requestedCode = req.body?.recoveryCode;
       if (typeof requestedCode !== 'string' || !requestedCode.trim()) {

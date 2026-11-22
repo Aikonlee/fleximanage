@@ -46,6 +46,15 @@ class MfaRateLimitStore {
     const redisUrl = typeof raw === 'string' && raw ? raw : 'redis://127.0.0.1:6379';
     const { redisAuth, redisUrlNoAuth } = getRedisAuthUrl(redisUrl);
     this.client = redis.createClient({ url: redisUrlNoAuth });
+    // Socket errors are emitted, not thrown. Without a listener Node crashes.
+    // Some unit doubles do not implement EventEmitter.
+    if (typeof this.client.on === 'function') {
+      this.client.on('error', (err) => {
+        logger.error('MFA rate limit redis client error', {
+          params: { err: err && err.message ? err.message : String(err) }
+        });
+      });
+    }
     if (redisAuth) this.client.auth(redisAuth);
     return this.client;
   }
@@ -56,24 +65,110 @@ class MfaRateLimitStore {
 
   incr (key, cb) {
     const redisKey = this._redisKey(key);
-    this._client().incr(redisKey, (err, current) => {
+    const client = this._client();
+
+    // One MULTI: INCR and EXPIRE NX commit together. NX arms a missing TTL
+    // (new key or TTL=-1) and does not slide a window that already exists.
+    // A separate INCR followed by a conditional EXPIRE can leave TTL=-1.
+    if (typeof client.multi === 'function') {
+      this._incrPipeline(client, redisKey, cb);
+      return;
+    }
+
+    // Doubles that only implement INCR/EXPIRE. Production Redis has MULTI.
+    this._incrPlain(client, redisKey, cb);
+  }
+
+  _incrPipeline (client, redisKey, cb) {
+    let multi;
+    try {
+      multi = client.multi();
+    } catch (err) {
+      cb(err);
+      return;
+    }
+    if (!multi ||
+      typeof multi.incr !== 'function' ||
+      typeof multi.expire !== 'function' ||
+      typeof multi.exec !== 'function') {
+      cb(new Error('MFA rate limit increment failed'));
+      return;
+    }
+
+    multi.incr(redisKey);
+    multi.expire(redisKey, this.windowSeconds, 'NX');
+    multi.exec((err, replies) => {
+      if (err) {
+        cb(err);
+        return;
+      }
+      const current = this._multiCount(replies);
+      if (typeof current !== 'number') {
+        cb(new Error('MFA rate limit increment failed'));
+        return;
+      }
+      cb(null, current, new Date(Date.now() + this.windowSeconds * 1000));
+    });
+  }
+
+  // node-redis replies are bare values. Some clients use [err, value] pairs.
+  _multiCount (replies) {
+    if (!Array.isArray(replies) || replies.length === 0) return null;
+    const raw = replies[0];
+    if (raw instanceof Error) return null;
+    if (Array.isArray(raw)) {
+      if (raw[0]) return null;
+      return typeof raw[1] === 'number' ? raw[1] : null;
+    }
+    return typeof raw === 'number' ? raw : null;
+  }
+
+  _incrPlain (client, redisKey, cb) {
+    client.incr(redisKey, (err, current) => {
       if (err) {
         cb(err);
         return;
       }
 
-      if (current === 1) {
-        // Expire errors must not fail the request; the counter is already set.
-        this._client().expire(redisKey, this.windowSeconds, (expireErr) => {
-          if (expireErr && logger && logger.error) {
-            logger.error('MFA rate limit expire failed', {
-              params: { key: redisKey, err: expireErr.message }
-            });
-          }
-        });
+      const finish = () => {
+        cb(null, current, new Date(Date.now() + this.windowSeconds * 1000));
+      };
+
+      // Repair a missing TTL on every hit when TTL can be read. Otherwise keep
+      // the first-hit EXPIRE the legacy doubles assert.
+      if (typeof client.ttl !== 'function') {
+        if (current === 1 && typeof client.expire === 'function') {
+          client.expire(redisKey, this.windowSeconds, (expireErr) => {
+            if (expireErr && logger && logger.error) {
+              logger.error('MFA rate limit expire failed', {
+                params: { key: redisKey, err: expireErr.message }
+              });
+            }
+          });
+        }
+        finish();
+        return;
       }
 
-      cb(null, current, new Date(Date.now() + this.windowSeconds * 1000));
+      client.ttl(redisKey, (ttlErr, ttl) => {
+        if (ttlErr) {
+          cb(ttlErr);
+          return;
+        }
+        if (typeof ttl !== 'number' || ttl < 0) {
+          client.expire(redisKey, this.windowSeconds, (expireErr) => {
+            if (expireErr && logger && logger.error) {
+              logger.error('MFA rate limit expire failed', {
+                params: { key: redisKey, err: expireErr.message }
+              });
+            }
+          });
+        }
+        const resetMs = (typeof ttl === 'number' && ttl > 0)
+          ? ttl * 1000
+          : this.windowSeconds * 1000;
+        cb(null, current, new Date(Date.now() + resetMs));
+      });
     });
   }
 

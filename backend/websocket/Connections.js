@@ -548,7 +548,8 @@ class Connections {
           length: token.length,
           preview: `${token.substring(0, 32)}...`
         } : null,
-        url: info.req.url,
+        // Path only. The query string carries the device JWT and must not be logged.
+        url: connectionURL.pathname,
         origin: info.req.headers.origin,
         timestamp: new Date().toISOString()
       }

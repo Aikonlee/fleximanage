@@ -36,6 +36,12 @@ class RoleSelector {
     // Create a redisClient based on the redis URL
     const { redisAuth, redisUrlNoAuth } = getRedisAuthUrl(redisUrl);
     this.redis = redis.createClient({ url: redisUrlNoAuth });
+    // Socket errors are emitted, not thrown. Without a listener Node crashes.
+    this.redis.on('error', (err) => {
+      logger.error('RoleSelector redis client error', {
+        params: { err: err && err.message ? err.message : String(err) }
+      });
+    });
     if (redisAuth) this.redis.auth(redisAuth);
     logger.info('RoleSelector init', { params: { redisUrl: redisUrl } });
 

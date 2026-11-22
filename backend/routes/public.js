@@ -35,6 +35,20 @@ router.route('/config')
     });
   });
 
+// Unsigned integers only. Zoom max is 24; x/y must stay below 2^24.
+const TILE_PART = /^\d+$/;
+const MAX_TILE_ZOOM = 24;
+const MAX_TILE_INDEX = 2 ** 24;
+const MAX_TILE_DIGITS = String(MAX_TILE_INDEX).length;
+
+const isTilePart = (value, maxExclusive) => {
+  if (typeof value !== 'string' || !TILE_PART.test(value) || value.length > MAX_TILE_DIGITS) {
+    return false;
+  }
+  const n = Number(value);
+  return Number.isInteger(n) && n < maxExclusive;
+};
+
 /**
  * Proxy endpoint for OpenStreetMap tiles
  * @openapi
@@ -67,9 +81,10 @@ router.route('/config')
 router.route('/tiles/:z/:x/:y')
   .get(cors.corsWithOptions, (req, res) => {
     const { z, x, y } = req.params;
-    
-    // Validate parameters
-    if (!z || !x || !y || isNaN(z) || isNaN(x) || isNaN(y)) {
+
+    // Digits only, with a hard cap so values like "1e2" cannot reach the upstream URL.
+    if (!isTilePart(z, MAX_TILE_ZOOM + 1) || !isTilePart(x, MAX_TILE_INDEX) ||
+        !isTilePart(y, MAX_TILE_INDEX)) {
       return res.status(400).json({ error: 'Invalid tile coordinates' });
     }
 

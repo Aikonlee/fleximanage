@@ -17,6 +17,7 @@
 
 const Service = require('./Service');
 const createError = require('http-errors');
+const escapeRegExp = require('lodash/escapeRegExp');
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 const QOSPolicies = require('../models/qosPolicies');
 const QOSTrafficMap = require('../models/qosTrafficMap');
@@ -31,7 +32,7 @@ class QOSPoliciesService {
 
     // Duplicate names are not allowed in the same organization
     const hasDuplicateName = await QOSPolicies.findOne(
-      { org, name: { $regex: new RegExp(`^${name}$`, 'i') }, _id: { $ne: _id } }
+      { org, name: { $regex: new RegExp(`^${escapeRegExp(name)}$`, 'i') }, _id: { $ne: _id } }
     );
     if (hasDuplicateName) {
       return {

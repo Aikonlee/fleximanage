@@ -7,8 +7,10 @@
  * Any key that looks like a credential (password, secret, token, MFA recovery
  * codes, ...) is replaced by '[REDACTED]', at any depth. Keys are normalized
  * (lowercase, non-alphanumerics removed) and then matched by substring, so
- * hyphenated names such as refresh-token and x-api-key are covered. The input
- * is never modified, a redacted copy is returned. Mongoose documents and other
+ * hyphenated names such as refresh-token and x-api-key are covered. String
+ * values that are URLs have those same names scrubbed in the query string;
+ * the path and non-sensitive parameters are preserved. The input is never
+ * modified, a redacted copy is returned. Mongoose documents and other
  * objects with toJSON() are serialized first, the same way JSON.stringify would.
  */
 
@@ -52,7 +54,56 @@ const isSensitiveKey = (key) => {
   return SENSITIVE_FRAGMENTS.some(fragment => normalized.includes(fragment));
 };
 
+const decodeQueryKey = (rawKey) => {
+  try {
+    return decodeURIComponent(String(rawKey).replace(/\+/g, ' '));
+  } catch (err) {
+    return rawKey;
+  }
+};
+
+// Whole-string values only. A URL buried in a sentence is left unchanged.
+const isUrlLike = (value) => {
+  const queryAt = value.indexOf('?');
+  if (queryAt === -1) return false;
+  const hashAt = value.indexOf('#');
+  if (hashAt !== -1 && hashAt < queryAt) return false;
+  const head = value.slice(0, queryAt);
+  if (/\s/.test(head)) return false;
+  if (
+    head === '' ||
+    head.startsWith('/') ||
+    head.startsWith('./') ||
+    head.startsWith('../')
+  ) return true;
+  return /^[a-z][a-z0-9+.-]*:/i.test(head);
+};
+
+const redactUrlLike = (value) => {
+  if (typeof value !== 'string' || !isUrlLike(value)) return value;
+  const queryAt = value.indexOf('?');
+  const head = value.slice(0, queryAt);
+  const rest = value.slice(queryAt + 1);
+  const hashAt = rest.indexOf('#');
+  const query = hashAt === -1 ? rest : rest.slice(0, hashAt);
+  const hash = hashAt === -1 ? '' : rest.slice(hashAt);
+  let changed = false;
+  const scrubbed = query.split('&').map(part => {
+    if (!part) return part;
+    const eq = part.indexOf('=');
+    if (eq === -1) return part;
+    const rawKey = part.slice(0, eq);
+    const rawVal = part.slice(eq + 1);
+    if (rawVal === '' || !isSensitiveKey(decodeQueryKey(rawKey))) return part;
+    changed = true;
+    return `${rawKey}=${REDACTED}`;
+  }).join('&');
+  if (!changed) return value;
+  return `${head}?${scrubbed}${hash}`;
+};
+
 const redact = (value, depth = 0, seen = new WeakSet()) => {
+  if (typeof value === 'string') return redactUrlLike(value);
   if (value === null || typeof value !== 'object') return value;
   if (depth > MAX_DEPTH) return '[Truncated]';
   if (value instanceof Date) return value;

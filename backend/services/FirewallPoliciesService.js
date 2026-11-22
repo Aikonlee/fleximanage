@@ -17,6 +17,7 @@
 /* eslint-disable no-unused-vars */
 const Service = require('./Service');
 const createError = require('http-errors');
+const escapeRegExp = require('lodash/escapeRegExp');
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 const FirewallPolicies = require('../models/firewallPolicies');
 const organizationsModal = require('../models/organizations');
@@ -41,7 +42,7 @@ class FirewallPoliciesService {
 
     // Duplicate names are not allowed in the same organization
     const hasDuplicateName = await FirewallPolicies.findOne(
-      { org, name: { $regex: new RegExp(`^${name}$`, 'i') }, _id: { $ne: _id } }
+      { org, name: { $regex: new RegExp(`^${escapeRegExp(name)}$`, 'i') }, _id: { $ne: _id } }
     );
     if (hasDuplicateName) {
       return {

@@ -15,6 +15,32 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+const escapeRegExp = require('lodash/escapeRegExp');
+
+/**
+ * Builds a case-insensitive RegExp from a user-controlled filter value.
+ * Strings are escaped so metacharacters are literal and cannot backtrack.
+ * Other types keep RegExp coercion (undefined becomes an empty pattern).
+ * @param {*} val raw filter value
+ * @param {string} kind 'exact' | 'prefix' | 'contains' | 'notContains'
+ * @returns {RegExp}
+ */
+const convertFilterMatchToRegExp = (val, kind) => {
+  const safe = typeof val === 'string' ? escapeRegExp(val) : val;
+  switch (kind) {
+    case 'prefix':
+      return new RegExp('^' + safe, 'i');
+    case 'contains':
+      return new RegExp(safe, 'i');
+    case 'notContains':
+      // Same "does not contain" result as ^((?!val).)*$ without nested backtracking.
+      return new RegExp('^(?!.*' + safe + ').*$', 'i');
+    case 'exact':
+    default:
+      return new RegExp('^' + safe + '$', 'i');
+  }
+};
+
 /**
  * Converts API query filter operation to mongoose expression
  * @param {Object} filter a filter object from API request
@@ -80,13 +106,16 @@ const getFilterExpression = ({ key, op, val }) => {
   const isString = typeof val === 'string';
   switch (op) {
     case '==':
-      return { [key]: isString ? new RegExp('^' + val + '$', 'i') : val };
+      return { [key]: isString ? convertFilterMatchToRegExp(val, 'exact') : val };
     case '!=':
-      return { [key]: isString ? { $not: new RegExp('^' + val, 'i') } : { $ne: val } };
+      // Prefix anchor only: historical $not semantics match "starts with", not equality.
+      return {
+        [key]: isString ? { $not: convertFilterMatchToRegExp(val, 'prefix') } : { $ne: val }
+      };
     case 'contains':
-      return { [key]: new RegExp(val, 'i') };
+      return { [key]: convertFilterMatchToRegExp(val, 'contains') };
     case '!contains':
-      return { [key]: new RegExp('^((?!' + val + ').)*$', 'i') };
+      return { [key]: convertFilterMatchToRegExp(val, 'notContains') };
     case '<':
       return { [key]: { $lt: val } };
     case '>':
@@ -132,9 +161,9 @@ const passFilters = (obj, filters) => {
     const isString = typeof val === 'string';
     switch (op) {
       case '==':
-        return isString ? (new RegExp('^' + val + '$', 'i')).test(objVal) : val === objVal;
+        return isString ? convertFilterMatchToRegExp(val, 'exact').test(objVal) : val === objVal;
       case '!=':
-        return isString ? !(new RegExp('^' + val + '$', 'i')).test(objVal) : val !== objVal;
+        return isString ? !convertFilterMatchToRegExp(val, 'exact').test(objVal) : val !== objVal;
       case '<=':
         return objVal <= val;
       case '>=':
@@ -144,9 +173,9 @@ const passFilters = (obj, filters) => {
       case '>':
         return objVal > val;
       case 'contains':
-        return (new RegExp(val, 'i')).test(objVal);
+        return convertFilterMatchToRegExp(val, 'contains').test(objVal);
       case '!contains':
-        return (new RegExp('^((?!' + val + ').)*$', 'i')).test(objVal);
+        return convertFilterMatchToRegExp(val, 'notContains').test(objVal);
       case 'in':
         if (!Array.isArray(val)) val = val.split(',');
         return val.includes(objVal);

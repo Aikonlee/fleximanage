@@ -18,6 +18,7 @@
 const Service = require('./Service');
 
 const jwt = require('jsonwebtoken');
+const escapeRegExp = require('lodash/escapeRegExp');
 const configs = require('../configs.js')();
 const Tokens = require('../models/tokens');
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
@@ -233,7 +234,7 @@ class TokensService {
 
     // Duplicate names are not allowed in the same organization
     const hasDuplicateName = await Tokens.findOne(
-      { org, name: { $regex: new RegExp(`^${name}$`, 'i') }, _id: { $ne: _id } }
+      { org, name: { $regex: new RegExp(`^${escapeRegExp(name)}$`, 'i') }, _id: { $ne: _id } }
     );
     if (hasDuplicateName) {
       return {

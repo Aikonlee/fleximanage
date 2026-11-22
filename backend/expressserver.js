@@ -46,6 +46,15 @@ const serialize = require('serialize-javascript');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 
+function escapeHtml (value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // periodic tasks
 const deviceStatus = require('./periodic/deviceStatus')();
 const deviceQueues = require('./periodic/deviceQueue')();
@@ -155,6 +164,7 @@ class ExpressServer {
           defaultSrc: ["'self'"],
           scriptSrc: [
             "'self'",
+            // index.html assigns window.__FLEXIWAN_SERVER_CONFIG__ from an inline script.
             "'unsafe-inline'",
             'https://challenges.cloudflare.com',
             'https://cdn.jsdelivr.net'
@@ -355,7 +365,7 @@ class ExpressServer {
     const transformIndex = (origIndex) => {
       let modifiedIndex = configs.get('removeBranding', 'boolean')
         ? origIndex.replace('<title>flexiWAN Management</title>',
-          `<title>${configs.get('companyName')} Management</title>`)
+          `<title>${escapeHtml(configs.get('companyName'))} Management</title>`)
         : origIndex;
 
       // Try to match the old format first
@@ -368,8 +378,10 @@ class ExpressServer {
 
       if (m instanceof Array && m.length > 0) { // successful match
         try {
-          // eslint-disable-next-line no-eval
-          const newConfig = eval('(' + m[1] + ')');
+          const newConfig = JSON.parse(m[1]);
+          if (!newConfig || typeof newConfig !== 'object' || Array.isArray(newConfig)) {
+            throw new Error('Embedded server config is not a JSON object');
+          }
           // Update default config with backend variables
           for (const c in clientConfig) {
             newConfig[c] = clientConfig[c];

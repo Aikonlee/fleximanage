@@ -18,6 +18,7 @@
 const Joi = require('joi');
 const pick = require('lodash/pick');
 const omit = require('lodash/omit');
+const escapeRegExp = require('lodash/escapeRegExp');
 const applications = require('../../models/applications');
 const vpnUniqueUsers = require('../../models/vpnUniqueUsers');
 const organizations = require('../../models/organizations');
@@ -60,7 +61,7 @@ class RemoteVpn extends IApplication {
 
     // check if unique networkId already taken
     const networkId = configurationRequest.networkId;
-    const regex = new RegExp(`\\b${networkId}\\b`, 'i');
+    const regex = new RegExp(`\\b${escapeRegExp(networkId)}\\b`, 'i');
     const existsNetworkId = await applications.findOne(
       {
         _id: { $ne: application._id },

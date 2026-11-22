@@ -27,6 +27,11 @@ const logger = require('../logging/logging')({ module: module.filename, type: 'r
 const mongoose = require('mongoose');
 const configs = require('../configs')();
 const randomKey = require('../utils/random-key');
+const { RESET_PASSWORD_TTL_MS } = require('../utils/emailTokenExpiry');
+// Invite links are accepted by the 1h reset-password $gte check. Dating the
+// stamp (7 days - 1h) ahead keeps that check true for 7 days, so an unverified
+// invitee is not locked out an hour later and can still set a password.
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const mailer = require('../utils/mailer')(
   configs.get('mailerHost'),
   configs.get('mailerPort'),
@@ -634,7 +639,7 @@ class MembersService {
             verify: '',
             invite: '',
             resetPassword: resetPWKey,
-            resetPasswordIssuedAt: new Date()
+            resetPasswordIssuedAt: new Date(Date.now() + (INVITE_TTL_MS - RESET_PASSWORD_TTL_MS))
           },
           defaultAccount: user.defaultAccount._id,
           defaultOrg: memberRequest.userPermissionTo === 'organization'

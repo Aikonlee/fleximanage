@@ -18,6 +18,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const mongoConns = require('../mongoConns.js')();
+const { isBlockedWebhookTarget } = require('../utils/webhooks');
 
 const ruleSchema = new Schema({
   warningThreshold: { type: Number, default: null },
@@ -37,7 +38,12 @@ const ruleSchema = new Schema({
 const webHookSchema = new Schema({
   webhookURL: {
     type: String,
-    maxlength: [256, 'Webhook URL cannot be longer than 256 characters']
+    maxlength: [256, 'Webhook URL cannot be longer than 256 characters'],
+    validate: {
+      validator: (value) => !value || !isBlockedWebhookTarget(value),
+      message:
+        'Webhook URL must not target a loopback, link-local, or private network address'
+    }
   },
   sendCriticalAlerts: { type: Boolean, default: true },
   sendWarningAlerts: { type: Boolean, default: false }

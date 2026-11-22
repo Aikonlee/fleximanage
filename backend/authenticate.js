@@ -259,19 +259,40 @@ exports.verifyUserLocal = async function (req, res, next) {
   })(req, res, next);
 };
 
+function normalizeRequestPath (req) {
+  let rawUrl = '';
+  if (typeof req.originalUrl === 'string' && req.originalUrl.length > 0) {
+    rawUrl = req.originalUrl;
+  } else if (typeof req.baseUrl === 'string' && req.baseUrl.length > 0) {
+    const subPath = typeof req.path === 'string'
+      ? req.path
+      : (typeof req.url === 'string' ? req.url : '');
+    rawUrl = req.baseUrl + subPath;
+  } else if (typeof req.url === 'string' && req.url.length > 0) {
+    rawUrl = req.url;
+  } else if (typeof req.path === 'string' && req.path.length > 0) {
+    rawUrl = req.path;
+  }
+  const pathWithoutQuery = rawUrl.split('?')[0];
+  let decodedPath = pathWithoutQuery;
+  try {
+    decodedPath = decodeURIComponent(pathWithoutQuery);
+  } catch {
+    // Keep undecoded path if percent-encoding is malformed.
+  }
+  return decodedPath.replace(/\/{2,}/g, '/').toLowerCase();
+}
+
 exports.verifyUserJWT = function (req, res, next) {
   // Allow options to pass through without verification for preflight options requests
   if (req.method === 'OPTIONS') {
     logger.debug('verifyUserJWT: OPTIONS request');
     return next();
   }
-  // Express matches routes case-insensitively unless `case sensitive routing` is
-  // enabled. Normalize before the prefix check so /API/... cannot skip this gate.
-  // req.path is already decoded and excludes the query string.
-  const rawPath = (typeof req.path === 'string' && req.path.length > 0)
-    ? req.path
-    : String(req.originalUrl || '').split('?')[0];
-  const requestPath = rawPath.toLowerCase();
+  // Use the full request URL (not router-relative req.path) and normalize
+  // case-insensitively so mounted routes like /api/users/me are protected and
+  // /API/... cannot skip this gate.
+  const requestPath = normalizeRequestPath(req);
   // Check if an API call
   if (requestPath.startsWith('/api') || requestPath.includes('/mfa')) {
     passport.authenticate('jwt', { session: false }, async (err, user, info) => {

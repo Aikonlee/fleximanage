@@ -72,10 +72,13 @@ function request (app, path, headers = {}) {
   });
 }
 
-function buildApp () {
+function buildApp (meHandler) {
   const app = express();
-  // Same order as expressserver.js: public mounts, then the global JWT gate.
-  // Case sensitive routing stays at the Express default (off).
+  // Same order as expressserver.js: mounted /api/users router and public mounts
+  // before the global JWT gate. Case sensitive routing stays at the Express default (off).
+  const usersRouter = express.Router();
+  usersRouter.get('/me', auth.verifyUserJWT, meHandler);
+  app.use('/api/users', usersRouter);
   app.get('/hello', (req, res) => res.status(200).send('Hello World'));
   app.get('/api/version', (req, res) => res.status(200).json({ version: 'test' }));
   app.use('/api/public', (req, res) => res.status(200).json({ public: true }));
@@ -90,7 +93,24 @@ function buildApp () {
 }
 
 describe('auth gate path case', () => {
-  const app = buildApp();
+  const meHandler = jest.fn((req, res) => {
+    res.status(200).json({ user: req.user || null });
+  });
+  const app = buildApp(meHandler);
+
+  beforeEach(() => {
+    meHandler.mockClear();
+  });
+
+  test('rejects anonymous request to mounted /api/users/me without reaching handler', async () => {
+    const res = await request(app, '/api/users/me');
+    expect(res.status).toBe(401);
+    expect(meHandler).not.toHaveBeenCalled();
+
+    const withQuery = await request(app, '/api/users/me?include=orgs');
+    expect(withQuery.status).toBe(401);
+    expect(meHandler).not.toHaveBeenCalled();
+  });
 
   test('rejects an uppercase protected path without Authorization', async () => {
     const upper = await request(app, '/API/configuration/restServers', {
@@ -103,6 +123,14 @@ describe('auth gate path case', () => {
     const lower = await request(app, '/api/configuration/restServers');
     expect(lower.status).toBe(401);
     expect(lower.body).not.toContain('secret');
+
+    const upperMounted = await request(app, '/API/users/me');
+    expect(upperMounted.status).toBe(401);
+    expect(meHandler).not.toHaveBeenCalled();
+
+    const allUpperMounted = await request(app, '/API/USERS/ME');
+    expect(allUpperMounted.status).toBe(401);
+    expect(meHandler).not.toHaveBeenCalled();
   });
 
   test('still serves public paths mounted before the gate', async () => {
@@ -120,6 +148,30 @@ describe('auth gate path case', () => {
     // Case-insensitive routing still reaches the public mount, which is before the gate.
     const pubUpper = await request(app, '/API/public/tiles/0/0/0');
     expect(pubUpper.status).toBe(200);
+  });
+
+  test('normalizes fallback URLs and malformed percent-encoding safely', async () => {
+    const cases = [
+      { baseUrl: '/api/users', path: '/me' },
+      { url: '/API/users/me?foo=1' },
+      { originalUrl: '/api/users/me%ZZ' },
+      { originalUrl: '/%61pi/users/me' },
+      { originalUrl: '//api/users/me' }
+    ];
+
+    for (const partialReq of cases) {
+      const req = {
+        method: 'GET',
+        headers: {},
+        header: () => undefined,
+        ...partialReq
+      };
+      const res = { setHeader () {}, getHeaders: () => ({}) };
+      const next = jest.fn();
+      auth.verifyUserJWT(req, res, next);
+      await new Promise(setImmediate);
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
+    }
   });
 
   test('does not reflect Origin when the JWT gate rejects', async () => {

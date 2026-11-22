@@ -27,6 +27,7 @@ const auth = require('../authenticate');
 const { getLoginProcessToken } = require('../tokens');
 const issueSessionTokens = require('../sessionTokens');
 const authSessions = require('../authSessions');
+const { setAuthCookies, clearAuthCookies } = require('../utils/authCookies');
 const cors = require('./cors');
 const mongoConns = require('../mongoConns.js')();
 const randomKey = require('../utils/random-key');
@@ -665,6 +666,7 @@ router.route('/logout')
   .get(cors.corsWithOptions, auth.verifyUserJWT, async (req, res, next) => {
     try {
       await authSessions.revokeCurrent(req.user._id, req.user.authSessionId);
+      clearAuthCookies(res);
       res.status(200).json({ status: 'logged out' });
     } catch (err) {
       next(err);
@@ -805,6 +807,7 @@ const sendJwtToken = async (req, res, mfaVerified) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Refresh-JWT', token);
   res.setHeader('refresh-token', refreshToken);
+  setAuthCookies(req, res, token, refreshToken);
   res.json({ name: req.user.name, status: 'logged in' });
 };
 

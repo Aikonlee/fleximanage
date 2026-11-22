@@ -17,6 +17,7 @@
 
 const Service = require('./Service');
 const Tunnels = require('../models/tunnels');
+const mongoose = require('mongoose');
 const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 const deviceStatus = require('../periodic/deviceStatus')();
 const statusesInDb = require('../periodic/statusesInDb')();
@@ -31,6 +32,32 @@ const { getMajorVersion, getMinorVersion } = require('../versioning');
 const { validateNotificationsSettings } = require('../models/validators');
 const mongoConns = require('../mongoConns.js')();
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
+
+function isPlainObject (value) {
+  if (!value || typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+// Response-boundary scrub. deviceToken stays readable on the schema for other flows.
+function removeSecretFields (value) {
+  if (Array.isArray(value)) return value.map(removeSecretFields);
+  if (!value || typeof value !== 'object') return value;
+  if (value instanceof Date) return value;
+  if (!isPlainObject(value)) {
+    if (typeof value.toJSON === 'function') {
+      const json = value.toJSON();
+      if (json !== value) return removeSecretFields(json);
+    }
+    return value;
+  }
+  const out = {};
+  Object.keys(value).forEach((key) => {
+    if (key === 'tunnelKeys' || key === 'deviceToken') return;
+    out[key] = removeSecretFields(value[key]);
+  });
+  return out;
+}
 
 class CustomError extends Error {
   constructor ({ message, status, data }) {
@@ -409,6 +436,55 @@ class TunnelsService {
         202
       );
     } catch (e) {
+      return Service.rejectResponse(
+        e.message || 'Internal Server Error',
+        e.status || 500
+      );
+    }
+  }
+
+  /**
+   * Soft-delete a tunnel. The document stays stored with isActive set to false.
+   *
+   * tunnelId String Tunnel ID
+   * org String Organization to be filtered by (optional)
+   * returns Tunnel
+   **/
+  static async tunnelsDELETE ({ tunnelId, org }, { user }, response) {
+    try {
+      let orgList = await getAccessTokenOrgList(user, org, true, null, '', true);
+      if (!Array.isArray(orgList)) orgList = [];
+      orgList = orgList.filter(Boolean).map(id => id.toString());
+      if (orgList.length === 0) {
+        return Service.rejectResponse('Tunnel not found or already inactive', 404);
+      }
+
+      logger.info('Deleting tunnel', { params: { tunnelId, orgIds: orgList } });
+      const resp = await Tunnels.findOneAndUpdate(
+        {
+          _id: new mongoose.Types.ObjectId(tunnelId),
+          org: { $in: orgList },
+          isActive: true
+        },
+        { isActive: false },
+        { new: true }
+      ).select('-tunnelKeys');
+
+      if (resp == null) {
+        logger.warn('Tunnel not found or already deleted', {
+          params: { tunnelId, orgIds: orgList }
+        });
+        return Service.rejectResponse('Tunnel not found or already inactive', 404);
+      }
+
+      logger.info('Tunnel deleted successfully', {
+        params: { tunnelId, num: resp.num }
+      });
+      return Service.successResponse(removeSecretFields(resp));
+    } catch (e) {
+      logger.error('Error deleting tunnel', {
+        params: { tunnelId, error: e.message }
+      });
       return Service.rejectResponse(
         e.message || 'Internal Server Error',
         e.status || 500

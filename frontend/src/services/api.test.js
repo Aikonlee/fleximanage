@@ -1,8 +1,8 @@
 import api, { inferBaseURL } from './api';
-import { setSessionToken, getSessionToken, clearSession } from '../auth/session';
+import { setSessionToken, setSessionTokens, getSessionToken, getRefreshToken, clearSession } from '../auth/session';
 const token = (org, perms = { devices: 15 }) => `eyJhbGciOiJIUzI1NiJ9.${btoa(JSON.stringify({ _id: 'user', account: 'account', org, exp: Math.floor(Date.now() / 1000) + 3600, perms }))}.signature`;
 const adapter = vi.fn();
-beforeEach(() => { localStorage.clear(); adapter.mockReset(); api.defaults.adapter = adapter; });
+beforeEach(() => { localStorage.clear(); clearSession(); adapter.mockReset(); api.defaults.adapter = adapter; });
 test('uses same-origin API fallback', () => { expect(inferBaseURL()).toBe(import.meta.env.REACT_APP_API_URL || '/api'); });
 test('viewer writes rejected before network, selection remains allowed', async () => {
   setSessionToken(token('A', { devices: 1, organizations: 1 }));
@@ -63,7 +63,7 @@ test('organization selection is accepted after a concurrent refresh within the o
 test('expired sessions refresh once before concurrent requests and persist both rotated headers', async () => {
   const expired = `header.${btoa(JSON.stringify({ _id: 'user', account: 'account', org: 'A', exp: 1, perms: { devices: 15 } }))}.signature`;
   const renewed = token('A');
-  setSessionToken(expired); localStorage.setItem('refreshToken', 'old-refresh');
+  setSessionTokens(expired, 'old-refresh');
   let finish;
   adapter.mockImplementation(config => config.url === '/users/me'
     ? new Promise(resolve => { finish = () => resolve({ config, status: 200, headers: { 'refresh-jwt': renewed, 'refresh-token': 'new-refresh' }, data: {} }); })
@@ -75,22 +75,23 @@ test('expired sessions refresh once before concurrent requests and persist both 
   expect(adapter).toHaveBeenCalledTimes(3);
   expect(adapter.mock.calls.slice(1).map(([config]) => config.headers.Authorization)).toEqual([`Bearer ${renewed}`, `Bearer ${renewed}`]);
   expect(getSessionToken()).toBe(renewed);
-  expect(localStorage.getItem('refreshToken')).toBe('new-refresh');
+  expect(getRefreshToken()).toBe('new-refresh');
+  expect(localStorage.getItem('refreshToken')).toBeNull();
 });
 
 test('refresh failure clears both credentials and blocks the waiting request', async () => {
   const expired = `header.${btoa(JSON.stringify({ _id: 'user', account: 'account', org: 'A', exp: 1 }))}.signature`;
-  setSessionToken(expired); localStorage.setItem('refreshToken', 'old-refresh');
+  setSessionTokens(expired, 'old-refresh');
   adapter.mockImplementation(config => Promise.reject({ config, response: { status: 401 } }));
   await expect(api.get('/devices')).rejects.toBeTruthy();
   expect(adapter).toHaveBeenCalledTimes(1);
   expect(getSessionToken()).toBeNull();
-  expect(localStorage.getItem('refreshToken')).toBeNull();
+  expect(getRefreshToken()).toBeNull();
 });
 
 test('late refresh after logout cannot resurrect credentials or dispatch a waiting request', async () => {
   const expired = `header.${btoa(JSON.stringify({ _id: 'user', account: 'account', org: 'A', exp: 1 }))}.signature`;
-  setSessionToken(expired); localStorage.setItem('refreshToken', 'old-refresh');
+  setSessionTokens(expired, 'old-refresh');
   let finish;
   adapter.mockImplementation(config => new Promise(resolve => { finish = () => resolve({ config, status: 200, headers: { 'refresh-jwt': token('A'), 'refresh-token': 'new-refresh' }, data: {} }); }));
   const request = api.get('/devices');
@@ -99,34 +100,40 @@ test('late refresh after logout cannot resurrect credentials or dispatch a waiti
   await expect(request).rejects.toMatchObject({ code: 'ERR_CANCELED' });
   expect(adapter).toHaveBeenCalledTimes(1);
   expect(getSessionToken()).toBeNull();
-  expect(localStorage.getItem('refreshToken')).toBeNull();
+  expect(getRefreshToken()).toBeNull();
 });
 
 test('a current-session 401 clears access and refresh credentials', async () => {
-  setSessionToken(token('A')); localStorage.setItem('refreshToken', 'old-refresh');
+  setSessionTokens(token('A'), 'old-refresh');
   adapter.mockImplementation(config => Promise.reject({ config, response: { status: 401 } }));
   await expect(api.get('/devices')).rejects.toMatchObject({ response: { status: 401 } });
   expect(getSessionToken()).toBeNull();
-  expect(localStorage.getItem('refreshToken')).toBeNull();
+  expect(getRefreshToken()).toBeNull();
 });
 
 test('an older rotation cannot overwrite a newer same-scope refresh token', async () => {
-  const original = token('A'); setSessionToken(original); localStorage.setItem('refreshToken', 'initial');
+  const original = token('A'); setSessionTokens(original, 'initial');
   let finish;
   adapter.mockImplementation(config => new Promise(resolve => { finish = () => resolve({ config, status: 200, headers: { 'refresh-jwt': token('A'), 'refresh-token': 'stale' }, data: {} }); }));
   const request = api.get('/devices');
   await vi.waitFor(() => expect(adapter).toHaveBeenCalledTimes(1));
-  setSessionToken(original + 'rotated'); localStorage.setItem('refreshToken', 'fresh');
+  setSessionTokens(original + 'rotated', 'fresh');
   finish();
   await expect(request).rejects.toMatchObject({ code: 'ERR_CANCELED' });
-  expect(localStorage.getItem('refreshToken')).toBe('fresh');
+  expect(getRefreshToken()).toBe('fresh');
 });
 
 test('incomplete refresh response fails closed', async () => {
   const expired = `header.${btoa(JSON.stringify({ _id: 'user', account: 'account', org: 'A', exp: 1 }))}.signature`;
-  setSessionToken(expired); localStorage.setItem('refreshToken', 'old-refresh');
+  setSessionTokens(expired, 'old-refresh');
   adapter.mockImplementation(async config => ({ config, status: 200, headers: { 'refresh-jwt': token('A') }, data: {} }));
   await expect(api.get('/devices')).rejects.toThrow('Incomplete refresh response');
   expect(getSessionToken()).toBeNull();
+  expect(getRefreshToken()).toBeNull();
+});
+
+test('refresh token is never written to localStorage', () => {
+  setSessionTokens(token('A'), 'memory-refresh');
+  expect(getRefreshToken()).toBe('memory-refresh');
   expect(localStorage.getItem('refreshToken')).toBeNull();
 });

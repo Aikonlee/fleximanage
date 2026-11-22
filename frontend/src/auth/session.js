@@ -2,15 +2,17 @@ import { decodeJwtPayload } from './permissions';
 
 export const TOKEN_KEY = 'token';
 const listeners = new Set();
+let refreshTokenMemory = null;
 export const getSessionToken = () => localStorage.getItem(TOKEN_KEY);
-export const getRefreshToken = () => localStorage.getItem('refreshToken');
+export const getRefreshToken = () => refreshTokenMemory;
 export function setSessionTokens(token, refreshToken) {
-  localStorage.setItem('refreshToken', refreshToken);
+  refreshTokenMemory = refreshToken;
   setSessionToken(token);
 }
 export function setSessionToken(token) {
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else {
+    refreshTokenMemory = null;
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('loginToken');

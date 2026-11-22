@@ -11,14 +11,9 @@ let refreshFlight;
 export function refreshSession() {
   const token = getSessionToken();
   const refresh = getRefreshToken();
-  if (!token || !refresh) {
-    if (token) clearSession();
-    return Promise.reject(new Error('No refresh session available'));
-  }
+  if (!token) return Promise.reject(new Error('No refresh session available'));
   if (refreshFlight && refreshFlight.token === token) return refreshFlight.promise;
-  const promise = api.get('/users/me', {
-    sessionRefresh: true, headers: { Authorization: `Bearer ${token}`, 'Refresh-Token': refresh }
-  }).then(response => {
+  const promise = api.get('/users/me', { sessionRefresh: true, withCredentials: true, headers: { Authorization: `Bearer ${token}`, ...(refresh ? { 'Refresh-Token': refresh } : {}) } }).then(response => {
     if (getSessionToken() !== token || getRefreshToken() !== refresh) throw new axios.CanceledError('Session changed during refresh');
     const next = response.headers['refresh-jwt'];
     const nextRefresh = response.headers['refresh-token'];

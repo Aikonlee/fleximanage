@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { AuthProvider, useAuth } from './AuthContext';
-import { setSessionToken, clearSession, validPayload } from './session';
+import { setSessionToken, setSessionTokens, clearSession, validPayload, getRefreshToken } from './session';
 import { hasPermission } from './permissions';
 import PermissionButton from '../components/common/PermissionButton';
 import api from '../services/api';
@@ -12,7 +12,7 @@ function SessionProbe() {
   return <><span data-testid="session">{`${isAuthenticated}:${orgName}:${isAdmin}`}</span>
     <PermissionButton permKey="devices" method="delete" onClick={() => {}}>Delete device</PermissionButton></>;
 }
-beforeEach(() => { localStorage.clear(); });
+beforeEach(() => { localStorage.clear(); clearSession(); });
 afterEach(() => { vi.useRealTimers(); });
 test('organization refresh updates headers and operation permissions without reload', () => {
   setSessionToken(token({ org: 'A', orgName: 'Alpha', admin: true, perms: { devices: 15 } }));
@@ -24,30 +24,30 @@ test('organization refresh updates headers and operation permissions without rel
   expect(screen.getByText('Delete device').disabled).toBe(true);
 });
 test('logout clears all authentication materials and other tabs synchronize', () => {
-  setSessionToken(token({ orgName: 'Alpha' }));
-  localStorage.setItem('refreshToken', 'refresh');
+  setSessionTokens(token({ orgName: 'Alpha' }), 'refresh');
   localStorage.setItem('loginToken', 'process');
   render(<AuthProvider><SessionProbe /></AuthProvider>);
   act(() => { localStorage.removeItem('token'); fireEvent(window, new StorageEvent('storage', { key: 'token' })); });
   expect(screen.getByTestId('session').textContent).toBe('false::false');
   act(clearSession);
-  expect(localStorage.getItem('refreshToken')).toBeNull();
+  expect(getRefreshToken()).toBeNull();
   expect(localStorage.getItem('loginToken')).toBeNull();
 });
-test('expired/malformed tokens never authenticate and active sessions expire automatically', () => {
+test('expired/malformed tokens never authenticate and active sessions expire automatically', async () => {
   expect(validPayload('broken')).toBeNull();
   expect(validPayload(token({ type: 'login' }))).toBeNull();
   expect(validPayload(token({ exp: 1 }))).toBeNull();
   vi.useFakeTimers();
   setSessionToken(token({ exp: Math.floor(Date.now() / 1000) + 2 }));
+  api.defaults.adapter = vi.fn(config => Promise.reject({ config, response: { status: 401 } }));
   render(<AuthProvider><SessionProbe /></AuthProvider>);
-  act(() => vi.advanceTimersByTime(2100));
+  await act(async () => { await vi.advanceTimersByTimeAsync(2100); });
   expect(screen.getByTestId('session').textContent).toBe('false::false');
 });
 test('access expiry proactively rotates a refreshable session without logging out', async () => {
   const soon = token({ _id: 'user', account: 'account', org: 'A', exp: Math.floor(Date.now() / 1000) + 2 });
   const renewed = token({ _id: 'user', account: 'account', org: 'A', exp: Math.floor(Date.now() / 1000) + 3600 });
-  setSessionToken(soon); localStorage.setItem('refreshToken', 'initial-refresh');
+  setSessionToken(soon);
   const adapter = vi.fn(async config => ({ config, status: 200, headers: { 'refresh-jwt': renewed, 'refresh-token': 'next-refresh' }, data: {} }));
   api.defaults.adapter = adapter;
   vi.useFakeTimers();
@@ -56,7 +56,7 @@ test('access expiry proactively rotates a refreshable session without logging ou
   expect(adapter).toHaveBeenCalledTimes(1);
   expect(adapter.mock.calls[0][0].url).toBe('/users/me');
   expect(localStorage.getItem('token')).toBe(renewed);
-  expect(localStorage.getItem('refreshToken')).toBe('next-refresh');
+  expect(getRefreshToken()).toBe('next-refresh');
   expect(screen.getByTestId('session').textContent).toMatch(/^true:/);
 });
 test('permission bits match backend including PATCH, deny unknown or missing domains', () => {

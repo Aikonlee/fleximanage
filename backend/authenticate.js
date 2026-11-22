@@ -23,6 +23,7 @@ var User = require('./models/users');
 const Accounts = require('./models/accounts');
 const Accesstoken = require('./models/accesstokens');
 const { verifyToken, getToken, getRefreshToken } = require('./tokens');
+const { setAuthCookies } = require('./utils/authCookies');
 const { permissionMasks, getUserPermissions } = require('./models/membership');
 const { orgUpdateFromNull, getUserOrgByID } = require('./utils/membershipUtils');
 var configs = require('./configs')();
@@ -269,10 +270,11 @@ exports.verifyUserJWT = function (req, res, next) {
         // and attach a new token to the response.
         // TBD: Maintain refresh tokens in database and add
         // check also if the refresh token hasn't been revoked.
-        if (info && info.name === 'TokenExpiredError' &&
-                    req.headers['refresh-token']) {
+        // Header stays authoritative during rollout. The cookie is the fallback.
+        const presentedRefresh = req.headers['refresh-token'] || req.cookies?.refreshToken;
+        if (info && info.name === 'TokenExpiredError' && presentedRefresh) {
           try {
-            const refreshToken = req.headers['refresh-token'];
+            const refreshToken = presentedRefresh;
             const decodedToken = await verifyToken(refreshToken);
             const expiredAccessToken = opts.jwtFromRequest(req);
             const expiredPayload = expiredAccessToken && jwt.decode(expiredAccessToken);
@@ -328,6 +330,7 @@ exports.verifyUserJWT = function (req, res, next) {
               mfaVerified: decodedToken.mfaVerified
             });
             res.setHeader('Refresh-Token', nextRefresh);
+            setAuthCookies(req, res, token, nextRefresh);
             user = userDetails;
           } catch (err) {
             if (req.header('Origin') !== undefined) {

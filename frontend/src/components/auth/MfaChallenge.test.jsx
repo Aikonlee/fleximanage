@@ -2,10 +2,11 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MfaChallenge from './MfaChallenge';
 import api from '../../services/api';
+import { clearSession, getRefreshToken } from '../../auth/session';
 
 vi.mock('../../services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 const token = claims => `header.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 180, ...claims }))}.signature`;
-beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); });
+beforeEach(() => { localStorage.clear(); clearSession(); vi.clearAllMocks(); });
 function methods({ enabled = true, recovery = 1 } = {}) {
   api.get.mockImplementation(async url => ({ data: url.endsWith('/methods')
     ? { methods: { authenticatorApp: enabled ? 1 : 0, recoveryCodes: recovery } }
@@ -21,7 +22,7 @@ test('interim login token never becomes a session; valid authenticator response 
   fireEvent.click(screen.getByRole('button', { name: 'Verify', exact: true }));
   await waitFor(() => expect(authenticated).toHaveBeenCalledTimes(1));
   expect(localStorage.getItem('token')).toBe(session);
-  expect(localStorage.getItem('refreshToken')).toBe('mfa-refresh');
+  expect(getRefreshToken()).toBe('mfa-refresh');
 });
 test('invalid OTP remains on verification screen and recovery uses its own endpoint', async () => {
   methods(); api.post.mockRejectedValueOnce({ response: { data: { error: 'Invalid Code' } } });

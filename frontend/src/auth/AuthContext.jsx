@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
-import { getSessionToken, getRefreshToken, subscribeSession, validPayload, clearSession, scopeOf } from './session';
+import { getSessionToken, subscribeSession, validPayload, clearSession, scopeOf } from './session';
 import { hasPermission, decodeJwtPayload } from './permissions';
 import { refreshSession } from '../services/api';
 
@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
     const expire = () => {
       const left = claims.exp * 1000 - Date.now();
       if (left <= 0) {
-        if (getRefreshToken()) refreshSession().catch(() => { /* Refresh fails closed. */ });
+        if (getSessionToken()) refreshSession().catch(() => { /* Refresh fails closed. */ });
         else clearSession();
       }
       else timer = setTimeout(expire, Math.min(left, 2147483647));

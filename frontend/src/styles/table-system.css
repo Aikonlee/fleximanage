@@ -2,6 +2,9 @@
    Canonical Table System — flexiManage
    ==========================================================================
    Single source of truth for feature-page table visuals across the app.
+   Provides shared containers, sticky headers, horizontal row borders,
+   vertical column separators (suppressed on :last-child), zebra striping,
+   hover/selected highlights, and empty-state styling.
 
    Covered legacy class families (add any new table/container selectors here):
    - Tables:
@@ -135,11 +138,22 @@ table.notif-rules-table,
   padding: var(--table-header-padding);
   border: none;
   border-bottom: 2px solid var(--table-header-border);
+  border-right: 1px solid var(--table-border-color);
   white-space: nowrap;
   position: sticky;
   top: var(--table-sticky-top);
   z-index: var(--table-sticky-z);
   box-shadow: none;
+}
+
+.table thead th:last-child,
+.unified-table thead th:last-child,
+.custom-table-template thead th:last-child,
+.datatable-table thead th:last-child,
+.profile-table thead th:last-child,
+.notif-rules-table thead th:last-child,
+.admin-orgs-devices table thead th:last-child {
+  border-right: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -159,6 +173,7 @@ table.notif-rules-table,
   font-size: var(--table-font-size);
   border: none;
   border-top: 1px solid var(--table-border-color);
+  border-right: 1px solid var(--table-border-color);
   text-align: left;
 }
 
@@ -170,6 +185,16 @@ table.notif-rules-table,
 .notif-rules-table tbody tr:first-child td,
 .admin-orgs-devices table tbody tr:first-child td {
   border-top: none;
+}
+
+.table tbody td:last-child,
+.unified-table tbody td:last-child,
+.custom-table-template tbody td:last-child,
+.datatable-table tbody td:last-child,
+.profile-table tbody td:last-child,
+.notif-rules-table tbody td:last-child,
+.admin-orgs-devices table tbody td:last-child {
+  border-right: none;
 }
 
 /* Compact table modifier (.table-sm) */

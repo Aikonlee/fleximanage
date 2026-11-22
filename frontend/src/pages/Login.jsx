@@ -4,6 +4,7 @@ import MfaChallenge from '../components/auth/MfaChallenge';
 import { clearSession, setSessionTokens } from '../auth/session';
 import React, { useState, useEffect } from 'react';
 import { BRAND_NAME } from '../constants/branding';
+import { COPYRIGHT_TEXT } from '../components/Footer';
 import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FaUser, FaLock } from 'react-icons/fa';
@@ -171,7 +172,7 @@ const Login = ({ onLogin }) => {
           </Card>
           <div className="text-center mt-3">
             <small className="text-muted">
-              © OpenSource-OpenNetworking.org 2025.10, All Rights Reserved
+              {COPYRIGHT_TEXT}
             </small>
           </div>
         </Col>

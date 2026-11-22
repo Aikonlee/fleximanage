@@ -24,7 +24,7 @@ const pick = require('lodash/pick');
 const kue = require('kue');
 const { createLogger, format, transports } = require('winston');
 const { combine, timestamp, json, colorize, printf } = format;
-const { redact } = require('../utils/redact');
+const { redact, redactLoggedUrl } = require('../utils/redact');
 const maxLevelLength = 'verbose'.length; // Used for log header alignment
 
 // Env specific information
@@ -41,7 +41,7 @@ const createRequestEntry = (req) => {
       user: req.userId || '',
       ip: req.ip,
       method: req.method,
-      url: redact(req.url)
+      url: redactLoggedUrl(req.url)
     }
     : {};
 };

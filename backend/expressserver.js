@@ -29,7 +29,7 @@ const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
 const OpenApiValidator = require('express-openapi-validator');
 const openapiRouter = require('./utils/openapiRouter');
-const { redact } = require('./utils/redact');
+const { redact, redactLoggedUrl } = require('./utils/redact');
 const WebSocket = require('ws');
 const connections = require('./websocket/Connections')();
 const broker = require('./broker/broker');
@@ -90,6 +90,9 @@ class ExpressServer {
     this.port = port;
     this.securePort = securePort;
     this.app = express();
+    // Routing and the JWT gate must agree. Express is case-insensitive by
+    // default, so /API/public would still hit the pre-guard public mounts.
+    this.app.set('case sensitive routing', true);
     this.openApiPath = openApiYaml;
     this.schema = YAML.parse(fs.readFileSync(openApiYaml, 'utf8'));
     const restServerUrl = configs.get('restServerUrl', 'list');
@@ -436,7 +439,7 @@ class ExpressServer {
             status: err.status,
             message: err.message || err.error || '',
             method: req.method,
-            url: redact(req.originalUrl || req.url),
+            url: redactLoggedUrl(req.originalUrl || req.url),
             user: req.userId || (req.user && req.user.email) || '',
             query: redact(req.query || {}),
             body: redact(req.body || {})

@@ -264,8 +264,16 @@ exports.verifyUserJWT = function (req, res, next) {
   if (req.method === 'OPTIONS') {
     logger.debug('verifyUserJWT: OPTIONS request');
     return next();
-    // Check if an API call
-  } else if (req.originalUrl.startsWith('/api') || req.originalUrl.includes('/mfa')) {
+  }
+  // Express matches routes case-insensitively unless `case sensitive routing` is
+  // enabled. Normalize before the prefix check so /API/... cannot skip this gate.
+  // req.path is already decoded and excludes the query string.
+  const rawPath = (typeof req.path === 'string' && req.path.length > 0)
+    ? req.path
+    : String(req.originalUrl || '').split('?')[0];
+  const requestPath = rawPath.toLowerCase();
+  // Check if an API call
+  if (requestPath.startsWith('/api') || requestPath.includes('/mfa')) {
     passport.authenticate('jwt', { session: false }, async (err, user, info) => {
       if (err || !user) {
         // If the JWT token has expired, but the request
@@ -337,9 +345,6 @@ exports.verifyUserJWT = function (req, res, next) {
             setAuthCookies(req, res, token, nextRefresh);
             user = userDetails;
           } catch (err) {
-            if (req.header('Origin') !== undefined) {
-              res.setHeader('Access-Control-Allow-Origin', req.header('Origin'));
-            }
             if (err.name === 'TokenExpiredError') {
               logger.info('User refresh token expired', { params: { err: err.message }, req: req });
               return next(createError(401, 'session expired'));
@@ -352,9 +357,6 @@ exports.verifyUserJWT = function (req, res, next) {
               : next(createError(401));
           }
         } else {
-          if (req.header('Origin') !== undefined) {
-            res.setHeader('Access-Control-Allow-Origin', req.header('Origin'));
-          }
           const [errMsg, status, responseMsg] = err
             ? [err.message, 500, 'Internal server error']
             : [info.message, 401, info.message];

@@ -7,6 +7,11 @@ const sessionSchema = new mongoose.Schema({
   account: { type: mongoose.Schema.Types.ObjectId, ref: 'accounts', required: true },
   authVersion: { type: Number, required: true },
   refreshHash: { type: String, required: true, select: false },
+  // One-shot grace for a just-rotated refresh. select:false keeps the hash off
+  // default query projections; the rotation path reads it only in the filter.
+  graceHash: { type: String, select: false },
+  graceUntil: { type: Date },
+  graceRotationCount: { type: Number, default: 0 },
   expiresAt: { type: Date, required: true },
   revokedAt: { type: Date, default: null }
 });

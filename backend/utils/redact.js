@@ -17,6 +17,8 @@
 // Substrings of the normalized key. Longer names stay listed when a shorter
 // fragment already covers them, so the set is explicit. refreshjwt keeps the
 // previous exact key refresh-jwt, which none of the other fragments imply.
+// Do not add one-letter names here: normalized substring matching would
+// redact ordinary keys such as status, list, and result.
 const SENSITIVE_FRAGMENTS = [
   'token',
   'secret',
@@ -48,6 +50,12 @@ const SENSITIVE_FRAGMENTS = [
   'puk'
 ];
 
+// Whole query-parameter names whose values are opaque (email verify and reset
+// links use `t`). Compared to the entire key, never as a substring.
+const OPAQUE_QUERY_KEYS = new Set(['t']);
+
+const isOpaqueQueryKey = (key) => OPAQUE_QUERY_KEYS.has(String(key).toLowerCase());
+
 // Compatibility export. Same names as the normalized substring check, including
 // separators between letters (refresh-token, x-api-key, Refresh-Token).
 const SENSITIVE_KEY = new RegExp(
@@ -63,6 +71,7 @@ const MAX_DEPTH = 10;
 const normalizeKey = (key) => String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const isSensitiveKey = (key) => {
+  if (isOpaqueQueryKey(key)) return true;
   const normalized = normalizeKey(key);
   return SENSITIVE_FRAGMENTS.some(fragment => normalized.includes(fragment));
 };
@@ -115,6 +124,20 @@ const redactUrlLike = (value) => {
   return `${head}?${scrubbed}${hash}`;
 };
 
+// Request logs keep the path and drop the query string. Email links put the
+// verify/reset secret in `t`, and other query values are not needed in the
+// URL field. redact() still runs so a sensitive fragment left on the path
+// is masked. The hash, when it appears after the query, is preserved.
+const redactLoggedUrl = (url) => {
+  if (typeof url !== 'string') return redact(url);
+  const queryAt = url.indexOf('?');
+  if (queryAt === -1) return redact(url);
+  const hashAt = url.indexOf('#');
+  if (hashAt !== -1 && hashAt < queryAt) return redact(url);
+  const hash = hashAt === -1 ? '' : url.slice(hashAt);
+  return redact(url.slice(0, queryAt) + hash);
+};
+
 const redact = (value, depth = 0, seen = new WeakSet()) => {
   if (typeof value === 'string') return redactUrlLike(value);
   if (value === null || typeof value !== 'object') return value;
@@ -141,4 +164,4 @@ const redact = (value, depth = 0, seen = new WeakSet()) => {
   return out;
 };
 
-module.exports = { redact, SENSITIVE_KEY };
+module.exports = { redact, redactLoggedUrl, SENSITIVE_KEY, SENSITIVE_FRAGMENTS, OPAQUE_QUERY_KEYS };

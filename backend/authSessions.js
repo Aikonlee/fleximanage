@@ -6,6 +6,11 @@ const configs = require('./configs')();
 const hashJti = jti => crypto.createHash('sha256').update(jti).digest('hex');
 const randomId = () => crypto.randomBytes(32).toString('hex');
 
+// One grace retry of a just-rotated token (client crash). A second presentation
+// of that same hash is not a new grace window.
+const GRACE_WINDOW_MS = 15000;
+const MAX_GRACE_ROTATIONS = 1;
+
 const createSession = async user => {
   const sid = randomId();
   const jti = randomId();
@@ -19,7 +24,10 @@ const createSession = async user => {
     authVersion,
     refreshHash: hashJti(jti),
     expiresAt,
-    revokedAt: null
+    revokedAt: null,
+    graceHash: null,
+    graceUntil: 0,
+    graceRotationCount: 0
   });
   return { sid, jti, authVersion, expiresAt };
 };
@@ -49,39 +57,55 @@ const rotateRefresh = async (payload, user) => {
   }
   const jti = randomId();
   const presented = hashJti(payload.jti);
-  const expiresAt = new Date(Date.now() +
-    configs.get('userRefreshTokenExpiration', 'number') * 1000);
+  const now = Date.now();
+  // expiresAt is the absolute session deadline from createSession. Rotation must
+  // not push it forward, so a stolen refresh cannot extend the session forever.
   const base = {
     sid: payload.sid,
     user: user._id,
     account: user.defaultAccount._id,
     authVersion: payload.authVersion,
     revokedAt: null,
-    expiresAt: { $gt: new Date() }
+    expiresAt: { $gt: new Date(now) }
   };
-  const rotation = {
-    $set: {
-      refreshHash: hashJti(jti),
-      expiresAt,
-      graceHash: presented,
-      graceUntil: Date.now() + 15000
-    }
-  };
+  const rotatedHash = hashJti(jti);
   let updated = await Sessions.findOneAndUpdate(
-    { ...base, refreshHash: presented }, rotation, { new: true });
+    { ...base, refreshHash: presented },
+    {
+      $set: {
+        refreshHash: rotatedHash,
+        graceHash: presented,
+        graceUntil: now + GRACE_WINDOW_MS
+      }
+    },
+    { new: true });
   if (!updated) {
+    // One-shot: consume the presented grace hash. Do not re-arm graceUntil.
     updated = await Sessions.findOneAndUpdate({
       ...base,
       graceHash: presented,
-      graceUntil: { $gt: Date.now() }
-    }, rotation, { new: true });
+      graceUntil: { $gt: now },
+      graceRotationCount: { $not: { $gte: MAX_GRACE_ROTATIONS } }
+    }, {
+      $set: {
+        refreshHash: rotatedHash,
+        graceHash: null,
+        graceUntil: 0
+      },
+      $inc: { graceRotationCount: 1 }
+    }, { new: true });
   }
   if (!updated) {
     await Sessions.updateOne({ sid: payload.sid, user: user._id, revokedAt: null },
       { $set: { revokedAt: new Date() } });
     throw new Error('Invalid refresh session');
   }
-  return { sid: payload.sid, jti, authVersion: payload.authVersion, expiresAt };
+  return {
+    sid: payload.sid,
+    jti,
+    authVersion: payload.authVersion,
+    expiresAt: updated.expiresAt
+  };
 };
 
 const revokeCurrent = async (userId, sid) => {

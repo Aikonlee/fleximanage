@@ -25,8 +25,12 @@ backend_validate:
   services:
     - name: redis:7-alpine
       alias: redis
+    - name: mongo:7
+      alias: mongo
   variables:
+    REDIS_URL: redis://redis:6379/15
     TEST_REDIS_URL: redis://redis:6379/15
+    MONGO_SESSION_TEST_URL: mongodb://127.0.0.1:27099/flexi_session_test
   cache:
     key:
       files: [backend/package-lock.json]
@@ -34,9 +38,31 @@ backend_validate:
   script:
     - cd backend
     - npm ci --ignore-scripts --cache .npm --prefer-offline
+    - test ! -e public_backup/direct-login.html
+    - test ! -e public_backup/fix-auth.html
     - npm run test:regression
     - npm run test:models
     - npm run test:historical
+    - |
+      rm -f /tmp/mongo-proxy.ready /tmp/auth-sessions-mongo-report.json
+      node tools/ci-mongo-loopback-proxy.cjs --ready-file /tmp/mongo-proxy.ready &
+      MONGO_PROXY_PID=$!
+      trap 'kill "$MONGO_PROXY_PID" 2>/dev/null || true' EXIT
+      for i in $(seq 1 35); do
+        if [ -f /tmp/mongo-proxy.ready ]; then break; fi
+        if ! kill -0 "$MONGO_PROXY_PID" 2>/dev/null; then
+          echo "ERROR: Isolated MongoDB loopback proxy exited before becoming ready" >&2
+          exit 1
+        fi
+        sleep 1
+      done
+      if [ ! -f /tmp/mongo-proxy.ready ]; then
+        echo "ERROR: Timed out waiting for isolated MongoDB service on 127.0.0.1:27099" >&2
+        exit 1
+      fi
+      npm test -- --runInBand --forceExit --setupFiles ./tools/test-models-setup.cjs
+      npx jest tests/auth-sessions.mongo.test.js --runInBand --json --outputFile=/tmp/auth-sessions-mongo-report.json
+      node -e 'const r = require("/tmp/auth-sessions-mongo-report.json"); if (!r.success || r.numPassedTests < 1 || r.numPendingTests > 0) { console.error("Session MongoDB integration test did not execute cleanly:", { success: r.success, passed: r.numPassedTests, pending: r.numPendingTests, failed: r.numFailedTests }); process.exit(1); }'
     - npm audit --json > audit-all.json || true
     - npm audit --omit=dev --json > audit-production.json || true
     - node tools/check-audit.cjs audit-production.json

@@ -47,6 +47,14 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      mongo:
+        image: mongo:7
+        options: >-
+          -p 127.0.0.1:27099:27017
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep -q 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,12 +64,40 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --ignore-scripts
         working-directory: backend
+      - name: Assert legacy backup auth HTML files do not exist
+        working-directory: backend
+        run: test ! -e public_backup/direct-login.html && test ! -e public_backup/fix-auth.html
       - run: npm run test:regression
         working-directory: backend
       - run: npm run test:models
         working-directory: backend
       - run: npm run test:historical
         working-directory: backend
+      - name: Run full backend Jest test suite
+        working-directory: backend
+        env:
+          REDIS_URL: redis://127.0.0.1:6379/15
+          TEST_REDIS_URL: redis://127.0.0.1:6379/15
+          MONGO_SESSION_TEST_URL: mongodb://127.0.0.1:27099/flexi_session_test
+        run: npm test -- --runInBand --forceExit --setupFiles ./tools/test-models-setup.cjs
+      - name: Verify session replay/revocation MongoDB integration suite ran
+        working-directory: backend
+        env:
+          MONGO_SESSION_TEST_URL: mongodb://127.0.0.1:27099/flexi_session_test
+        run: |
+          npx jest tests/auth-sessions.mongo.test.js --runInBand --json --outputFile=/tmp/auth-sessions-mongo-report.json
+          node -e '
+            const r = require("/tmp/auth-sessions-mongo-report.json");
+            if (!r.success || r.numPassedTests < 1 || r.numPendingTests > 0) {
+              console.error("Session MongoDB integration test did not execute cleanly:", {
+                success: r.success,
+                passed: r.numPassedTests,
+                pending: r.numPendingTests,
+                failed: r.numFailedTests
+              });
+              process.exit(1);
+            }
+          '
       - name: Record dependency audit
         working-directory: backend
         run: |

@@ -30,12 +30,65 @@ const tunnels = require('../models/tunnels');
 const tunnelIds = require('../models/tunnelids');
 const tokens = require('../models/tokens');
 const AccessToken = require('../models/accesstokens');
-const { getUserOrganizations, getUserOrgByID, orgUpdateFromNull } = require('../utils/membershipUtils');
+const {
+  getUserOrganizations,
+  getUserOrgByID,
+  orgUpdateFromNull,
+  // Public entry to validateOrgAccess. Access keys are checked at token scope,
+  // so they do not inherit the creator's account or group role.
+  getAccessTokenOrgList
+} = require('../utils/membershipUtils');
+const authSessions = require('../authSessions');
 const mongoConns = require('../mongoConns.js')();
 const createError = require('http-errors');
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 const flexibilling = require('../flexibilling');
 const { deviceStats } = require('../models/analytics/deviceStats');
+
+// Metadata an organization member may edit. account, group, tunnelRange, and
+// vxlanPort stay off this list and require account or group modify rights.
+const ORG_METADATA_FIELDS = ['name', 'description', 'encryptionMethod'];
+
+// revokeAll owns the single authVersion increment per user.
+const distinctIds = (ids) => {
+  const seen = new Set();
+  const unique = [];
+  for (const id of ids) {
+    if (id == null) continue;
+    const key = String(id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(id);
+  }
+  return unique;
+};
+
+const revokeDistinctUsers = async (userIds) => {
+  for (const userId of distinctIds(userIds)) {
+    await authSessions.revokeAll(userId);
+  }
+};
+
+// Group membership grants access to every organization in that group.
+const revokeGroupMembers = async (accountId, previousGroup, nextGroup) => {
+  const groups = [previousGroup, nextGroup]
+    .filter(name => name !== undefined && name !== null);
+  if (groups.length === 0) return;
+  const rows = await membership.find({
+    account: accountId,
+    to: 'group',
+    group: { $in: groups }
+  });
+  await revokeDistinctUsers((rows || []).map(row => row.user));
+};
+
+const sameValue = (left, right) => {
+  if (left === right) return true;
+  if (left === null || left === undefined || right === null || right === undefined) {
+    return false;
+  }
+  return String(left) === String(right);
+};
 
 const organizationsRouter = express.Router();
 organizationsRouter.use(bodyParser.json());
@@ -120,6 +173,11 @@ organizationsRouter.route('/')
 organizationsRouter.route('/select')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .post(cors.corsWithOptions, verifyPermission('organizations', 'get'), async (req, res, next) => {
+    // An app access key authenticates as its creator. Selecting an org would
+    // rewrite that user's defaultOrg and widen the key beyond its scope.
+    if (req.user && req.user.accessToken) {
+      return next(createError(403, 'Organization selection is not permitted for access keys'));
+    }
     if (!req.user._id || !req.user.defaultAccount) {
       return next(createError(500, 'Error in selecting organization'));
     }
@@ -373,6 +431,7 @@ organizationsRouter.route('/:orgId')
       return next(createError(400, 'User has no default organization selected'));
     }
     let session = null;
+    let affectedUserIds = [];
     mongoConns.getMainDB().startSession()
       .then((_session) => {
         session = _session;
@@ -409,8 +468,17 @@ organizationsRouter.route('/:orgId')
           session: session
         });
       })
-    // Remove all memberships that belong to the organization, but keep group even if empty
+    // Remove all memberships that belong to the organization, but keep group even if empty.
+    // Capture members first so their sessions can be revoked once, after commit.
       .then(() => {
+        return membership.find(
+          { organization: req.params.orgId },
+          { user: 1 },
+          { session: session }
+        );
+      })
+      .then((memberRows) => {
+        affectedUserIds = distinctIds((memberRows || []).map(row => row.user));
         return membership.deleteMany({ organization: req.params.orgId }, { session: session });
       })
     // Remove organization inventory (devices, tokens, tunnelIds, tunnels)
@@ -458,8 +526,9 @@ organizationsRouter.route('/:orgId')
         return session.commitTransaction();
       })
       .then(async () => {
-        // Session committed, set to null
+        // Session committed, set to null. revokeAll bumps authVersion once per user.
         session = null;
+        await revokeDistinctUsers(affectedUserIds);
         return res.status(200).json({ ok: 1 });
       })
       .catch((err) => {
@@ -475,19 +544,90 @@ organizationsRouter.route('/:orgId')
     try {
       // Only allow to update current default org, this is required to make sure the API permissions
       // are set properly for updating this organization
-      if (req.user.defaultOrg._id.toString() === req.params.orgId) {
-        const resultOrg = await organizations.findOneAndUpdate(
-          { _id: req.params.orgId },
-          { $set: req.body },
-          { upsert: false, multi: false, new: true, runValidators: true }
-        );
-        // Update token
-        const token = await getToken(req, { orgName: req.body.name });
-        res.setHeader('Refresh-JWT', token);
-        return res.status(200).json(resultOrg);
-      } else {
+      if (req.user.defaultOrg._id.toString() !== req.params.orgId) {
         throw new Error('Please select an organization to update it');
       }
+      const visible = await getUserOrgByID(req.user, req.params.orgId);
+      if (!visible || visible.length === 0) {
+        throw new Error('Please select an organization to update it');
+      }
+      const current = await organizations.findOne({ _id: req.params.orgId });
+      if (!current) throw new Error('Cannot update organization');
+
+      const body = (req.body && typeof req.body === 'object') ? req.body : {};
+      const update = {};
+      for (const field of ORG_METADATA_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = body[field];
+      }
+
+      const changed = (field) => {
+        return Object.prototype.hasOwnProperty.call(body, field) &&
+          !sameValue(current[field], body[field]);
+      };
+      const wantsAccount = changed('account');
+      const wantsGroup = changed('group');
+      const wantsTunnel = changed('tunnelRange');
+      const wantsVxlan = changed('vxlanPort');
+
+      if (wantsAccount || wantsGroup || wantsTunnel || wantsVxlan) {
+        let accountModify = null;
+        const hasAccountModify = async () => {
+          if (accountModify !== null) return accountModify;
+          const accountId = req.user.defaultAccount && req.user.defaultAccount._id;
+          if (!accountId) {
+            accountModify = false;
+            return false;
+          }
+          // validateOrgAccess at account scope (modify). Empty list means denied.
+          const allowed = await getAccessTokenOrgList(
+            req.user, null, false, String(accountId), '', true
+          );
+          accountModify = Array.isArray(allowed) && allowed.length > 0;
+          return accountModify;
+        };
+        const hasGroupModify = async (groupName) => {
+          if (typeof groupName !== 'string' || groupName.length === 0) return false;
+          // validateOrgAccess at group scope (modify).
+          const allowed = await getAccessTokenOrgList(
+            req.user, null, false, null, groupName, true
+          );
+          return Array.isArray(allowed) && allowed.length > 0;
+        };
+        const accountOk = await hasAccountModify();
+        if (wantsAccount && accountOk) update.account = body.account;
+        if (wantsTunnel || wantsVxlan) {
+          const groupOk = accountOk || await hasGroupModify(current.group);
+          if (groupOk) {
+            if (wantsTunnel) update.tunnelRange = body.tunnelRange;
+            if (wantsVxlan) update.vxlanPort = body.vxlanPort;
+          }
+        }
+        if (wantsGroup) {
+          const sourceOk = accountOk || await hasGroupModify(current.group);
+          const targetOk = accountOk || await hasGroupModify(body.group);
+          if (sourceOk && targetOk) update.group = body.group;
+        }
+      }
+
+      let resultOrg = current;
+      if (Object.keys(update).length > 0) {
+        resultOrg = await organizations.findOneAndUpdate(
+          { _id: req.params.orgId },
+          { $set: update },
+          { upsert: false, multi: false, new: true, runValidators: true }
+        );
+      }
+      if (!resultOrg) throw new Error('Cannot update organization');
+
+      // Group-derived access changes without a membership write. Revoke after the
+      // update so a failed write does not drop sessions. One revokeAll per user.
+      if (current.group !== resultOrg.group) {
+        await revokeGroupMembers(current.account, current.group, resultOrg.group);
+      }
+
+      const token = await getToken(req, { orgName: resultOrg.name });
+      res.setHeader('Refresh-JWT', token);
+      return res.status(200).json(resultOrg);
     } catch (err) {
       logger.error('Error updating organization', { params: { reason: err.message } });
       return next(createError(400, err.message));

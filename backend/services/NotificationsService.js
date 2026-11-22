@@ -243,7 +243,7 @@ class NotificationsService {
    **/
   static async notificationsIdPUT ({ id, org, ...notificationsIDPutRequest }, { user }) {
     try {
-      const orgList = await getAccessTokenOrgList(user, org, false);
+      const orgList = await getAccessTokenOrgList(user, org, false, null, '', true);
       const query = { org: { $in: orgList }, _id: id };
       const { status, resolve } = notificationsIDPutRequest;
       const updateFields = {};

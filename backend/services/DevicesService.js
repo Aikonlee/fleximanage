@@ -3696,7 +3696,7 @@ class DevicesService {
     org, id, interfaceId, ...interfaceOperationReq
   }, { user }) {
     try {
-      const orgList = await getAccessTokenOrgList(user, org, false);
+      const orgList = await getAccessTokenOrgList(user, org, false, null, '', true);
 
       const deviceObject = await devices.findOne({
         _id: id,
@@ -3944,7 +3944,7 @@ class DevicesService {
       if (!deviceSendRequest.api || !deviceSendRequest.entity) {
         throw new Error('Request must include entity and api fields');
       }
-      const orgList = await getAccessTokenOrgList(user, org, false);
+      const orgList = await getAccessTokenOrgList(user, org, false, null, '', true);
       const deviceObject = await devices.findOne({
         _id: new mongoose.Types.ObjectId(id),
         org: { $in: orgList }

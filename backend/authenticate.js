@@ -23,7 +23,7 @@ var User = require('./models/users');
 const Accounts = require('./models/accounts');
 const Accesstoken = require('./models/accesstokens');
 const { verifyToken, getToken, getRefreshToken } = require('./tokens');
-const { permissionMasks } = require('./models/membership');
+const { permissionMasks, getUserPermissions } = require('./models/membership');
 const { orgUpdateFromNull, getUserOrgByID } = require('./utils/membershipUtils');
 var configs = require('./configs')();
 const createError = require('http-errors');
@@ -143,7 +143,18 @@ const setUserPerms = async (user, jwtPayload, token = null) => {
 
   user.accessToken = isAccessToken;
   user.jwtAccount = jwtPayload.account;
-  user.perms = jwtPayload.perms;
+
+  // Normal-user perms are trusted only while the token account and org still
+  // match the current selection. Compare as strings so ObjectId and null agree
+  // with the signed claim. After organizations/select changes defaultOrg,
+  // recompute. App access keys and tokens keep their permission source below.
+  const currentOrgId = user.defaultOrg && user.defaultOrg._id;
+  const orgMatchesToken = String(currentOrgId) === String(jwtPayload.org);
+  if (!isAccessToken && !(isValidAccount && orgMatchesToken)) {
+    user.perms = await getUserPermissions(user);
+  } else {
+    user.perms = jwtPayload.perms;
+  }
 
   // override user default account with account stored on jwtPayload
   if (isAccessToken) {

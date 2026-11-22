@@ -21,7 +21,6 @@ const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 const deviceStatus = require('../periodic/deviceStatus')();
 const statusesInDb = require('../periodic/statusesInDb')();
 const { getTunnelsPipeline } = require('../utils/tunnelUtils');
-const { getUserOrganizations } = require('../utils/membershipUtils');
 const notificationsConf = require('../models/notificationsConf');
 const configs = require('../configs')();
 const deviceQueues = require('../utils/deviceQueue')(
@@ -234,8 +233,8 @@ class TunnelsService {
         );
       }
 
-      const userOrgList = await getUserOrganizations(user);
-      if (!Object.values(userOrgList).find((o) => o.id === orgId)) {
+      const userOrgList = await getAccessTokenOrgList(user, orgId, true, null, '', true);
+      if (!Object.values(userOrgList).find((o) => o === orgId || (o && o.id === orgId))) {
         return Service.rejectResponse(
           'You do not have permission to access this organization',
           403

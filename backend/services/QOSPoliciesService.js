@@ -527,7 +527,7 @@ class QOSPoliciesService {
    **/
   static async qosTrafficMapPUT ({ org, ...qosTrafficMapRequest }, { user }) {
     try {
-      const orgList = await getAccessTokenOrgList(user, org, false);
+      const orgList = await getAccessTokenOrgList(user, org, false, null, '', true);
       // todo: validate qos traffic map request
       await QOSTrafficMap.findOneAndUpdate(
         { org: { $in: orgList } },

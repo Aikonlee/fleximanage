@@ -20,6 +20,7 @@ const bodyParser = require('body-parser');
 const tunnels = require('../models/tunnels');
 const cors = require('./cors');
 const { verifyPermission } = require('../authenticate');
+const { getAccessTokenOrgList } = require('../utils/membershipUtils');
 const mongoose = require('mongoose');
 const createError = require('http-errors');
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
@@ -29,64 +30,116 @@ const deviceStatus = require('../periodic/deviceStatus')();
 const tunnelsRouter = express.Router();
 tunnelsRouter.use(bodyParser.json());
 
+function isPlainObject (value) {
+  if (!value || typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+// Response-boundary scrub. deviceToken stays readable on the schema for other flows.
+function removeSecretFields (value) {
+  if (Array.isArray(value)) return value.map(removeSecretFields);
+  if (!value || typeof value !== 'object') return value;
+  if (value instanceof Date) return value;
+  if (!isPlainObject(value)) {
+    if (typeof value.toJSON === 'function') {
+      const json = value.toJSON();
+      if (json !== value) return removeSecretFields(json);
+    }
+    return value;
+  }
+  const out = {};
+  Object.keys(value).forEach((key) => {
+    if (key === 'tunnelKeys' || key === 'deviceToken') return;
+    out[key] = removeSecretFields(value[key]);
+  });
+  return out;
+}
+
+function stripTunnelSecrets (payload) {
+  return removeSecretFields(payload);
+}
+
+// App keys are confined to tokenOrganization/tokenGroup inside the helper.
+// Do not scope these routes with req.user.defaultOrg.
+async function resolveScopedOrgList (user, org) {
+  const orgList = await getAccessTokenOrgList(user, org, true);
+  if (!Array.isArray(orgList)) return [];
+  return orgList.filter(Boolean).map(id => id.toString());
+}
+
+async function loadOrgList (req, next) {
+  const org = req.query?.org;
+  try {
+    const orgList = await resolveScopedOrgList(req.user, org);
+    if (!orgList.length && !(req.user && req.user.accessToken)) {
+      next(createError(400, 'User has no default organization selected'));
+      return null;
+    }
+    return orgList;
+  } catch (err) {
+    next(createError(400, err.message || 'Organization access denied'));
+    return null;
+  }
+}
+
 // retrieves the list of tunnels
 tunnelsRouter
   .route('/')
 // When options message received, reply origin based on whitelist
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .get(cors.corsWithOptions, verifyPermission('tunnels', 'get'), (req, res, next) => {
-    if (!req.user.defaultOrg) {
-      return next(createError(400, 'User has no default organization selected'));
-    }
-    tunnels
-      .find({ org: req.user.defaultOrg._id, isActive: true })
-      .populate('deviceA')
-      .populate('deviceB')
-      .then((resp) => {
-        // Populate interface details
-        resp.forEach((d) => {
-          d.set('interfaceADetails',
-            d.deviceA.interfaces.filter((ifc) => {
-              return ifc._id.toString() === '' + d.interfaceA;
-            })[0],
-            { strict: false });
-          d.set('interfaceBDetails',
-            d.deviceB.interfaces.filter((ifc) => {
-              return ifc._id.toString() === '' + d.interfaceB;
-            })[0],
-            { strict: false });
+  .get(cors.corsWithOptions, verifyPermission('tunnels', 'get'), async (req, res, next) => {
+    const orgList = await loadOrgList(req, next);
+    if (orgList === null) return;
 
-          try {
-            const tunnelId = d.num;
-            // Add tunnel status
-            d.set(
-              'tunnelStatusA',
-              deviceStatus.getTunnelStatus(d.deviceA.machineId, tunnelId) ||
-                null,
-              { strict: false }
-            );
+    try {
+      const resp = await tunnels
+        .find({ org: { $in: orgList }, isActive: true })
+        .select('-tunnelKeys')
+        .populate({ path: 'deviceA', select: '-deviceToken' })
+        .populate({ path: 'deviceB', select: '-deviceToken' });
 
-            // Add tunnel status
-            d.set(
-              'tunnelStatusB',
-              deviceStatus.getTunnelStatus(d.deviceB.machineId, tunnelId) ||
-                null,
-              { strict: false }
-            );
-          } catch (error) {
-            // console.error(error);
-          }
-        });
+      // Populate interface details
+      resp.forEach((d) => {
+        d.set('interfaceADetails',
+          d.deviceA.interfaces.filter((ifc) => {
+            return ifc._id.toString() === '' + d.interfaceA;
+          })[0],
+          { strict: false });
+        d.set('interfaceBDetails',
+          d.deviceB.interfaces.filter((ifc) => {
+            return ifc._id.toString() === '' + d.interfaceB;
+          })[0],
+          { strict: false });
 
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json');
-        return res.json(resp);
-      }, (err) => {
-        next(err);
-      })
-      .catch((err) => {
-        next(err);
+        try {
+          const tunnelId = d.num;
+          // Add tunnel status
+          d.set(
+            'tunnelStatusA',
+            deviceStatus.getTunnelStatus(d.deviceA.machineId, tunnelId) ||
+              null,
+            { strict: false }
+          );
+
+          // Add tunnel status
+          d.set(
+            'tunnelStatusB',
+            deviceStatus.getTunnelStatus(d.deviceB.machineId, tunnelId) ||
+              null,
+            { strict: false }
+          );
+        } catch (error) {
+          // console.error(error);
+        }
       });
+
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      return res.json(stripTunnelSecrets(resp));
+    } catch (err) {
+      return next(err);
+    }
   });
 
 // deletes the tunnel
@@ -94,42 +147,45 @@ tunnelsRouter
   .route('/:tunnelId')
 // When options message received, reply origin based on whitelist
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .delete(cors.corsWithOptions, verifyPermission('tunnels', 'del'), (req, res, next) => {
-    if (!req.user.defaultOrg) {
-      return next(createError(400, 'User has no default organization selected'));
-    }
+  .delete(cors.corsWithOptions, verifyPermission('tunnels', 'del'), async (req, res, next) => {
+    const orgList = await loadOrgList(req, next);
+    if (orgList === null) return;
+
     const tunnelId = req.params.tunnelId;
-    const orgId = req.user.defaultOrg._id;
-    
-    logger.info('Deleting tunnel', { params: { tunnelId, orgId } });
-    
-    tunnels
-      .findOneAndUpdate(
-        // Query - match by ID and org
-        { _id: new mongoose.Types.ObjectId(tunnelId), org: orgId, isActive: true },
-        // Update
+    logger.info('Deleting tunnel', { params: { tunnelId, orgIds: orgList } });
+
+    try {
+      const resp = await tunnels.findOneAndUpdate(
+        {
+          _id: new mongoose.Types.ObjectId(tunnelId),
+          org: { $in: orgList },
+          isActive: true
+        },
         { isActive: false },
-        // Options
-        { upsert: false, new: true })
-      .then((resp) => {
-        if (resp != null) {
-          logger.info('Tunnel deleted successfully', { params: { tunnelId, num: resp.num } });
-          res.statusCode = 200;
-          res.setHeader('Content-Type', 'application/json');
-          return res.json(resp);
-        } else {
-          logger.warn('Tunnel not found or already deleted', { params: { tunnelId, orgId } });
-          return next(createError(404, 'Tunnel not found or already inactive'));
-        }
-      }, (err) => {
-        logger.error('Error deleting tunnel', { params: { tunnelId, error: err.message } });
-        next(err);
-      })
-      .catch((err) => {
-        logger.error('Error deleting tunnel', { params: { tunnelId, error: err.message } });
-        next(err);
+        { upsert: false, new: true }
+      ).select('-tunnelKeys');
+
+      if (resp != null) {
+        logger.info('Tunnel deleted successfully', {
+          params: { tunnelId, num: resp.num }
+        });
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        return res.json(stripTunnelSecrets(resp));
+      }
+      logger.warn('Tunnel not found or already deleted', {
+        params: { tunnelId, orgIds: orgList }
       });
+      return next(createError(404, 'Tunnel not found or already inactive'));
+    } catch (err) {
+      logger.error('Error deleting tunnel', {
+        params: { tunnelId, error: err.message }
+      });
+      return next(err);
+    }
   });
 
 // Default exports
 module.exports = tunnelsRouter;
+module.exports.resolveScopedOrgList = resolveScopedOrgList;
+module.exports.stripTunnelSecrets = stripTunnelSecrets;

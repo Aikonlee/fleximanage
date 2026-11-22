@@ -69,6 +69,50 @@ const sequenceExpireTime = configs.get('sequenceExpireTime') ?? 300; // seconds
 const connectDevicePrefix = configs.get('connectDevicePrefix') ?? 'fw-conn';
 const connectExpireTime = configs.get('connectExpireTime') ?? 300; // seconds
 
+/**
+ * Parse a device response and apply the machine-id binding check.
+ * Invalid JSON is reported without throwing. A response is ignored when the
+ * queue entry is bound to a different machine. A missing sender id is not a
+ * mismatch, so cross-server forwards that only carry the original payload
+ * still resolve.
+ * @param  {string} message raw device payload
+ * @param  {string|null} machineId sender machine id when known
+ * @param  {string|null} boundMachineId machine id stored with the queue entry
+ * @return {Object}
+ */
+function classifyDeviceResponse (message, machineId, boundMachineId) {
+  let parsed;
+  try {
+    parsed = JSON.parse(message);
+  } catch (error) {
+    return { status: 'invalid-json', error };
+  }
+  if (boundMachineId != null && machineId != null && boundMachineId !== machineId) {
+    return { status: 'ignored', parsed };
+  }
+  return { status: 'accepted', parsed };
+}
+
+/**
+ * Choose the machine id for the device-token lookup.
+ * The URL id is always the lookup key. Reject only when the token payload
+ * contains a machine_id claim that names a different device. A token with no
+ * claim is left to the database, which requires both machineId and deviceToken.
+ * @param  {string} urlMachineId machine id from the connection path
+ * @param  {string|null} machineIdFromToken decoded machine_id claim, if any
+ * @return {Object}
+ */
+function resolveUpgradeMachineId (urlMachineId, machineIdFromToken) {
+  if (machineIdFromToken && urlMachineId !== machineIdFromToken) {
+    return {
+      ok: false,
+      status: 401,
+      message: 'Unauthorized: Device ID mismatch'
+    };
+  }
+  return { ok: true, machineId: urlMachineId };
+}
+
 class Connections {
   constructor () {
     this.createConnection = this.createConnection.bind(this);
@@ -165,7 +209,9 @@ class Connections {
       logger.debug('Response received on the hosts channel', {
         params: { channel, hostId }
       });
-      this.processDeviceMessage(message);
+      // Forwarded payload has no socket identity. Null keeps the existing
+      // cross-server resolve path; the socket handler passes a real id.
+      this.processDeviceMessage(null, message);
     } else if (channel === devInfoChannelName) {
       // all devices will publish their state on this common channel
       const { hostId: remoteHostId, machineId, action, info } = JSON.parse(message);
@@ -262,14 +308,34 @@ class Connections {
    * Process the response message from device
    * It can be received directly from websocket
    * or from different server to which the device is connected
+   * @param  {string|null} machineId sender machine id, or null when forwarded
    * @param  {string} message the message to process
    * @return {void}
    */
-  processDeviceMessage (message) {
-    const parsed = JSON.parse(message);
+  processDeviceMessage (machineId, message) {
+    const classified = classifyDeviceResponse(message, machineId, null);
+    if (classified.status === 'invalid-json') {
+      logger.warn('Failed to parse device message', {
+        params: { machineId, error: classified.error.message }
+      });
+      return;
+    }
+    const parsed = classified.parsed;
     const { seq, msg } = parsed;
     if (!seq) return;
-    const { resolver, rejecter, validator, tohandle } = this.msgQueue[seq] ?? {};
+    const {
+      resolver,
+      rejecter,
+      validator,
+      tohandle,
+      machineId: boundMachineId
+    } = this.msgQueue[seq] ?? {};
+    if (classifyDeviceResponse(message, machineId, boundMachineId).status === 'ignored') {
+      logger.warn('Ignoring device response with mismatched machineId', {
+        params: { seq, machineId, boundMachineId }
+      });
+      return;
+    }
     if (typeof resolver === 'function') {
       const normalizedMsg = this.normalizeDeviceResponse(seq, msg);
       const response = (normalizedMsg && typeof normalizedMsg === 'object')
@@ -541,10 +607,10 @@ class Connections {
       return done(false, 400);
     }
 
-    // Extract machineId from URL path
+    // Extract machineId from URL path. The token payload is decoded only so a
+    // mismatched machine_id can be rejected. deviceToken stays a stored
+    // credential checked by the database lookup below; do not jwt.verify it.
     const urlMachineId = connectionURL.pathname.substring(1);
-    
-    // Try to extract machineId from JWT token payload as fallback
     let machineIdFromToken = null;
     try {
       const token = connectionURL.searchParams.get('token');
@@ -561,19 +627,18 @@ class Connections {
       });
     }
 
-    // Use token machineId if available, otherwise use URL machineId
-    const machineId = machineIdFromToken || urlMachineId;
-    
-    // Log deviceId mismatch for debugging
-    if (machineIdFromToken && urlMachineId !== machineIdFromToken) {
+    const identity = resolveUpgradeMachineId(urlMachineId, machineIdFromToken);
+    if (!identity.ok) {
       logger.warn('Device ID mismatch between URL and JWT token', {
         params: {
           urlDeviceId: urlMachineId,
-          tokenMachineId: machineIdFromToken,
-          usingMachineId: machineId
+          tokenMachineId: machineIdFromToken
         }
       });
+      return done(false, identity.status, identity.message);
     }
+
+    const machineId = identity.machineId;
 
     devices
       .find({
@@ -632,6 +697,7 @@ class Connections {
               // device is connected to websocket, now listen to messages on redis channel
               this.subscriber.subscribe(`${deviceChannelPrefix}:${machineId}`);
 
+              info.req.authenticatedMachineId = machineId;
               return done(true);
             } else {
               throw createError(403, 'Device found but not approved yet');
@@ -677,9 +743,28 @@ class Connections {
    * @return {void}
    */
   createConnection (socket, req) {
-    const connectionURL = new URL(`${req.headers.origin}${req.url}`);
-    const machineId = connectionURL.pathname.substring(1);
+    const connectionURL = new URL(req.url, 'http://device-connection');
+    const machineId = req.authenticatedMachineId;
     const deviceInfo = this.devices.getDeviceInfo(machineId);
+
+    if (!deviceInfo) {
+      logger.warn('Closing device socket - missing device info', {
+        params: { machineId }
+      });
+      try {
+        if (typeof socket.close === 'function') {
+          socket.close();
+        }
+        if (typeof socket.destroy === 'function') {
+          socket.destroy();
+        }
+      } catch (err) {
+        logger.warn('Failed to destroy socket missing device info', {
+          params: { machineId, error: err.message }
+        });
+      }
+      return;
+    }
 
     // Set the received socket and update device state
     deviceInfo.socket = socket;
@@ -725,7 +810,7 @@ class Connections {
 
     socket.on('message', (message) => {
       // response from the device received
-      this.processDeviceMessage(message);
+      this.processDeviceMessage(machineId, message);
     });
 
     socket.on('error', err => {
@@ -1559,7 +1644,8 @@ class Connections {
           resolver: resolve,
           rejecter: reject,
           tohandle: tohandle,
-          validator: responseValidator
+          validator: responseValidator,
+          machineId: device
         };
 
         const messageToDevice = JSON.stringify({ seq: key, hostId, msg, jobid });
@@ -1597,10 +1683,13 @@ class Connections {
 }
 
 var connections = null;
-module.exports = function () {
+function getConnections () {
   if (connections) return connections;
   else {
     connections = new Connections();
     return connections;
   }
-};
+}
+getConnections.classifyDeviceResponse = classifyDeviceResponse;
+getConnections.resolveUpgradeMachineId = resolveUpgradeMachineId;
+module.exports = getConnections;

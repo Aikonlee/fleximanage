@@ -171,7 +171,7 @@ const Login = ({ onLogin }) => {
             </Card.Body>
           </Card>
           <div className="text-center mt-3">
-            <small className="text-muted">
+            <small>
               <CopyrightLine />
             </small>
           </div>

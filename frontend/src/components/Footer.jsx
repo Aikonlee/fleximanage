@@ -7,7 +7,7 @@ export const COPYRIGHT_TEXT = `© OpenSource-OpenNetworking.org 2025.10, All Rig
 export const DOCS_URL = '/docs/index.html';
 
 export const CopyrightLine = ({ linkClassName = 'text-reset' } = {}) => (
-  <>
+  <span className="copyright-line">
     <span>{COPYRIGHT_TEXT}</span>
     {' · '}
     <a
@@ -18,7 +18,7 @@ export const CopyrightLine = ({ linkClassName = 'text-reset' } = {}) => (
     >
       documentation
     </a>
-  </>
+  </span>
 );
 
 const Footer = () => {

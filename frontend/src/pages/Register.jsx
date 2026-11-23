@@ -252,7 +252,7 @@ const Register = () => {
             </Card.Body>
           </Card>
           <div className="text-center mt-2">
-            <small className="text-muted">
+            <small>
               <CopyrightLine />
             </small>
           </div>

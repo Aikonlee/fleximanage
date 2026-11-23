@@ -55,6 +55,18 @@
   width: 100%;
 }
 
+.copyright-line,
+.copyright-line a,
+.copyright-line a:hover,
+.copyright-line a:focus,
+.copyright-line a:visited {
+  color: #ffffff !important;
+}
+
+.copyright-line .footer-link::after {
+  background-color: #ffffff;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .footer-content {

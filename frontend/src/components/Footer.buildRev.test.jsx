@@ -34,6 +34,7 @@ test('footer, login, and register show the same revision suffix', () => {
     expect(link).toHaveAttribute('href', '/docs/index.html');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link.parentElement).toHaveClass('copyright-line');
     expect(link.parentElement?.textContent).toBe(`${COPYRIGHT_TEXT} · documentation`);
   }
 });

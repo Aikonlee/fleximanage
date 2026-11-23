@@ -16,6 +16,7 @@ code {
 .app {
   display: flex;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 .main-content {

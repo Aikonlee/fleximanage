@@ -2,7 +2,8 @@
 .app {
   position: relative;
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
   background: var(--content-bg);
 }
 
@@ -30,6 +31,8 @@ html, body, #root, .app { height: 100%; margin: 0; }
   padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   transition: left 0.25s ease;
   display: flex;
   flex-direction: column;
@@ -45,9 +48,8 @@ html, body, #root, .app { height: 100%; margin: 0; }
   padding-bottom: 0;
 }
 
-/* Prevent body scroll, keep scroll in content area */
-/* Allow body scroll fallback in very small heights, primary scroll still in content */
-body { overflow-y: auto; }
+/* Prevent document scroll so sidebar and content area scroll independently */
+html, body { overflow: hidden; }
 
 /* Webkit scrollbar styling */
 .content-area::-webkit-scrollbar { width: 8px; }

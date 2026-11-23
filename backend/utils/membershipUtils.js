@@ -345,7 +345,7 @@ const getUserAccounts = async (user, offset = 0, limit = 0) => {
  * @param {*} req - req with updated user account info
  * @param {*} res - res with updated token if necessary
  */
-const orgUpdateFromNull = async ({ user }, res) => {
+const orgUpdateFromNull = async ({ user }, res, { issueToken = true } = {}) => {
   if (user.defaultOrg == null) {
     let org0 = null;
 
@@ -365,14 +365,16 @@ const orgUpdateFromNull = async ({ user }, res) => {
         await User.updateOne({ _id: user._id }, { defaultOrg: org0._id });
         user.defaultOrg = org0;
       }
-      // Refresh JWT with new values
-      const token = await getToken({ user }, {
-        account: user.defaultAccount._id,
-        accountName: user.defaultAccount.name,
-        org: org0 ? org0._id : null,
-        orgName: org0 ? org0.name : null
-      });
-      res.setHeader('Refresh-JWT', token);
+      if (issueToken) {
+        // Refresh JWT with new values
+        const token = await getToken({ user }, {
+          account: user.defaultAccount._id,
+          accountName: user.defaultAccount.name,
+          org: org0 ? org0._id : null,
+          orgName: org0 ? org0.name : null
+        });
+        res.setHeader('Refresh-JWT', token);
+      }
     } catch (err) {
       logger.error('Could not update organization',
         { params: { userId: user._id, message: err.message } });

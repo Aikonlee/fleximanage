@@ -130,9 +130,14 @@ async function assertWebhookTargetAllowed (url) {
     throw forbiddenWebhookError(webhookHost(url) || url);
   }
 
+  let parsedUrl;
   let host;
   try {
-    host = webhookHost(new URL(url).href);
+    parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      throw new Error('Unsupported protocol');
+    }
+    host = webhookHost(parsedUrl.href);
   } catch (err) {
     const error = new Error('Invalid webhook URL');
     error.code = 'WEBHOOK_TARGET_FORBIDDEN';
@@ -241,12 +246,16 @@ class WebHooks {
     const fetchOptions = {
       method: 'POST',
       headers,
-      body: data
+      body: data,
+      redirect: 'error'
     };
     if (pinnedAddress) fetchOptions.agent = agentPinnedTo(url, pinnedAddress);
 
     return fetch(url, fetchOptions)
       .then(response => {
+        if (response && response.status >= 300 && response.status < 400) {
+          throw new Error(`Webhook redirect responses are not allowed (HTTP ${response.status})`);
+        }
         return response.json()
           .then(json => {
             response.message = json;

@@ -145,6 +145,11 @@ const User = new Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'organizations'
   },
+  // Transient per-request marker guarding account-switch rollbacks
+  accountSwitchMarker: {
+    type: String,
+    select: false
+  },
   // MFA configuration
   mfa: {
     // Array of all secrets that user received.

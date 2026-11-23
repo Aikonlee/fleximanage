@@ -36,6 +36,9 @@ exports.getToken = async function ({ user }, override = {}, shouldExpire = true)
 
   // if not specifics in "override", use it from previous jwt if exists
   const mfaVerified = user.isLoggedInWithMfa ?? false;
+  const authTime = user.authTime !== undefined
+    ? user.authTime
+    : Math.floor(Date.now() / 1000);
 
   return jwt.sign(
     {
@@ -52,6 +55,7 @@ exports.getToken = async function ({ user }, override = {}, shouldExpire = true)
       mfaVerified,
       sid: user.authSessionId,
       authVersion: user.authVersion ?? 0,
+      authTime,
       ...override
     },
     configs.get('userTokenSecretKey'),
@@ -74,6 +78,9 @@ exports.getAccessKey = async ({ user }, override = {}, shouldExpire = true) => {
 
 exports.getRefreshToken = async ({ user }, override = {}) => {
   if (!override.sid || !override.jti) throw new Error('Active session required');
+  const authTime = user.authTime !== undefined
+    ? user.authTime
+    : Math.floor(Date.now() / 1000);
   return jwt.sign({
     type: 'refresh',
     _id: user._id,
@@ -81,6 +88,7 @@ exports.getRefreshToken = async ({ user }, override = {}) => {
     admin: user.admin || false,
     account: user.defaultAccount?._id,
     authVersion: user.authVersion ?? 0,
+    authTime,
     ...override
   }, configs.get('userTokenSecretKey'), {
     expiresIn: configs.get('userRefreshTokenExpiration', 'number')

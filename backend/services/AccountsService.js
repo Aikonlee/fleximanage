@@ -15,7 +15,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+const crypto = require('crypto');
 const Service = require('./Service');
+const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 
 const Accounts = require('../models/accounts');
 const Users = require('../models/users');
@@ -27,7 +29,7 @@ const issueSessionTokens = require('../sessionTokens');
 const { setAuthCookies } = require('../utils/authCookies');
 const {
   getUserAccounts,
-  orgUpdateFromNull
+  getUserOrganizations
 } = require('../utils/membershipUtils');
 
 // revokeAll owns the single authVersion increment per user.
@@ -41,6 +43,31 @@ const revokeAccountMembers = async (accountId) => {
     seen.add(key);
     await authSessions.revokeAll(row.user);
   }
+};
+
+const runConditionalMarkerUpdate = async (operation, filter, update, context) => {
+  let lastError;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await Users.findOneAndUpdate(
+        filter,
+        update,
+        { upsert: false, new: false }
+      );
+      return;
+    } catch (err) {
+      lastError = err;
+      if (attempt === 1) {
+        logger.warn(`Retrying accountSwitchMarker ${operation} after write failure`, {
+          params: { ...context, attempt, reason: err.message }
+        });
+      }
+    }
+  }
+  logger.error(`Failed accountSwitchMarker ${operation} after retry`, {
+    params: { ...context, reason: lastError.message }
+  });
+  throw lastError;
 };
 
 class AccountsService {
@@ -258,26 +285,144 @@ class AccountsService {
         );
       }
 
-      // Get organizations for the new account
-      const updUser = await Users.findOneAndUpdate(
-        // Query, use the email and account
-        { _id: user._id },
-        // Update account, set default org to null so the system
-        // will choose an organization on login if something failed
-        { defaultAccount: account, defaultOrg: null },
-        // Options
-        { upsert: false, new: true }
-      ).populate('defaultAccount');
+      const previousAccount = user.defaultAccount;
+      const previousAccountId = previousAccount._id;
+      const previousOrg = user.defaultOrg || null;
+      const previousOrgId = previousOrg ? (previousOrg._id || previousOrg) : null;
+      const previousSessionId = user.authSessionId;
 
-      // Set a default organization for the new account
-      user.defaultAccount = updUser.defaultAccount;
-      user.defaultOrg = null;
+      // Load destination account and resolve its default organization before mutating
+      // persisted user state so a failed session issuance never orphans the caller.
+      const targetAccount = await Accounts.findOne({ _id: account });
+      if (!targetAccount) {
+        return Service.rejectResponse('No permission to access this account', 403);
+      }
 
-      await orgUpdateFromNull(req, res);
-      // This API bypass account permissions check, return only needed info
-      // Still it's returned only if user has any permission to access this account
-      const result = AccountsService.selectAccountParams(updUser.defaultAccount, true);
-      return Service.successResponse(result, 201);
+      const candidateOrgs = await getUserOrganizations(user, 0, 0, targetAccount._id);
+      const nextOrg = candidateOrgs && typeof candidateOrgs === 'object'
+        ? (candidateOrgs[Object.keys(candidateOrgs)[0]] || null)
+        : null;
+
+      const targetUser = {
+        ...(typeof user.toObject === 'function' ? user.toObject() : user),
+        _id: user._id,
+        username: user.username,
+        admin: user.admin,
+        authVersion: user.authVersion,
+        authTime: user.authTime,
+        isLoggedInWithMfa: user.isLoggedInWithMfa,
+        defaultAccount: targetAccount,
+        defaultOrg: nextOrg
+      };
+
+      // Explicit session transition: issue the new destination-bound session BEFORE
+      // committing defaultAccount so issuance failures leave DB and source session intact.
+      const { token, refreshToken } = await issueSessionTokens(
+        targetUser, user.isLoggedInWithMfa === true
+      );
+      const newSessionId = targetUser.authSessionId;
+      const switchMarker = crypto.randomUUID();
+
+      let accountCommitted = false;
+      let markerHandled = false;
+      let populatedUser;
+      const markerContext = { userId: String(user._id), accountId: String(account) };
+      try {
+        try {
+          const updUser = await Users.findOneAndUpdate(
+            { _id: user._id },
+            {
+              $set: {
+                defaultAccount: account,
+                defaultOrg: nextOrg ? nextOrg._id : null,
+                accountSwitchMarker: switchMarker
+              }
+            },
+            { upsert: false, new: true }
+          );
+          if (!updUser) {
+            throw new Error('Error in selecting account');
+          }
+          accountCommitted = true;
+
+          populatedUser = typeof updUser.populate === 'function'
+            ? (await updUser.populate('defaultAccount')) || updUser
+            : updUser;
+          if (!populatedUser || !populatedUser.defaultAccount) {
+            throw new Error('Error in selecting account');
+          }
+
+          if (previousSessionId && previousSessionId !== newSessionId) {
+            await authSessions.revokeCurrent(user._id, previousSessionId);
+          }
+        } catch (commitError) {
+          let rollbackError = null;
+          if (accountCommitted) {
+            try {
+              await runConditionalMarkerUpdate(
+                'rollback',
+                {
+                  _id: user._id,
+                  defaultAccount: account,
+                  accountSwitchMarker: switchMarker
+                },
+                {
+                  $set: {
+                    defaultAccount: previousAccountId,
+                    defaultOrg: previousOrgId
+                  },
+                  $unset: { accountSwitchMarker: 1 }
+                },
+                markerContext
+              );
+            } catch (err) {
+              rollbackError = err;
+            }
+            markerHandled = true;
+          }
+          if (newSessionId && newSessionId !== previousSessionId) {
+            try {
+              await authSessions.revokeCurrent(user._id, newSessionId);
+            } catch (revokeError) {
+              logger.error('Failed to revoke uncommitted destination session', {
+                params: { ...markerContext, reason: revokeError.message }
+              });
+            }
+          }
+          user.defaultAccount = previousAccount;
+          user.defaultOrg = previousOrg;
+          user.authSessionId = previousSessionId;
+          if (rollbackError) {
+            throw new Error(
+              `${commitError.message}; account switch rollback failed: ${rollbackError.message}`
+            );
+          }
+          throw commitError;
+        }
+
+        user.defaultAccount = populatedUser.defaultAccount;
+        user.defaultOrg = nextOrg;
+        user.authSessionId = newSessionId;
+
+        res.setHeader('Refresh-JWT', token);
+        res.setHeader('Refresh-Token', refreshToken);
+        setAuthCookies(req, res, token, refreshToken);
+
+        // This API bypass account permissions check, return only needed info
+        // Still it's returned only if user has any permission to access this account
+        const result = AccountsService.selectAccountParams(populatedUser.defaultAccount, true);
+        return Service.successResponse(result, 201);
+      } finally {
+        if (accountCommitted && !markerHandled) {
+          await runConditionalMarkerUpdate(
+            'cleanup',
+            { _id: user._id, accountSwitchMarker: switchMarker },
+            { $unset: { accountSwitchMarker: 1 } },
+            markerContext
+          );
+          markerHandled = true;
+        }
+      }
     } catch (e) {
       return Service.rejectResponse(
         e.message || 'Internal Server Error',

@@ -19,6 +19,19 @@ const plainSubdoc = (value) => {
   return typeof value.toObject === 'function' ? value.toObject() : value;
 };
 
+const sanitizeOspf = (ospf) => {
+  const plain = plainSubdoc(ospf);
+  const sanitized = {
+    area: plain.area !== undefined && plain.area !== null ? plain.area : '0',
+    keyId: plain.keyId || '',
+    keyConfigured: Boolean(plain.key)
+  };
+  if (plain.cost !== undefined) {
+    sanitized.cost = plain.cost;
+  }
+  return sanitized;
+};
+
 /**
  * Get routing configuration for a specific interface
  */
@@ -39,7 +52,7 @@ router.get('/api/devices/:deviceId/interfaces/:interfaceId/routing',
 
       res.status(200).json({
         routing: iface.routing || 'NONE',
-        ospf: iface.ospf || { area: '0', keyId: '', key: '' },
+        ospf: sanitizeOspf(iface.ospf),
         bgp: device.bgp || { enable: false }
       });
     } catch (error) {
@@ -87,7 +100,11 @@ router.put('/api/devices/:deviceId/interfaces/:interfaceId/routing',
         iface.routing = normalizedProtocol;
       }
       if (ospf && typeof ospf === 'object') {
-        iface.ospf = { ...plainSubdoc(iface.ospf), ...ospf };
+        const { keyConfigured: _ignored, ...ospfUpdate } = ospf;
+        if (ospfUpdate.key === undefined) {
+          delete ospfUpdate.key;
+        }
+        iface.ospf = { ...plainSubdoc(iface.ospf), ...ospfUpdate };
       }
       if (bgp && typeof bgp === 'object') {
         device.bgp = { ...plainSubdoc(device.bgp), ...bgp };
@@ -113,7 +130,7 @@ router.put('/api/devices/:deviceId/interfaces/:interfaceId/routing',
       res.status(200).json({
         message: 'Routing configuration updated successfully',
         routing: iface.routing,
-        ospf: iface.ospf,
+        ospf: sanitizeOspf(iface.ospf),
         bgp: device.bgp
       });
     } catch (error) {

@@ -114,13 +114,17 @@ const revokeCurrent = async (userId, sid) => {
     { $set: { revokedAt: new Date() } });
 };
 
-const revokeAll = async userId => {
-  const updated = await Users.findOneAndUpdate(
-    { _id: userId }, { $inc: { authVersion: 1 } }, { new: true });
-  if (!updated) throw new Error('User not found');
+const revokeAll = async (userId, { incrementAuthVersion = true } = {}) => {
+  let authVersion;
+  if (incrementAuthVersion) {
+    const updated = await Users.findOneAndUpdate(
+      { _id: userId }, { $inc: { authVersion: 1 } }, { new: true });
+    if (!updated) throw new Error('User not found');
+    authVersion = updated.authVersion;
+  }
   await Sessions.updateMany({ user: userId, revokedAt: null },
     { $set: { revokedAt: new Date() } });
-  return updated.authVersion;
+  return authVersion;
 };
 
 module.exports = { createSession, validateAccess, rotateRefresh, revokeCurrent, revokeAll };

@@ -41,6 +41,7 @@ const auth = require('./authenticate');
 const { connectRouter } = require('./routes/connect');
 const { getSwVerUpdaterInstance } = require('./deviceLogic/DevSwVersionUpdateManager');
 const morgan = require('morgan');
+morgan.token('redacted-url', (req) => redactLoggedUrl(req.originalUrl || req.url));
 const logger = require('./logging/logging')({ module: module.filename, type: 'req' });
 const { reqLogger, errLogger } = require('./logging/request-logging');
 const serialize = require('serialize-javascript');
@@ -218,10 +219,10 @@ class ExpressServer {
         }
       }
     }));
-    this.app.use(mongoSanitize());
-
-    // Use morgan request logger in development mode
-    if (configs.get('environment') === 'development') this.app.use(morgan('dev'));
+    // Use morgan request logger in development mode with query strings stripped.
+    if (configs.get('environment') === 'development') {
+      this.app.use(morgan(':method :redacted-url :status :response-time ms - :res[content-length]'));
+    }
 
     // Initialize websocket traffic handler role selector
     // On every new websocket connection it will try to set itself as active
@@ -275,13 +276,40 @@ class ExpressServer {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: false }));
     this.app.use(cookieParser());
+    // Sanitize MongoDB operator keys after body/query parsers run.
+    this.app.use(mongoSanitize());
 
     // Retired authentication helpers must not fall through to static files or the SPA.
     this.app.get(['/direct-login.html', '/fix-auth.html'], (req, res) => res.sendStatus(410));
 
-    // Routes allowed without authentication
-    this.app.get('/', (req, res) => this.sendIndexFile(req, res));
-    this.app.use(express.static(path.join(__dirname, configs.get('clientStaticDir'))));
+    // Routes allowed without authentication: intercept any request resolving to
+    // the built SPA entry file (including encoded/slash/dot-segment variants) so
+    // it always receives CSP nonce, server config, and Cache-Control: no-store.
+    const staticDir = path.resolve(__dirname, configs.get('clientStaticDir'));
+    const indexFilePath = path.join(staticDir, 'index.html');
+    const isSpaIndexRequest = (req) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+      let decodedPath;
+      try {
+        decodedPath = decodeURIComponent(req.path || '/');
+      } catch {
+        return false;
+      }
+      const normalized = path.posix.normalize(decodedPath.replace(/\\/g, '/'));
+      if (normalized === '/' || normalized === '/.') return true;
+      const candidatePath = path.resolve(staticDir, '.' + normalized);
+      return candidatePath === indexFilePath ||
+        candidatePath.toLowerCase() === indexFilePath.toLowerCase();
+    };
+    this.app.use((req, res, next) => {
+      if (isSpaIndexRequest(req)) {
+        return this.sendIndexFile(req, res);
+      }
+      return next();
+    });
+    this.app.use(express.static(staticDir, {
+      index: false
+    }));
 
     // Secure traffic only
     this.app.all('*', (req, res, next) => {
@@ -441,6 +469,7 @@ class ExpressServer {
     const indexFile =
         fs.readFileSync(path.join(__dirname, configs.get('clientStaticDir'), 'index.html'));
     const transformedIndex = transformIndex(indexFile.toString());
+    res.setHeader('Cache-Control', 'no-store');
     res.send(transformedIndex);
   }
 
@@ -496,7 +525,10 @@ class ExpressServer {
       const errorResponse = error.error || error.message || error.errors || 'Unknown error';
       res.status(error.status || 500);
       res.type('json');
-      res.json({ error: errorResponse });
+      res.json({
+        error: errorResponse,
+        ...(error.errorCode ? { code: error.errorCode } : {})
+      });
     });
   }
 

@@ -21,6 +21,7 @@ import Tunnels from './pages/Tunnels';
 import Tokens from './pages/Tokens';
 import Login from './pages/Login';
 import VerifyAccount from './pages/VerifyAccount';
+import ResetPassword from './pages/ResetPassword';
 import About from './pages/About';
 import PathLabels from './pages/PathLabels';
 import PathSelectionPolicy from './pages/PathSelectionPolicy';
@@ -77,6 +78,12 @@ function App() {
 
   // Sidebar toggle removed from header; keeping state & logic placeholder if reintroduced later.
   // const toggleSidebar = () => setSidebarCollapsed(!sidebarCollapsed);
+
+  // Always handle password reset links regardless of auth state so a signed-in
+  // session does not skip the reset page or keep the secret token in the URL.
+  if (location.pathname === '/reset-password' || location.pathname.startsWith('/reset-password/')) {
+    return <ResetPassword />;
+  }
 
   if (!isAuthenticated) {
     // Unauthenticated routes (login, register, verify-account)

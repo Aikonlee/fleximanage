@@ -299,7 +299,6 @@ const Tunnels = () => {
                 ospf: {
                   area: iface.ospf?.area || '0',
                   keyId: iface.ospf?.keyId || '',
-                  key: iface.ospf?.key || '',
                   cost: iface.ospf?.cost || 10
                 }
               };

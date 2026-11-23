@@ -80,7 +80,7 @@ api.interceptors.response.use((response) => {
     try { await refreshFlight.promise; } catch (_) { /* Refresh handler owns session cleanup. */ }
   }
   if (!error.config?.authFlow && error.response?.status === 401 && error.config?.sessionToken === getSessionToken() &&
-      !/^\/users\/(login|register|verify-account|reverify-account)/.test(error.config?.url || '')) {
+      !/^\/users\/(login|register|verify-account|reverify-account|reset-password)/.test(error.config?.url || '')) {
     clearSession();
   }
   return Promise.reject(error);

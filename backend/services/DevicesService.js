@@ -77,6 +77,33 @@ const Joi = require('joi');
 const { getStartEndIp } = require('../utils/networks');
 const errorCodes = require('../errorCodes');
 
+const plainSubdoc = (value) => {
+  if (!value) return {};
+  return typeof value.toObject === 'function' ? value.toObject() : value;
+};
+
+const sanitizeOspf = (ospf) => {
+  const plain = plainSubdoc(ospf);
+  const sanitized = {
+    area: plain.area !== undefined && plain.area !== null ? plain.area : '0',
+    keyId: plain.keyId || '',
+    keyConfigured: Boolean(plain.key)
+  };
+  if (plain.cost !== undefined) {
+    sanitized.cost = plain.cost;
+  }
+  return sanitized;
+};
+
+const sanitizeDeviceOspf = (ospf) => {
+  const plain = plainSubdoc(ospf);
+  const { key, keyConfigured: _ignored, ...rest } = plain;
+  return {
+    ...rest,
+    keyConfigured: Boolean(key)
+  };
+};
+
 class DevicesService {
   /**
    * Execute an action on the device side
@@ -186,6 +213,12 @@ class DevicesService {
       retDevice.isConnected = connections.isConnected(retDevice.machineId);
       const deviceStatusObj = deviceStatus.getDeviceStatus(retDevice.machineId);
       retDevice.state = (deviceStatusObj && deviceStatusObj.state) || 'pending';
+      if (retDevice.ospf && typeof retDevice.ospf === 'object') {
+        const plainDeviceOspf = plainSubdoc(retDevice.ospf);
+        if ('key' in plainDeviceOspf) {
+          retDevice.ospf = sanitizeDeviceOspf(plainDeviceOspf);
+        }
+      }
 
       // pick interfaces
       let retInterfaces;
@@ -237,6 +270,9 @@ class DevicesService {
           if (retIf.qosPolicy) {
             retIf.qosPolicy = (retIf.qosPolicy._id ? retIf.qosPolicy._id : retIf.qosPolicy)
               .toString();
+          }
+          if (retIf.ospf !== undefined) {
+            retIf.ospf = sanitizeOspf(retIf.ospf);
           }
           // if device is not connected then internet access status is unknown
           retIf.internetAccess = retDevice.isConnected ? retIf.internetAccess : '';
@@ -2075,9 +2111,24 @@ class DevicesService {
               }
             }
 
+            // Preserve stored OSPF key when omitted in an update and ignore read-only keyConfigured.
+            const origOspf = origIntf && origIntf.ospf ? plainSubdoc(origIntf.ospf) : {};
+            if (updIntf.ospf && typeof updIntf.ospf === 'object') {
+              const { keyConfigured: _ignoredKeyConfigured, ...ospfUpdate } = updIntf.ospf;
+              if (ospfUpdate.key === undefined) {
+                delete ospfUpdate.key;
+              }
+              updIntf.ospf = {
+                ...origOspf,
+                ...ospfUpdate
+              };
+            } else if (origIntf && origIntf.ospf) {
+              updIntf.ospf = { ...origOspf };
+            }
+
             // don't allow set OSPF keyID without key and vise versa
-            const keyId = updIntf.ospf.keyId;
-            const key = updIntf.ospf.key;
+            const keyId = updIntf.ospf?.keyId;
+            const key = updIntf.ospf?.key;
             if ((keyId && !key) || (!keyId && key)) {
               throw createError(400,
                 `(${updIntf.name}) Not allowed to save OSPF key ID without key and vice versa`
@@ -4000,7 +4051,7 @@ class DevicesService {
 
       if (!device) return Service.rejectResponse('Device not found', 404);
 
-      return Service.successResponse(device.ospf, 200);
+      return Service.successResponse(sanitizeDeviceOspf(device.ospf), 200);
     } catch (e) {
       return Service.rejectResponse(
         e.message || 'Internal Server Error',
@@ -4031,9 +4082,19 @@ class DevicesService {
         throw new Error('Device must be first approved');
       }
 
+      const origOspf = plainSubdoc(deviceObject.ospf);
+      const { keyConfigured: _ignoredKeyConfigured, ...ospfUpdate } = ospfConfigs;
+      if (ospfUpdate.key === undefined) {
+        delete ospfUpdate.key;
+      }
+      const nextOspf = {
+        ...origOspf,
+        ...ospfUpdate
+      };
+
       const updDevice = await devices.findOneAndUpdate(
         { _id: deviceObject._id },
-        { $set: { ospf: ospfConfigs } },
+        { $set: { ospf: nextOspf } },
         { new: true, runValidators: true }
       );
 
@@ -4042,7 +4103,7 @@ class DevicesService {
         newDevice: updDevice
       });
       DevicesService.setLocationHeader(server, response, ids, orgList[0]);
-      return Service.successResponse(ospfConfigs, 202);
+      return Service.successResponse(sanitizeDeviceOspf(updDevice?.ospf ?? nextOspf), 202);
     } catch (e) {
       return Service.rejectResponse(
         e.message || 'Internal Server Error',

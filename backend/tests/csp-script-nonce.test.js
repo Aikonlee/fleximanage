@@ -1,5 +1,6 @@
 /** @jest-environment node */
 const fs = require('fs');
+const http = require('http');
 const os = require('os');
 const path = require('path');
 const { EventEmitter } = require('events');
@@ -151,6 +152,36 @@ function invokeApp (app, urlPath = '/') {
   });
 }
 
+function invokeAppHttp (app, urlPath = '/') {
+  return new Promise((resolve, reject) => {
+    const httpServer = http.createServer(app);
+    httpServer.listen(0, '127.0.0.1', () => {
+      const { port } = httpServer.address();
+      const req = http.request({
+        hostname: '127.0.0.1',
+        port,
+        path: urlPath,
+        method: 'GET',
+        headers: { host: 'localhost:3443' }
+      }, (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          httpServer.close(() => {
+            resolve({
+              status: res.statusCode,
+              headers: res.headers,
+              body: Buffer.concat(chunks).toString('utf8')
+            });
+          });
+        });
+      });
+      req.on('error', (err) => httpServer.close(() => reject(err)));
+      req.end();
+    });
+  });
+}
+
 describe('CSP script nonce enforcement', () => {
   let tmpDir;
   let staticDir;
@@ -298,5 +329,65 @@ describe('CSP script nonce enforcement', () => {
       );
     }
     expect(mockLogger.error).toHaveBeenCalledTimes(3);
+  });
+
+  test('routes /index.html and equivalent/encoded/slash paths through sendIndexFile with nonce and Cache-Control: no-store', async () => {
+    fs.mkdirSync(path.join(staticDir, 'static'), { recursive: true });
+    fs.writeFileSync(path.join(staticDir, 'static', 'index-abc123.js'), 'console.log("ok");', 'utf8');
+
+    const equivalentPaths = [
+      '/',
+      '/index.html',
+      '//index.html',
+      '/%69ndex.html',
+      '/index%2ehtml',
+      '/./index.html',
+      '/sub/../index.html',
+      '/index.html/',
+      '/devices/overview'
+    ];
+
+    for (const urlPath of equivalentPaths) {
+      const response = await invokeAppHttp(server.app, urlPath);
+      expect(response.status).toBe(200);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.body).not.toContain('__CSP_NONCE__');
+
+      const csp = parseCsp(response.headers['content-security-policy']);
+      const nonceToken = csp['script-src'].find((src) => src.startsWith("'nonce-"));
+      const expectedNonce = nonceToken.slice("'nonce-".length, -1);
+
+      const inlineMatch = response.body.match(
+        /<script([^>]*)>([\s\S]*?window\.__FLEXIWAN_SERVER_CONFIG__[\s\S]*?)<\/script>/i
+      );
+      expect(inlineMatch).not.toBeNull();
+      expect(inlineMatch[1]).toContain(`nonce="${expectedNonce}"`);
+      expect(inlineMatch[2]).toContain('"jwtInSessionStorage":true');
+    }
+
+    // Non-entry static assets are still served by express.static.
+    const assetResponse = await invokeAppHttp(server.app, '/static/index-abc123.js');
+    expect(assetResponse.status).toBe(200);
+    expect(assetResponse.body).toContain('console.log("ok");');
+  });
+
+  test('mounts mongoSanitize after body parsers and redacts URLs in morgan dev logging', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'expressserver.js'), 'utf8');
+    const jsonPos = source.indexOf('this.app.use(express.json())');
+    const urlEncodedPos = source.indexOf('this.app.use(express.urlencoded(');
+    const sanitizePos = source.indexOf('this.app.use(mongoSanitize())');
+    expect(jsonPos).toBeGreaterThan(-1);
+    expect(urlEncodedPos).toBeGreaterThan(-1);
+    expect(sanitizePos).toBeGreaterThan(jsonPos);
+    expect(sanitizePos).toBeGreaterThan(urlEncodedPos);
+
+    expect(source).not.toContain("morgan('dev')");
+    expect(source).toContain('redacted-url');
+    const morgan = require('morgan');
+    const formatted = morgan['redacted-url']({
+      originalUrl: '/reset-password?id=507f1f77bcf86cd799439011&t=super-secret-reset-token'
+    });
+    expect(formatted).toBe('/reset-password');
+    expect(formatted).not.toContain('super-secret-reset-token');
   });
 });

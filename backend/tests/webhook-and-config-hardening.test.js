@@ -79,11 +79,12 @@ describe('pinned webhook lookup', () => {
     jest.restoreAllMocks();
   });
 
-  it('passes a lookup pinned to the validated address', async () => {
+  it('passes a lookup pinned to the validated address and disables redirects', async () => {
     mockLookup(['203.0.113.10', '203.0.113.11']);
     const sent = hooks.sendToWebHook('https://hooks.example/hook', { ok: true });
     await expect(sent).resolves.toBe(true);
     const options = fetch.mock.calls[0][1];
+    expect(options.redirect).toBe('error');
     expect(options.agent).toBeInstanceOf(http.Agent);
     const pinned = await new Promise((resolve, reject) => {
       options.agent.options.lookup('attacker.example', { all: true }, (err, addresses) => {
@@ -100,6 +101,55 @@ describe('pinned webhook lookup', () => {
       });
     });
     expect(one).toEqual({ address: '2001:db8::5', family: 6 });
+  });
+
+  it('fails instead of following a 302 redirect response', async () => {
+    mockLookup(['203.0.113.10']);
+    const jsonSpy = jest.fn(async () => ({ status: 'success' }));
+    fetch.mockImplementation(async (_url, options) => {
+      expect(options.redirect).toBe('error');
+      return {
+        status: 302,
+        ok: false,
+        headers: { get: () => 'http://169.254.169.254/latest/meta-data/' },
+        json: jsonSpy
+      };
+    });
+    await expect(hooks.sendToWebHook('https://hooks.example/hook', { ok: true }))
+      .resolves.toBe(false);
+    expect(jsonSpy).not.toHaveBeenCalled();
+
+    // End-to-end verification with real fetch-with-proxy: redirect:'error' aborts 302 without
+    // contacting the redirect destination.
+    const realFetch = jest.requireActual('fetch-with-proxy').default;
+    const targetHits = [];
+    const targetServer = http.createServer((req, res) => {
+      targetHits.push(req.url);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'success' }));
+    });
+    await new Promise((resolve) => targetServer.listen(0, '127.0.0.1', resolve));
+    const targetPort = targetServer.address().port;
+
+    const redirectServer = http.createServer((req, res) => {
+      res.writeHead(302, { Location: `http://127.0.0.1:${targetPort}/secret` });
+      res.end();
+    });
+    await new Promise((resolve) => redirectServer.listen(0, '127.0.0.1', resolve));
+    const redirectPort = redirectServer.address().port;
+
+    try {
+      await expect(realFetch(`http://127.0.0.1:${redirectPort}/hook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ok: true }),
+        redirect: 'error'
+      })).rejects.toThrow(/redirect/i);
+      expect(targetHits).toEqual([]);
+    } finally {
+      await new Promise((resolve) => redirectServer.close(resolve));
+      await new Promise((resolve) => targetServer.close(resolve));
+    }
   });
 
   it('logs and returns false when background delivery cannot resolve the domain', async () => {

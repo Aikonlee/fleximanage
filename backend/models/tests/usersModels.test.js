@@ -40,6 +40,12 @@ describe('Minimal required users schema', () => {
     expect(userFullSchema.authVersion).toBe(0);
   });
 
+  it('keeps accountSwitchMarker excluded from default projections and serialization', () => {
+    expect(users.schema.path('accountSwitchMarker').options.select).toBe(false);
+    expect(userFullSchema.toObject()).not.toHaveProperty('accountSwitchMarker');
+    expect(userFullSchema.toJSON()).not.toHaveProperty('accountSwitchMarker');
+  });
+
   it('Should be a valid users model if all required fields are present', () => {
     return userFullSchema.validate().then(() => null, error => error).then((err) => {
       expect(err).toBe(null);

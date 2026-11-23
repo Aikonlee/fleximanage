@@ -98,9 +98,10 @@ test('password change invalidates all old sessions after the password is saved',
 });
 
 test('completed password reset invalidates all previous sessions', async () => {
+  const validId = '507f1f77bcf86cd799439011';
   auth.validatePassword = jest.fn(() => true);
   Users.findOneAndUpdate = jest.fn(async () => ({
-    _id: 'user-id', setPassword: jest.fn(), save: jest.fn()
+    _id: validId
   }));
   const res = response();
   let finish;
@@ -108,11 +109,29 @@ test('completed password reset invalidates all previous sessions', async () => {
   res.json = jest.fn(() => finish());
   handler('/reset-password', 'post')({
     body: {
-      type: 'update', id: 'user-id', token: 'reset-key', password: 'new-value'
+      type: 'update', id: validId, token: 'reset-key', password: 'new-value'
     }
   }, res, jest.fn());
   await done;
-  expect(sessions.revokeAll).toHaveBeenCalledWith('user-id');
+  expect(Users.findOneAndUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      _id: validId,
+      'emailTokens.resetPassword': 'reset-key',
+      'emailTokens.resetPasswordIssuedAt': { $gte: expect.any(Date) }
+    }),
+    expect.objectContaining({
+      $set: expect.objectContaining({
+        state: 'verified',
+        hash: expect.any(String),
+        salt: expect.any(String),
+        'emailTokens.resetPassword': '',
+        'emailTokens.resetPasswordIssuedAt': null
+      }),
+      $inc: { authVersion: 1 }
+    }),
+    { upsert: false, new: true }
+  );
+  expect(sessions.revokeAll).toHaveBeenCalledWith(validId, { incrementAuthVersion: false });
   expect(res.json).toHaveBeenCalledWith({ status: 'password reset' });
 });
 

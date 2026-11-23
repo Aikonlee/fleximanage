@@ -66,9 +66,12 @@ jest.mock('../utils/membershipUtils', () => ({ getUserOrganizations: jest.fn() }
 jest.mock('../otp', () => ({ verifyCode: jest.fn(), generateSecret: jest.fn() }));
 jest.mock('express-rate-limit', () => () => (req, res, next) => next());
 jest.mock('../utils/mfaRateLimitStore', () => class MfaRateLimitStore {});
-jest.mock('../logging/logging', () => () => ({
-  info: jest.fn(), warn: jest.fn(), error: jest.fn()
-}));
+jest.mock('../logging/logging', () => {
+  const error = jest.fn();
+  const factory = () => ({ info: jest.fn(), warn: jest.fn(), error });
+  factory.error = error;
+  return factory;
+});
 jest.mock('../tokens', () => ({
   getLoginProcessToken: jest.fn(),
   getToken: jest.fn(),
@@ -85,9 +88,15 @@ const sessions = require('../authSessions');
 const User = require('../models/users');
 const { membership } = require('../models/membership');
 const sendMailHTML = require('../utils/mailer').sendMailHTML;
+const logError = require('../logging/logging').error;
 const router = require('../routes/users');
 const MembersService = require('../services/MembersService');
 const { RESET_PASSWORD_TTL_MS } = require('../utils/emailTokenExpiry');
+
+const flushDetachedMail = async () => {
+  await new Promise(setImmediate);
+  await new Promise(setImmediate);
+};
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const handler = (path, method) => router.stack.find(layer => layer.route?.path === path)
@@ -193,43 +202,166 @@ test('reverify-account still issues a token when verifyIssuedAt is missing', asy
   expect(res.json).toHaveBeenCalledWith({ status: 'account reverified' });
 });
 
-test('reset-password returns 429 and does not overwrite a fresh reset token', async () => {
-  const user = account(new Date());
-  User.findOne.mockImplementation(async (query) => (
-    query.email === user.email && query.state === 'verified' ? user : null
-  ));
-  const res = response();
-  const next = jest.fn();
-  await handler('/reset-password', 'post')(
-    post({ type: 'reset', email: 'user@example.com' }), res, next
-  );
-  expect(next).toHaveBeenCalledTimes(1);
-  expect(next.mock.calls[0][0].status).toBe(429);
-  expect(User.findOneAndUpdate).not.toHaveBeenCalled();
-  expect(sendMailHTML).not.toHaveBeenCalled();
-  expect(res.json).not.toHaveBeenCalled();
-});
+test('reset-password enforces cooldown in findOneAndUpdate and returns uniform 200 without 429', async () => {
+  const freshUser = account(new Date());
+  const pastUser = account(new Date(Date.now() - 90 * 1000));
 
-test('reset-password still issues a token when resetPasswordIssuedAt is past 60s', async () => {
-  const user = account(new Date(Date.now() - 90 * 1000));
-  User.findOne.mockResolvedValue(user);
-  User.findOneAndUpdate.mockResolvedValue(user);
-  const res = response();
-  const next = jest.fn();
-  await handler('/reset-password', 'post')(
-    post({ type: 'reset', email: 'user@example.com' }), res, next
-  );
-  expect(next).not.toHaveBeenCalled();
+  const runReset = async (email, matchedUser) => {
+    User.findOne.mockClear();
+    User.findOneAndUpdate.mockReset();
+    sendMailHTML.mockClear();
+    User.findOneAndUpdate.mockImplementation(async (filter) => {
+      if (!matchedUser) return null;
+      if (filter.email !== matchedUser.email || filter.state !== matchedUser.state) return null;
+      const issuedAt = matchedUser.emailTokens?.resetPasswordIssuedAt;
+      const lteClause = filter.$or?.find((clause) => clause['emailTokens.resetPasswordIssuedAt']?.$lte);
+      const cutoff = lteClause?.['emailTokens.resetPasswordIssuedAt']?.$lte;
+      const eligible = issuedAt == null || (cutoff instanceof Date && issuedAt <= cutoff);
+      return eligible ? matchedUser : null;
+    });
+    const res = response();
+    const next = jest.fn();
+    await handler('/reset-password', 'post')(post({ type: 'reset', email }), res, next);
+    return { res, next };
+  };
+
+  // Unknown address
+  const unknown = await runReset('nobody@example.com', null);
+  await flushDetachedMail();
+  expect(unknown.next).not.toHaveBeenCalled();
+  expect(unknown.res.statusCode).toBe(200);
+  expect(unknown.res.json).toHaveBeenCalledWith({ status: 'password reset initiated' });
+  expect(sendMailHTML).not.toHaveBeenCalled();
+  expect(User.findOne).not.toHaveBeenCalled();
+
+  // Throttled address (issued within 60s cooldown)
+  const throttled = await runReset('user@example.com', freshUser);
+  await flushDetachedMail();
+  expect(throttled.next).not.toHaveBeenCalled();
+  expect(throttled.res.statusCode).toBe(200);
+  expect(throttled.res.json).toHaveBeenCalledWith({ status: 'password reset initiated' });
+  expect(sendMailHTML).not.toHaveBeenCalled();
+  expect(User.findOne).not.toHaveBeenCalled();
+
+  // Accepted address (past 60s cooldown)
+  const accepted = await runReset('user@example.com', pastUser);
+  expect(accepted.next).not.toHaveBeenCalled();
+  expect(accepted.res.statusCode).toBe(200);
+  expect(accepted.res.json).toHaveBeenCalledWith({ status: 'password reset initiated' });
+  // Mail delivery must be detached and not started synchronously before responding.
+  expect(sendMailHTML).not.toHaveBeenCalled();
+  await flushDetachedMail();
+  expect(sendMailHTML).toHaveBeenCalledTimes(1);
+  expect(User.findOne).not.toHaveBeenCalled();
   expect(User.findOneAndUpdate).toHaveBeenCalledWith(
-    { email: 'user@example.com', state: 'verified' },
+    {
+      email: 'user@example.com',
+      state: 'verified',
+      $or: [
+        { 'emailTokens.resetPasswordIssuedAt': null },
+        { 'emailTokens.resetPasswordIssuedAt': { $exists: false } },
+        { 'emailTokens.resetPasswordIssuedAt': { $lte: expect.any(Date) } }
+      ]
+    },
     expect.objectContaining({
       'emailTokens.resetPassword': expect.any(String),
       'emailTokens.resetPasswordIssuedAt': expect.any(Date)
     }),
     { upsert: false, new: false }
   );
-  expect(sendMailHTML).toHaveBeenCalled();
+});
+
+test('reset-password detaches mail delivery so response resolves before mail settles and rejected send still yields 200', async () => {
+  const pastUser = account(new Date(Date.now() - 90 * 1000));
+  User.findOneAndUpdate.mockResolvedValue(pastUser);
+
+  // 1) Slow/unsettled mail provider: response resolves strictly before mail starts or settles.
+  const events = [];
+  let resolveSlowMail;
+  let mailSettled = false;
+  sendMailHTML.mockImplementationOnce(() => {
+    events.push('mail:start');
+    return new Promise((resolve) => {
+      resolveSlowMail = (val) => {
+        mailSettled = true;
+        events.push('mail:settled');
+        resolve(val);
+      };
+    });
+  });
+
+  const slowRes = response();
+  slowRes.json = jest.fn(() => {
+    events.push('response');
+    return slowRes;
+  });
+  const slowNext = jest.fn();
+  await handler('/reset-password', 'post')(
+    post({ type: 'reset', email: 'user@example.com' }), slowRes, slowNext
+  );
+  expect(slowNext).not.toHaveBeenCalled();
+  expect(slowRes.statusCode).toBe(200);
+  expect(slowRes.json).toHaveBeenCalledWith({ status: 'password reset initiated' });
+  expect(mailSettled).toBe(false);
+  expect(sendMailHTML).not.toHaveBeenCalled();
+  expect(events).toEqual(['response']);
+
+  await flushDetachedMail();
+  expect(sendMailHTML).toHaveBeenCalledTimes(1);
+  expect(mailSettled).toBe(false);
+  expect(events).toEqual(['response', 'mail:start']);
+
+  resolveSlowMail(true);
+  await flushDetachedMail();
+  expect(mailSettled).toBe(true);
+  expect(events).toEqual(['response', 'mail:start', 'mail:settled']);
+
+  // 2) Rejected mail send still yields 200 and logs internally without calling next.
+  logError.mockClear();
+  sendMailHTML.mockRejectedValueOnce(new Error('SMTP connection refused'));
+
+  const res = response();
+  const next = jest.fn();
+  await handler('/reset-password', 'post')(
+    post({ type: 'reset', email: 'user@example.com' }), res, next
+  );
+  expect(next).not.toHaveBeenCalled();
+  expect(res.statusCode).toBe(200);
   expect(res.json).toHaveBeenCalledWith({ status: 'password reset initiated' });
+  expect(sendMailHTML).toHaveBeenCalledTimes(1);
+
+  await flushDetachedMail();
+  expect(next).not.toHaveBeenCalled();
+  expect(sendMailHTML).toHaveBeenCalledTimes(2);
+  expect(logError).toHaveBeenCalledWith(
+    'Account Password Reset email delivery failed',
+    { params: { reason: 'SMTP connection refused' } }
+  );
+});
+
+test('reset-password update rejects object-valued token, id, password, invalid ObjectId, and unknown type', async () => {
+  const validId = '507f1f77bcf86cd799439011';
+  const badPayloads = [
+    { type: 'update', id: validId, token: { $ne: '' }, password: 'valid-password-123' },
+    { type: 'update', id: { $gt: '' }, token: 'valid-token', password: 'valid-password-123' },
+    { type: 'update', id: 'not-an-object-id', token: 'valid-token', password: 'valid-password-123' },
+    { type: 'update', id: validId, token: ['arr-token'], password: 'valid-password-123' },
+    { type: 'update', id: validId, token: 'valid-token', password: { $ne: '' } },
+    { type: 'other', id: validId, token: 'valid-token', password: 'valid-password-123' },
+    { type: { $ne: 'reset' }, id: validId, token: 'valid-token', password: 'valid-password-123' },
+    { type: 'reset', email: { $ne: '' } }
+  ];
+
+  for (const body of badPayloads) {
+    User.findOneAndUpdate.mockClear();
+    const res = response();
+    const next = jest.fn();
+    await handler('/reset-password', 'post')(post(body), res, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0].status).toBe(400);
+    expect(User.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  }
 });
 
 test('invitation issuedAt stays inside the 1h reset window beyond one hour', async () => {

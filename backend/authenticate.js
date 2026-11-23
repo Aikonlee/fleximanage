@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+const path = require('path');
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var JwtStrategy = require('passport-jwt').Strategy;
@@ -91,6 +92,7 @@ exports.jwtPassport = passport.use('jwt', new JwtStrategy({ ...opts, passReqToCa
           return done(null, false, { message: 'Session revoked' });
         }
         user.authSessionId = jwtPayload.sid;
+        user.authTime = Number.isFinite(jwtPayload.authTime) ? jwtPayload.authTime : null;
       }
       const res = await setUserPerms(user, jwtPayload, token);
       return res === true
@@ -123,6 +125,8 @@ passport.use('jwt-login', new JwtStrategy(opts, async (jwtPayload, done) => {
           jwtPayload.authVersion !== (user.authVersion ?? 0)) {
         return done(null, false, { message: 'Login token revoked' });
       }
+      user.accessToken = false;
+      user.authTokenType = 'login';
       return done(null, user);
     } else {
       done(null, false, { message: 'Invalid Token' });
@@ -143,6 +147,7 @@ const setUserPerms = async (user, jwtPayload, token = null) => {
       jwtPayload.mfaVerified !== true) return false;
 
   user.accessToken = isAccessToken;
+  user.authTokenType = isAccessToken ? jwtPayload.type : 'session';
   user.jwtAccount = jwtPayload.account;
 
   // Normal-user perms are trusted only while the token account and org still
@@ -350,8 +355,15 @@ exports.verifyUserJWT = function (req, res, next) {
             }
             const rotated = await authSessions().rotateRefresh(decodedToken, userDetails);
             userDetails.authSessionId = rotated.sid;
+            // Preserve the original interactive authentication timestamp across refreshes
+            // so token rotation never extends a recent-reauth window.
+            userDetails.authTime = Number.isFinite(decodedToken.authTime)
+              ? decodedToken.authTime
+              : null;
             req.user = userDetails;
-            const token = await getToken(req, { mfaVerified: decodedToken.mfaVerified ?? false });
+            const token = await getToken(req, {
+              mfaVerified: decodedToken.mfaVerified ?? false
+            });
             const jwtPayload = jwt.decode(token);
             if (!await setUserPerms(userDetails, jwtPayload)) {
               return next(createError(401, 'Two-factor authentication required'));
@@ -462,9 +474,36 @@ exports.validatePassword = function (password) {
   return (password !== null && password !== undefined && password.length >= 8);
 };
 
+const REAUTH_MAX_AGE_SECONDS = 15 * 60;
+
+function isAppCredential (user) {
+  return Boolean(
+    user?.accessToken ||
+    user?.authTokenType === 'app_access_key' ||
+    user?.authTokenType === 'app_access_token'
+  );
+}
+
+function hasRecentReauth (user, nowSeconds = Math.floor(Date.now() / 1000)) {
+  if (!user || isAppCredential(user) || user.authTokenType !== 'session') return false;
+  if (!Number.isFinite(user.authTime)) return false;
+  const age = nowSeconds - user.authTime;
+  return age >= 0 && age <= REAUTH_MAX_AGE_SECONDS;
+}
+
+function isApiUsersPath (requestPath) {
+  if (typeof requestPath !== 'string' || !requestPath.startsWith('/')) return false;
+  const normalized = path.posix.normalize(requestPath);
+  return normalized === '/api/users' || normalized.startsWith('/api/users/');
+}
+
+exports.REAUTH_MAX_AGE_SECONDS = REAUTH_MAX_AGE_SECONDS;
+exports.isAppCredential = isAppCredential;
+exports.hasRecentReauth = hasRecentReauth;
+
 exports.verifyUserOrLoginJWT = function (req, res, next) {
-  // Allow options to pass through without verification for preflight options requests
-  if (!req.originalUrl.startsWith('/api/users')) {
+  const requestPath = normalizeRequestPath(req);
+  if (!isApiUsersPath(requestPath)) {
     return next(createError(403, "You don't have permission to perform this operation"));
   }
 
@@ -472,6 +511,9 @@ exports.verifyUserOrLoginJWT = function (req, res, next) {
     if (err || !user) {
       logger.warn('JWT verification failed', { params: { err: err?.message }, req: req });
       return next(createError(401));
+    }
+    if (isAppCredential(user)) {
+      return next(createError(403, 'API credentials cannot access this resource'));
     }
     req.user = user;
     return next();

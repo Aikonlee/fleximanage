@@ -50,7 +50,8 @@ const { getUiServerUrl } = require('../utils/httpUtils');
 const flexibilling = require('../flexibilling');
 const { getUserOrganizations } = require('../utils/membershipUtils');
 const { generateSecret, verifyCode } = require('../otp');
-const { createHash } = require('crypto');
+const mongoose = require('mongoose');
+const { createHash, pbkdf2, randomBytes } = require('crypto');
 const SHA256 = value => createHash('sha256').update(value).digest('hex');
 const rateLimit = require('express-rate-limit');
 const MfaRateLimitStore = require('../utils/mfaRateLimitStore');
@@ -85,6 +86,104 @@ const formatErr = (err, msg) => {
 
 // Per-account cooldown so a caller cannot rotate an email token indefinitely.
 const EMAIL_TOKEN_COOLDOWN_MS = 60 * 1000;
+const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/;
+const REAUTH_MAX_AGE_SECONDS = auth.REAUTH_MAX_AGE_SECONDS || (15 * 60);
+
+const isValidObjectIdString = (value) => (
+  typeof value === 'string' &&
+  OBJECT_ID_PATTERN.test(value) &&
+  mongoose.Types.ObjectId.isValid(value)
+);
+
+const derivePasswordCredentials = async (password) => {
+  if (typeof User === 'function' && typeof User.prototype?.setPassword === 'function') {
+    const tempUser = new User();
+    await tempUser.setPassword(password);
+    if (tempUser.hash && tempUser.salt) {
+      return { hash: tempUser.hash, salt: tempUser.salt };
+    }
+  }
+  const salt = randomBytes(32).toString('hex');
+  const hash = await new Promise((resolve, reject) => {
+    pbkdf2(password, salt, 25000, 512, 'sha256', (err, derivedKey) => {
+      if (err) reject(err);
+      else resolve(Buffer.from(derivedKey, 'binary').toString('hex'));
+    });
+  });
+  return { hash, salt };
+};
+
+const isAppCredential = (user) => Boolean(
+  user?.accessToken ||
+  user?.authTokenType === 'app_access_key' ||
+  user?.authTokenType === 'app_access_token'
+);
+
+const hasRecentReauth = (user) => {
+  if (!user || isAppCredential(user) || user.authTokenType !== 'session') return false;
+  if (!Number.isFinite(user.authTime)) return false;
+  const age = Math.floor(Date.now() / 1000) - user.authTime;
+  return age >= 0 && age <= REAUTH_MAX_AGE_SECONDS;
+};
+
+const rejectAppCredentials = (req, res, next) => {
+  if (isAppCredential(req.user)) {
+    return next(createError(403, 'API credentials cannot access this resource'));
+  }
+  return next();
+};
+
+const requireRecentInteractiveSession = (req, res, next) => {
+  if (isAppCredential(req.user)) {
+    return next(createError(403, 'API credentials cannot access this resource'));
+  }
+  if (!hasRecentReauth(req.user)) {
+    return next(createError(403, 'Recent reauthentication required for this operation', {
+      errorCode: 'REAUTH_REQUIRED'
+    }));
+  }
+  return next();
+};
+
+const requireMfaEnrollmentCredential = (req, res, next) => {
+  if (isAppCredential(req.user)) {
+    return next(createError(403, 'API credentials cannot access this resource'));
+  }
+  if (req.user?.authTokenType === 'login' || hasRecentReauth(req.user)) {
+    return next();
+  }
+  return next(createError(403, 'Recent reauthentication required for MFA enrollment', {
+    errorCode: 'REAUTH_REQUIRED'
+  }));
+};
+
+const requireMfaVerifyCredential = (req, res, next) => {
+  if (isAppCredential(req.user)) {
+    return next(createError(403, 'API credentials cannot access this resource'));
+  }
+  if (req.user?.authTokenType === 'login') {
+    return next();
+  }
+  if (!req.user?.mfa?.enabled && hasRecentReauth(req.user)) {
+    return next();
+  }
+  if (!req.user?.mfa?.enabled) {
+    return next(createError(403, 'Recent reauthentication required for MFA enrollment', {
+      errorCode: 'REAUTH_REQUIRED'
+    }));
+  }
+  return next(createError(403, 'Valid login challenge or recent reauthentication required'));
+};
+
+const requireLoginChallenge = (req, res, next) => {
+  if (isAppCredential(req.user)) {
+    return next(createError(403, 'API credentials cannot access this resource'));
+  }
+  if (req.user?.authTokenType !== 'login') {
+    return next(createError(403, 'Valid login challenge required'));
+  }
+  return next();
+};
 
 const issuedWithinCooldown = (issuedAt) => {
   if (!issuedAt) return false;
@@ -452,49 +551,57 @@ router.route('/change-password')
  * @param {Function} next = next middleware
  */
 const resetPassword = (req, res, next) => {
-  if (!req.body.email) return next(createError(500, 'Password Reset Error'));
+  if (typeof req.body?.email !== 'string' || !req.body.email.trim()) {
+    return next(createError(400, 'Password Reset Error'));
+  }
 
+  const email = req.body.email;
   const validateKey = randomKey(30);
-  let blocked = false;
-  return User.findOne({ email: req.body.email, state: 'verified' })
-    .then((current) => {
-      const issuedAt = current && current.emailTokens
-        ? current.emailTokens.resetPasswordIssuedAt
-        : null;
-      if (issuedWithinCooldown(issuedAt)) {
-        blocked = true;
-        next(createError(429, 'Please wait before requesting another password reset email'));
-        return null;
-      }
-      return User.findOneAndUpdate(
-        // Query, use the email and make sure user is verified when reset password
-        { email: req.body.email, state: 'verified' },
-        // Update
-        {
-          'emailTokens.resetPassword': validateKey,
-          'emailTokens.resetPasswordIssuedAt': new Date()
-        },
-        // Options
-        { upsert: false, new: false }
-      );
-    })
+  const now = new Date();
+  const cooldownCutoff = new Date(now.getTime() - EMAIL_TOKEN_COOLDOWN_MS);
+
+  return User.findOneAndUpdate(
+    // Atomically enforce verified state and cooldown in a single conditional write.
+    // Unknown, unverified, and throttled addresses all return null and receive
+    // the exact same public 200 response.
+    {
+      email,
+      state: 'verified',
+      $or: [
+        { 'emailTokens.resetPasswordIssuedAt': null },
+        { 'emailTokens.resetPasswordIssuedAt': { $exists: false } },
+        { 'emailTokens.resetPasswordIssuedAt': { $lte: cooldownCutoff } }
+      ]
+    },
+    // Update
+    {
+      'emailTokens.resetPassword': validateKey,
+      'emailTokens.resetPasswordIssuedAt': now
+    },
+    // Options
+    { upsert: false, new: false }
+  )
     .then((resp) => {
-      if (blocked) return null;
-      // Send email if user found
+      // Always send the same public 200 response first, then detach mail
+      // delivery onto a subsequent event-loop turn so provider setup, latency,
+      // and errors cannot distinguish accepted, throttled, and unknown addresses.
+      const response = res.status(200).json({ status: 'password reset initiated' });
       if (resp) {
         const uiServerUrl = getUiServerUrl(req);
-        const p = mailer.sendMailHTML(
-          configs.get('mailerEnvelopeFromAddress'),
-          configs.get('mailerFromAddress'),
-          req.body.email,
-          `Reset Password for Your ${configs.get('companyName')} Account`,
-          `<h2>Reset Password for your ${configs.get('companyName')} Account</h2>
+        setImmediate(() => {
+          Promise.resolve()
+            .then(() => mailer.sendMailHTML(
+              configs.get('mailerEnvelopeFromAddress'),
+              configs.get('mailerFromAddress'),
+              email,
+              `Reset Password for Your ${configs.get('companyName')} Account`,
+              `<h2>Reset Password for your ${configs.get('companyName')} Account</h2>
                 <b>It has been requested to reset your account password. If it is asked by yourself,
                    click below to reset your password. If you do not know who this is,
                    ignore this message.</b>
                 <p><a href="${uiServerUrl}/reset-password?id=${
-            resp._id
-          }&t=${validateKey}"><button style="color:#fff;
+                resp._id
+              }&t=${validateKey}"><button style="color:#fff;
           background-color:#F99E5B;border-color:#F99E5B;
           font-weight:400;text-align:center;
           vertical-align:middle;border:1px solid transparent;
@@ -502,14 +609,15 @@ const resetPassword = (req, res, next) => {
           border-radius:.25rem;
                 cursor:pointer">Reset Password</button></a></p>
                 <p>Your friends @ ${configs.get('companyName')}</p>`
-        );
-        return p;
+            ))
+            .catch((mailErr) => {
+              logger.error('Account Password Reset email delivery failed', {
+                params: { reason: mailErr?.message || String(mailErr) }
+              });
+            });
+        });
       }
-    })
-    .then(() => {
-      if (blocked) return null;
-      // In case of password reset, always return OK to not expose email addresses
-      return res.status(200).json({ status: 'password reset initiated' });
+      return response;
     })
     .catch((err) => {
       logger.error('Account Password Reset process failed', { params: { reason: err.message } });
@@ -523,51 +631,47 @@ const resetPassword = (req, res, next) => {
  * @param {Object} res = response
  * @param {Function} next = next middleware
  */
-const updatePassword = (req, res, next) => {
-  if (!req.body.id || !req.body.token || !req.body.password ||
-    req.body.id === '' || req.body.token === '') {
-    return next(createError(500, 'Password Reset Error'));
+const updatePassword = async (req, res, next) => {
+  const { id, token, password } = req.body || {};
+  if (typeof id !== 'string' || typeof token !== 'string' || typeof password !== 'string' ||
+    id.trim() === '' || token.trim() === '' || !isValidObjectIdString(id)) {
+    return next(createError(400, 'Password Reset Error'));
   }
 
   // Validate password
-  if (!auth.validatePassword(req.body.password)) return next(createError(500, 'Bad Password'));
+  if (!auth.validatePassword(password)) return next(createError(400, 'Bad Password'));
 
-  let registerUser = null;
-  User.findOneAndUpdate(
-    // Query, use the id and password reset token. $gte rejects a missing
-    // or expired resetPasswordIssuedAt (older than 1 hour).
-    {
-      _id: req.body.id,
-      'emailTokens.resetPassword': req.body.token,
-      'emailTokens.resetPasswordIssuedAt': resetPasswordIssuedAtQuery()
-    },
-    // Update
-    {
-      state: 'verified',
-      'emailTokens.resetPassword': '',
-      'emailTokens.resetPasswordIssuedAt': null
-    },
-    // Options
-    { upsert: false, new: true }
-  )
-    .then((resp) => {
-      if (!resp) throw new Error('Password Reset Error');
-      else {
-        registerUser = resp;
-        return registerUser.setPassword(req.body.password);
-      }
-    })
-    .then(() => {
-      return registerUser.save();
-    })
-    .then(async () => {
-      await authSessions.revokeAll(registerUser._id);
-      return res.status(200).json({ status: 'password reset' });
-    })
-    .catch((err) => {
-      logger.error('Password Reset Error', { params: { reason: err.message } });
-      return next(createError(500, 'Password Reset Error'));
-    });
+  try {
+    const { hash, salt } = await derivePasswordCredentials(password);
+    // Atomically verify exact scalar token + 1h issued-at window, update password
+    // credentials, consume the token, and increment authVersion in one write.
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        _id: id,
+        'emailTokens.resetPassword': token,
+        'emailTokens.resetPasswordIssuedAt': resetPasswordIssuedAtQuery()
+      },
+      {
+        $set: {
+          state: 'verified',
+          hash,
+          salt,
+          'emailTokens.resetPassword': '',
+          'emailTokens.resetPasswordIssuedAt': null
+        },
+        $inc: { authVersion: 1 }
+      },
+      { upsert: false, new: true }
+    );
+    if (!updatedUser) {
+      throw new Error('Password Reset Error');
+    }
+    await authSessions.revokeAll(updatedUser._id, { incrementAuthVersion: false });
+    return res.status(200).json({ status: 'password reset' });
+  } catch (err) {
+    logger.error('Password Reset Error', { params: { reason: err.message } });
+    return next(createError(500, 'Password Reset Error'));
+  }
 };
 
 /**
@@ -579,11 +683,10 @@ const updatePassword = (req, res, next) => {
 router.route('/reset-password')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
   .post(cors.corsWithOptions, async (req, res, next) => {
-    if (!req.body.type) return next(createError(500, 'Password Reset Error'));
-
-    // Call function based on request type
-    if (req.body.type === 'reset') return resetPassword(req, res, next);
-    else return updatePassword(req, res, next);
+    const op = req.body?.type;
+    if (op === 'reset') return resetPassword(req, res, next);
+    if (op === 'update') return updatePassword(req, res, next);
+    return next(createError(400, 'Password Reset Error'));
   });
 
 // This endpoint receives the username and password from the initial screen of the login process.
@@ -608,7 +711,7 @@ router.route('/login')
 // which he can use to identify himself and enter the system
 router.route('/login/methods')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .get(cors.corsWithOptions, auth.verifyUserOrLoginJWT, async (req, res) => {
+  .get(cors.corsWithOptions, auth.verifyUserOrLoginJWT, rejectAppCredentials, async (req, res) => {
     const methods = {
       recoveryCodes: 0,
       authenticatorApp: 0
@@ -681,7 +784,7 @@ router.route('/logout')
 // Once user enabled it, he cannot login without it.
 router.route('/mfa/isEnabled')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .get(cors.corsWithOptions, auth.verifyUserOrLoginJWT, async (req, res) => {
+  .get(cors.corsWithOptions, auth.verifyUserOrLoginJWT, rejectAppCredentials, async (req, res) => {
     res.status(200).json({ isEnabled: req?.user?.mfa?.enabled });
   });
 
@@ -689,7 +792,11 @@ router.route('/mfa/isEnabled')
 // that can be scanned by an authenticator application
 router.route('/mfa/getMfaConfigUri')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .get(cors.corsWithOptions, auth.verifyUserOrLoginJWT, async (req, res, next) => {
+  .get(
+    cors.corsWithOptions,
+    auth.verifyUserOrLoginJWT,
+    requireMfaEnrollmentCredential,
+    async (req, res, next) => {
     // if verified - don't generate
     if (req.user.mfa.enabled) {
       return next(createError(500, 'Secret already verified'));
@@ -742,6 +849,7 @@ router.route('/mfa/verify')
   .post(
     cors.corsWithOptions,
     auth.verifyUserOrLoginJWT,
+    requireMfaVerifyCredential,
     verifyMfaRateLimit,
     async (req, res, next) => {
       if (!req.body.token) {
@@ -806,6 +914,7 @@ router.route('/mfa/verify')
 // This function generates the JWT after the authentication process is complete.
 // With this token, the user can access and receive the organization's information.
 const sendJwtToken = async (req, res, mfaVerified) => {
+  req.user.authTime = Math.floor(Date.now() / 1000);
   const { token, refreshToken } = await issueSessionTokens(req.user, mfaVerified);
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
@@ -817,36 +926,44 @@ const sendJwtToken = async (req, res, mfaVerified) => {
 
 router.route('/mfa/generateRecoveryCodes')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .get(cors.corsWithOptions, auth.verifyUserJWT, async (req, res, next) => {
-    if (!req?.user?.mfa?.enabled) {
-      return next(createError(403, 'Two-Factor authentication is not configured'));
-    }
+  .get(
+    cors.corsWithOptions,
+    auth.verifyUserJWT,
+    requireRecentInteractiveSession,
+    async (req, res, next) => {
+      if (!req?.user?.mfa?.enabled) {
+        return next(createError(403, 'Two-Factor authentication is not configured'));
+      }
 
-    const codes = []; // send to user as clear text
-    const hashed = []; // store hashed in DB
+      const codes = []; // send to user as clear text
+      const hashed = []; // store hashed in DB
 
-    if (req?.user?.mfa?.recoveryCodes?.length > 0 && req.query.regenerate !== 'true') {
-      return res.json({ codes });
-    }
+      if (req?.user?.mfa?.recoveryCodes?.length > 0 && req.query.regenerate !== 'true') {
+        return res.json({ codes });
+      }
 
-    for (let i = 0; i < 10; i++) {
-      const code = randomKey(40);
-      codes.push(code);
-      hashed.push({ code: SHA256(code).toString(), usedTime: null });
-    };
+      for (let i = 0; i < 10; i++) {
+        const code = randomKey(40);
+        codes.push(code);
+        hashed.push({ code: SHA256(code).toString(), usedTime: null });
+      };
 
-    await User.findOneAndUpdate(
-      { _id: req.user._id },
-      { $set: { 'mfa.recoveryCodes': hashed } },
-      { upsert: false }
-    );
+      await User.findOneAndUpdate(
+        { _id: req.user._id },
+        { $set: { 'mfa.recoveryCodes': hashed } },
+        { upsert: false }
+      );
 
-    res.json({ codes });
-  });
+      res.json({ codes });
+    });
 
 router.route('/mfa/verifyRecoveryCode')
   .options(cors.corsWithOptions, (req, res) => { res.sendStatus(200); })
-  .post(cors.corsWithOptions, auth.verifyUserOrLoginJWT, verifyMfaRateLimit,
+  .post(
+    cors.corsWithOptions,
+    auth.verifyUserOrLoginJWT,
+    requireLoginChallenge,
+    verifyMfaRateLimit,
     async (req, res, next) => {
       const requestedCode = req.body?.recoveryCode;
       if (typeof requestedCode !== 'string' || !requestedCode.trim()) {

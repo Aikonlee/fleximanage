@@ -4,7 +4,13 @@ import api from '../../services/api';
 import { decodeJwtPayload } from '../../auth/permissions';
 import { setSessionTokens } from '../../auth/session';
 
-export default function MfaChallenge({ loginToken, onAuthenticated, onCancel }) {
+const isReauthRequired = (reason) => (
+  reason?.response?.data?.code === 'REAUTH_REQUIRED' ||
+  (reason?.response?.status === 403 &&
+    /recent reauthentication required/i.test(reason?.response?.data?.error || ''))
+);
+
+export default function MfaChallenge({ loginToken, onAuthenticated, onCancel, onReauthRequired }) {
   const [methods, setMethods] = useState(null);
   const [setupUri, setSetupUri] = useState('');
   const [method, setMethod] = useState('authenticator');
@@ -23,11 +29,19 @@ export default function MfaChallenge({ loginToken, onAuthenticated, onCancel }) 
         const result = await api.get('/users/mfa/getMfaConfigUri', options);
         if (active) setSetupUri(result.data.configUri);
       }
-    }).catch(reason => { if (active) setError(reason.response?.data?.error || 'Unable to load two-factor authentication.'); });
+    }).catch(reason => {
+      if (!active) return;
+      const msg = reason.response?.data?.error || 'Unable to load two-factor authentication.';
+      if (isReauthRequired(reason) && onReauthRequired) {
+        onReauthRequired(msg);
+        return;
+      }
+      setError(msg);
+    });
     const expires = decodeJwtPayload(loginToken)?.exp;
     const timer = expires ? setTimeout(() => { if (active) setExpired(true); }, Math.max(0, expires * 1000 - Date.now())) : null;
     return () => { active = false; clearTimeout(timer); };
-  }, [loginToken]);
+  }, [loginToken, onReauthRequired]);
   const verify = async event => {
     event.preventDefault(); setBusy(true); setError('');
     try {
@@ -39,7 +53,12 @@ export default function MfaChallenge({ loginToken, onAuthenticated, onCancel }) 
       if (!token || !refreshToken || decodeJwtPayload(token)?.type === 'login' || decodeJwtPayload(token)?.mfaVerified !== true) throw new Error('No authenticated session returned');
       setSessionTokens(token, refreshToken); onAuthenticated();
     } catch (reason) {
-      setError(reason.response?.data?.error || reason.message || 'Verification failed');
+      const msg = reason.response?.data?.error || reason.message || 'Verification failed';
+      if (isReauthRequired(reason) && onReauthRequired) {
+        onReauthRequired(msg);
+        return;
+      }
+      setError(msg);
     } finally { setBusy(false); }
   };
   let secret = '';

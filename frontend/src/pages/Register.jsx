@@ -4,7 +4,7 @@ import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap'
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { t } from '../i18n';
-import { COPYRIGHT_TEXT } from '../components/Footer';
+import { CopyrightLine } from '../components/Footer';
 
 // Registration page with runtime + debug-enabled Cloudflare Turnstile (mirrors Login implementation)
 const Register = () => {
@@ -253,7 +253,7 @@ const Register = () => {
           </Card>
           <div className="text-center mt-2">
             <small className="text-muted">
-              {COPYRIGHT_TEXT}
+              <CopyrightLine />
             </small>
           </div>
         </Col>

@@ -27,4 +27,13 @@ test('footer, login, and register show the same revision suffix', () => {
     </MemoryRouter>
   );
   expect(screen.getAllByText(COPYRIGHT_TEXT)).toHaveLength(3);
+
+  const docLinks = screen.getAllByRole('link', { name: 'documentation' });
+  expect(docLinks).toHaveLength(3);
+  for (const link of docLinks) {
+    expect(link).toHaveAttribute('href', '/docs/index.html');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link.parentElement?.textContent).toBe(`${COPYRIGHT_TEXT} · documentation`);
+  }
 });

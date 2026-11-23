@@ -17,6 +17,96 @@
 
 const escapeRegExp = require('lodash/escapeRegExp');
 
+const SENSITIVE_FILTER_KEY_PATTERN = /(key|secret|token|password|tunnelKeys)/i;
+const FORBIDDEN_PATH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+const invalidFilterError = (message) => {
+  const err = new Error(message);
+  err.status = 400;
+  return err;
+};
+
+/**
+ * Returns true if a dotted path (or any segment) is malformed or references
+ * sensitive credential material (key, secret, token, password, tunnelKeys).
+ * @param {string} key
+ * @returns {boolean}
+ */
+const isSensitiveFilterKey = (key) => {
+  if (typeof key !== 'string') return true;
+  const trimmed = key.trim();
+  if (!trimmed || trimmed !== key || trimmed.includes('$')) return true;
+  const segments = trimmed.split('.');
+  for (const segment of segments) {
+    if (!segment || FORBIDDEN_PATH_SEGMENTS.has(segment)) return true;
+    if (SENSITIVE_FILTER_KEY_PATTERN.test(segment)) return true;
+  }
+  return false;
+};
+
+/**
+ * Validates a filter key against sensitive path restrictions and an optional allowlist.
+ * Supports '|' composite keys by validating each branch.
+ * @param {string} key
+ * @param {Set<string>|Array<string>|null} allowedKeys
+ */
+const validateFilterKey = (key, allowedKeys = null) => {
+  if (typeof key !== 'string' || !key.trim()) {
+    throw invalidFilterError('Invalid filter key');
+  }
+  const allowSet = allowedKeys
+    ? (allowedKeys instanceof Set ? allowedKeys : new Set(allowedKeys))
+    : null;
+  const branches = key.split('|');
+  for (const branch of branches) {
+    if (isSensitiveFilterKey(branch)) {
+      throw invalidFilterError(`Filter key is not allowed: ${branch}`);
+    }
+    if (allowSet && !allowSet.has(branch)) {
+      throw invalidFilterError(`Filter key is not allowed: ${branch}`);
+    }
+  }
+};
+
+/**
+ * Validates an array of filter objects against sensitive path restrictions
+ * and an optional allowlist.
+ * @param {Array} filters
+ * @param {Set<string>|Array<string>|null} allowedKeys
+ */
+const validateFilters = (filters, allowedKeys = null) => {
+  if (!Array.isArray(filters)) {
+    throw invalidFilterError('Filters must be an array');
+  }
+  for (const filter of filters) {
+    if (!filter || typeof filter !== 'object') {
+      throw invalidFilterError('Invalid filter entry');
+    }
+    validateFilterKey(filter.key, allowedKeys);
+  }
+};
+
+/**
+ * Validates a sort field against sensitive path restrictions and an optional allowlist.
+ * @param {string} sortField
+ * @param {Set<string>|Array<string>|null} allowedKeys
+ */
+const validateSortField = (sortField, allowedKeys = null) => {
+  if (typeof sortField !== 'string' || !sortField.trim() ||
+      sortField.includes('|') || sortField.includes('?')) {
+    throw invalidFilterError('Invalid sort field');
+  }
+  if (isSensitiveFilterKey(sortField)) {
+    throw invalidFilterError(`Sort field is not allowed: ${sortField}`);
+  }
+  if (allowedKeys) {
+    const allowSet = allowedKeys instanceof Set ? allowedKeys : new Set(allowedKeys);
+    if (!allowSet.has(sortField)) {
+      throw invalidFilterError(`Sort field is not allowed: ${sortField}`);
+    }
+  }
+};
+
 /**
  * Builds a case-insensitive RegExp from a user-controlled filter value.
  * Strings are escaped so metacharacters are literal and cannot backtrack.
@@ -188,16 +278,19 @@ const passFilters = (obj, filters) => {
 /**
  * Converts array of filters from API request to array of mongoose expressions
  * @param {Array}  filters an array of filters from API request
+ * @param {Object} [options] validation options
+ * @param {Set<string>|Array<string>} [options.allowedKeys] optional explicit key allowlist
  * @returns {Array} an array of mongoose match expressions
  */
-const getMatchFilters = (filters) => {
+const getMatchFilters = (filters, { allowedKeys = null } = {}) => {
+  validateFilters(filters, allowedKeys);
   const matchFilters = [];
   for (const filter of filters) {
     const filterExpr = getFilterExpression(filter);
     if (filterExpr !== undefined) {
       matchFilters.push(filterExpr);
     } else {
-      throw new Error('There is an error in filter: ' + JSON.stringify(filter));
+      throw invalidFilterError('There is an error in filter: ' + JSON.stringify(filter));
     }
   }
   return matchFilters;
@@ -205,5 +298,9 @@ const getMatchFilters = (filters) => {
 
 module.exports = {
   getMatchFilters,
-  passFilters
+  passFilters,
+  isSensitiveFilterKey,
+  validateFilterKey,
+  validateFilters,
+  validateSortField
 };

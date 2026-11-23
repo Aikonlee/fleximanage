@@ -114,15 +114,44 @@ const revokeCurrent = async (userId, sid) => {
     { $set: { revokedAt: new Date() } });
 };
 
-const revokeAll = async (userId, { incrementAuthVersion = true } = {}) => {
+const authVersionFilter = (userId, expectedAuthVersion) => {
+  if (expectedAuthVersion === undefined) return { _id: userId };
+  if (expectedAuthVersion === 0) {
+    return {
+      _id: userId,
+      $or: [{ authVersion: 0 }, { authVersion: { $exists: false } }]
+    };
+  }
+  return { _id: userId, authVersion: expectedAuthVersion };
+};
+
+const revokeAll = async (userId, { incrementAuthVersion = true, expectedAuthVersion } = {}) => {
   let authVersion;
   if (incrementAuthVersion) {
     const updated = await Users.findOneAndUpdate(
-      { _id: userId }, { $inc: { authVersion: 1 } }, { new: true });
-    if (!updated) throw new Error('User not found');
+      authVersionFilter(userId, expectedAuthVersion),
+      { $inc: { authVersion: 1 } },
+      { new: true });
+    if (!updated) {
+      if (expectedAuthVersion !== undefined) {
+        const err = new Error('Auth version mismatch');
+        err.code = 'AUTH_VERSION_MISMATCH';
+        throw err;
+      }
+      throw new Error('User not found');
+    }
     authVersion = updated.authVersion;
+  } else if (expectedAuthVersion !== undefined) {
+    authVersion = expectedAuthVersion;
   }
-  await Sessions.updateMany({ user: userId, revokedAt: null },
+  const sessionFilter = { user: userId, revokedAt: null };
+  if (!incrementAuthVersion && expectedAuthVersion !== undefined) {
+    sessionFilter.$or = [
+      { authVersion: { $lt: expectedAuthVersion } },
+      { authVersion: { $exists: false } }
+    ];
+  }
+  await Sessions.updateMany(sessionFilter,
     { $set: { revokedAt: new Date() } });
   return authVersion;
 };

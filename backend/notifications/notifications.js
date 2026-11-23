@@ -504,6 +504,7 @@ class NotificationsManager {
 
       const orgsMap = new Map();
       const orgNotificationsMap = new Map();
+      const pendingWebHooks = [];
       const defaultNotificationsConfPromise = notificationsConf
         .findOne({ name: 'Default notifications settings' }).lean();
 
@@ -728,8 +729,12 @@ class NotificationsManager {
             }
           }
           if (eventRule.sendWebHook) {
-            await this.sendWebHook(title, details,
-              notification.severity, orgNotificationsConf);
+            pendingWebHooks.push({
+              title,
+              details,
+              severity: notification.severity,
+              orgNotificationsConf
+            });
           }
           const key = notification.org.toString();
           const notificationList = orgsMap.get(key);
@@ -776,6 +781,29 @@ class NotificationsManager {
         await notificationsDb.bulkWrite(bulkWriteOps);
         // Log notification for logging systems
         logger.info('New notifications', { params: { notifications: notificationList } });
+      }
+
+      // Dispatch webhooks after persistence in detached tasks so a slow or
+      // failing webhook endpoint cannot delay persistence or other organizations.
+      for (const hook of pendingWebHooks) {
+        setImmediate(() => {
+          Promise.resolve()
+            .then(() => this.sendWebHook(
+              hook.title, hook.details, hook.severity, hook.orgNotificationsConf
+            ))
+            .catch((err) => {
+              logger.error('Failed to send an immediate webhook notification', {
+                params: {
+                  message: {
+                    title: hook.title,
+                    details: hook.details,
+                    severity: hook.severity
+                  },
+                  error: err?.message || String(err)
+                }
+              });
+            });
+        });
       }
     } catch (err) {
       logger.error('Failed to store notifications in database', {

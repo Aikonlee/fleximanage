@@ -49,3 +49,23 @@ test('expired login attempts cannot submit codes', async () => {
   expect(await screen.findByText(/sign-in attempt expired/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Verify', exact: true })).toBeNull();
 });
+test('rejects MFA session token belonging to a different identity when expectedUserId is set', async () => {
+  methods();
+  const authenticated = vi.fn();
+  const otherSession = token({ _id: 'user-2', username: 'bob@example.com', mfaVerified: true });
+  api.post.mockResolvedValue({ headers: { 'refresh-jwt': otherSession, 'refresh-token': 'bob-refresh' } });
+  render(
+    <MfaChallenge
+      loginToken={token({ type: 'login', _id: 'user-1', username: 'alice@example.com' })}
+      expectedUserId="user-1"
+      expectedUsername="alice@example.com"
+      onAuthenticated={authenticated}
+      onCancel={() => {}}
+    />
+  );
+  fireEvent.change(await screen.findByLabelText('Authenticator code'), { target: { value: '123456' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Verify', exact: true }));
+  expect(await screen.findByText(/does not match the current session/i)).toBeTruthy();
+  expect(authenticated).not.toHaveBeenCalled();
+  expect(localStorage.getItem('token')).toBeNull();
+});

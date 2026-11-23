@@ -58,7 +58,7 @@ const deviceQueues = require('../utils/deviceQueue')(
 );
 const cidr = require('../utils/cidr');
 const { TypedError, ErrorTypes } = require('../utils/errors');
-const { getMatchFilters } = require('../utils/filterUtils');
+const { getMatchFilters, validateFilters, validateSortField } = require('../utils/filterUtils');
 const TunnelsService = require('./TunnelsService');
 const { pendingTypes, getReason } = require('../deviceLogic/events/eventReasons');
 const {
@@ -94,6 +94,243 @@ const sanitizeOspf = (ospf) => {
   }
   return sanitized;
 };
+
+// Explicit allowlist of non-sensitive device fields permitted in query filters
+// and sortField, inventoried from backend/models/devices.js and lookup/computed
+// fields while excluding credentials, tokens, keys, secrets, passwords, and
+// arbitrary nested configuration objects.
+const DEVICE_FILTER_ALLOWLIST = new Set([
+  '_id',
+  'account',
+  'org',
+  'org._id',
+  'org.name',
+  'org.vxlanPort',
+  'name',
+  'description',
+  'site',
+  'hostname',
+  'defaultRoute',
+  'serial',
+  'machineId',
+  'ipList',
+  'isApproved',
+  'isConnected',
+  'status',
+  'state',
+  'deviceStatus.state',
+  'deviceState',
+  'deviceSpecificRulesEnabled',
+  'labels',
+  'coords',
+  'createdAt',
+  'updatedAt',
+  'distro.version',
+  'distro.codename',
+  'sync.state',
+  'sync.statePrev',
+  'sync.autoSync',
+  'sync.trials',
+  'sync.hash',
+  'versions.agent',
+  'versions.router',
+  'versions.device',
+  'versions.vpp',
+  'versions.frr',
+  'cpuInfo.hwCores',
+  'cpuInfo.grubCores',
+  'cpuInfo.vppCores',
+  'cpuInfo.configuredVppCores',
+  'cpuInfo.powerSaving',
+  'upgradeSchedule._id',
+  'upgradeSchedule.jobQueued',
+  'upgradeSchedule.time',
+  'upgradeSchedule.latestTry',
+  'appIdentification.clients',
+  'appIdentification.lastRequestTime',
+  'appIdentification.lastUpdateTime',
+  'qosTrafficMap.lastRequestTime',
+  'qosTrafficMap.lastUpdateTime',
+  'IKEv2.certificate',
+  'IKEv2.expireTime',
+  'IKEv2.jobQueued',
+  'policies.multilink.policy',
+  'policies.multilink.status',
+  'policies.multilink.requestTime',
+  'policies.multilink.policy._id',
+  'policies.multilink.policy.name',
+  'policies.multilink.policy.description',
+  'policies.firewall.policy',
+  'policies.firewall.status',
+  'policies.firewall.requestTime',
+  'policies.firewall.policy._id',
+  'policies.firewall.policy.name',
+  'policies.firewall.policy.description',
+  'policies.qos.policy',
+  'policies.qos.status',
+  'policies.qos.requestTime',
+  'policies.qos.policy._id',
+  'policies.qos.policy.name',
+  'policies.qos.policy.description',
+  'pathlabels._id',
+  'pathlabels.name',
+  'pathlabels.description',
+  'pathlabels.color',
+  'pathlabels.type',
+  'vrrp._id',
+  'vrrp.name',
+  'vrrp.virtualIp',
+  'interfaces._id',
+  'interfaces.name',
+  'interfaces.type',
+  'interfaces.isAssigned',
+  'interfaces.IPv4',
+  'interfaces.IPv4Mask',
+  'interfaces.IPv6',
+  'interfaces.IPv6Mask',
+  'interfaces.PublicIP',
+  'interfaces.PublicPort',
+  'interfaces.NatType',
+  'interfaces.useStun',
+  'interfaces.useFixedPublicPort',
+  'interfaces.gateway',
+  'interfaces.metric',
+  'interfaces.mtu',
+  'interfaces.MAC',
+  'interfaces.devId',
+  'interfaces.parentDevId',
+  'interfaces.locked',
+  'interfaces.vlanTag',
+  'interfaces.driver',
+  'interfaces.dhcp',
+  'interfaces.dnsServers',
+  'interfaces.dnsDomains',
+  'interfaces.useDhcpDnsServers',
+  'interfaces.routing',
+  'interfaces.pathlabels',
+  'interfaces.monitorInternet',
+  'interfaces.internetAccess',
+  'interfaces.linkStatus',
+  'interfaces.deviceType',
+  'interfaces.bandwidthMbps.tx',
+  'interfaces.bandwidthMbps.rx',
+  'interfaces.qosPolicy',
+  'interfaces.hasIpOnDevice',
+  'interfaces.status',
+  'interfaces.isConnected',
+  'interfaces.createdAt',
+  'interfaces.updatedAt',
+  'interfaces.ospf.area',
+  'interfaces.ospf.cost',
+  'staticroutes._id',
+  'staticroutes.destination',
+  'staticroutes.gateway',
+  'staticroutes.ifname',
+  'staticroutes.metric',
+  'staticroutes.redistributeViaOSPF',
+  'staticroutes.redistributeViaBGP',
+  'staticroutes.onLink',
+  'staticroutes.isPending',
+  'staticroutes.pendingType',
+  'staticroutes.pendingReason',
+  'staticroutes.pendingTime',
+  'staticroutes.conditions.destination',
+  'staticroutes.conditions.type',
+  'staticroutes.conditions.via.devId',
+  'staticroutes.conditions.via.tunnelId',
+  'staticroutes.createdAt',
+  'staticroutes.updatedAt',
+  'dhcp._id',
+  'dhcp.interface',
+  'dhcp.rangeStart',
+  'dhcp.rangeEnd',
+  'dhcp.dns',
+  'dhcp.defaultLeaseTime',
+  'dhcp.maxLeaseTime',
+  'dhcp.status',
+  'dhcp.macAssign.host',
+  'dhcp.macAssign.mac',
+  'dhcp.macAssign.ipv4',
+  'dhcp.macAssign.useHostNameAsDhcpOption',
+  'dhcp.options.option',
+  'dhcp.options.code',
+  'dhcp.options.value',
+  'dhcp.createdAt',
+  'dhcp.updatedAt',
+  'firewall.rules._id',
+  'firewall.rules.description',
+  'firewall.rules.direction',
+  'firewall.rules.inbound',
+  'firewall.rules.internalIP',
+  'firewall.rules.internalPortStart',
+  'firewall.rules.priority',
+  'firewall.rules.enabled',
+  'firewall.rules.action',
+  'firewall.rules.interfaces',
+  'firewall.rules.system',
+  'firewall.rules.reference',
+  'firewall.rules.referenceModel',
+  'firewall.rules.referenceNumber',
+  'firewall.rules.classification.source.ipPort.ip',
+  'firewall.rules.classification.source.ipPort.ports',
+  'firewall.rules.classification.source.trafficId',
+  'firewall.rules.classification.source.lanNat.interface',
+  'firewall.rules.classification.source.lanNat.match',
+  'firewall.rules.classification.source.lanNat.action',
+  'firewall.rules.classification.destination.ipProtoPort.ip',
+  'firewall.rules.classification.destination.ipProtoPort.ports',
+  'firewall.rules.classification.destination.ipProtoPort.protocols',
+  'firewall.rules.classification.destination.ipProtoPort.interface',
+  'firewall.rules.classification.destination.trafficId',
+  'firewall.rules.classification.destination.trafficTags.category',
+  'firewall.rules.classification.destination.trafficTags.serviceClass',
+  'firewall.rules.classification.destination.trafficTags.importance',
+  'firewall.rules.classification.destination.lanNat.match',
+  'firewall.rules.classification.destination.lanNat.action',
+  'ospf.routerId',
+  'ospf.helloInterval',
+  'ospf.deadInterval',
+  'ospf.redistributeBgp',
+  'ospf.custom',
+  'bgp.enable',
+  'bgp.routerId',
+  'bgp.localASN',
+  'bgp.keepaliveInterval',
+  'bgp.holdInterval',
+  'bgp.redistributeOspf',
+  'bgp.custom',
+  'bgp.neighbors._id',
+  'bgp.neighbors.ip',
+  'bgp.neighbors.remoteASN',
+  'bgp.neighbors.inboundFilter',
+  'bgp.neighbors.outboundFilter',
+  'bgp.neighbors.sendCommunity',
+  'bgp.neighbors.multiHop',
+  'bgp.neighbors.custom',
+  'bgp.neighbors.createdAt',
+  'bgp.neighbors.updatedAt',
+  'advancedRouting.custom',
+  'routingFilters._id',
+  'routingFilters.name',
+  'routingFilters.description',
+  'routingFilters.rules._id',
+  'routingFilters.rules.route',
+  'routingFilters.rules.action',
+  'routingFilters.rules.nextHop',
+  'routingFilters.rules.priority',
+  'routingFilters.rules.custom',
+  'edgeLoopbacks._id',
+  'edgeLoopbacks.name',
+  'edgeLoopbacks.ip',
+  'applications.app',
+  'applications.app._id',
+  'applications.identifier',
+  'applications.status',
+  'applications.requestTime',
+  'applications.app.installedVersion',
+  'applications.app.appStoreApp.name',
+  'applications.app.appStoreApp.identifier'
+]);
 
 const sanitizeDeviceOspf = (ospf) => {
   const plain = plainSubdoc(ospf);
@@ -431,17 +668,25 @@ class DevicesService {
   static async devicesGET (requestParams, { user }, response) {
     const { org, offset, limit, sortField, sortOrder, filters } = requestParams;
     try {
+      let parsedFilters = [];
+      if (filters) {
+        try {
+          parsedFilters = JSON.parse(filters);
+        } catch (parseErr) {
+          throw createError(400, 'Invalid filters parameter');
+        }
+        validateFilters(parsedFilters, DEVICE_FILTER_ALLOWLIST);
+      }
+      if (sortField) {
+        validateSortField(sortField, DEVICE_FILTER_ALLOWLIST);
+      }
+
       const orgList = await getAccessTokenOrgList(user, org, false);
       const updateStatusInDb = (filters && /state|isConnected|sync/.test(filters)) ||
         /state|isConnected|sync/.test(sortField);
       if (updateStatusInDb) {
         // need to update changed statuses from memory to DB
         await statusesInDb.updateDevicesStatuses(orgList);
-      }
-
-      let parsedFilters = [];
-      if (filters) {
-        parsedFilters = JSON.parse(filters);
       }
       const hasFilters = parsedFilters.length > 0;
 
@@ -1519,7 +1764,7 @@ class DevicesService {
         } else if (filters && (!Array.isArray(filters) || filters.length === 0)) {
           throw createError(400, 'To delete ALL devices please add filters=\'all\' parameter');
         } else if (filters) {
-          const matchFilters = getMatchFilters(filters);
+          const matchFilters = getMatchFilters(filters, { allowedKeys: DEVICE_FILTER_ALLOWLIST });
           if (matchFilters.length > 0) {
             query.$and = matchFilters;
           } else {

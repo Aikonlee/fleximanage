@@ -167,6 +167,69 @@ describe('pinned webhook lookup', () => {
       .rejects.toThrow(/resolves to 10\.1\.2\.3/);
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it('passes AbortSignal timeout and 1MB response size cap to fetch', async () => {
+    mockLookup(['203.0.113.10']);
+    const sent = await hooks.sendToWebHook('https://hooks.example/hook', { ok: true });
+    expect(sent).toBe(true);
+    const options = fetch.mock.calls[0][1];
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+    expect(options.size).toBe(createWebHooks.WEBHOOK_MAX_RESPONSE_BYTES);
+    expect(createWebHooks.WEBHOOK_TIMEOUT_MS).toBe(5000);
+    expect(createWebHooks.WEBHOOK_MAX_RESPONSE_BYTES).toBe(1024 * 1024);
+  });
+
+  it('aborts and returns false when webhook fetch times out', async () => {
+    mockLookup(['203.0.113.10']);
+    const timeoutErr = Object.assign(new Error('The operation was aborted due to timeout'), {
+      name: 'TimeoutError'
+    });
+    fetch.mockRejectedValueOnce(timeoutErr);
+    await expect(hooks.sendToWebHook('https://slow.example/hook', { ok: true }))
+      .resolves.toBe(false);
+
+    // End-to-end check with real fetch-with-proxy against a stalling local server
+    const realFetch = jest.requireActual('fetch-with-proxy').default;
+    const timers = [];
+    const slowServer = http.createServer((req, res) => {
+      const t = setTimeout(() => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'success' }));
+      }, 5000);
+      t.unref();
+      timers.push(t);
+    });
+    await new Promise((resolve) => slowServer.listen(0, '127.0.0.1', resolve));
+    const port = slowServer.address().port;
+    try {
+      await expect(realFetch(`http://127.0.0.1:${port}/hook`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(50)
+      })).rejects.toThrow(/abort/i);
+    } finally {
+      timers.forEach((t) => clearTimeout(t));
+      await new Promise((resolve) => slowServer.close(resolve));
+    }
+  });
+
+  it('cancels response body and returns false when response exceeds size cap', async () => {
+    mockLookup(['203.0.113.10']);
+    const destroy = jest.fn();
+    const jsonSpy = jest.fn(async () => ({ status: 'success' }));
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: {
+        get: (h) => (h.toLowerCase() === 'content-length' ? String(2 * 1024 * 1024) : null)
+      },
+      body: { destroy },
+      json: jsonSpy
+    });
+    await expect(hooks.sendToWebHook('https://huge.example/hook', { ok: true }))
+      .resolves.toBe(false);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(jsonSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('auth cookie secure flag', () => {

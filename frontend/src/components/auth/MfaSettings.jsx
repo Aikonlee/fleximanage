@@ -17,6 +17,8 @@ const isReauthRequired = (reason) => (
 export default function MfaSettings() {
   const { token, payload } = useAuth();
   const navigate = useNavigate();
+  const currentUsername = (payload?.username || '').trim();
+  const currentUserId = payload?._id || null;
   const [enabled, setEnabled] = useState(null);
   const [showSetup, setShowSetup] = useState(false);
   const [codes, setCodes] = useState([]);
@@ -24,7 +26,6 @@ export default function MfaSettings() {
   const [busy, setBusy] = useState(false);
   const [reauthState, setReauthState] = useState(null);
   const [showReauth, setShowReauth] = useState(false);
-  const [reauthUsername, setReauthUsername] = useState('');
   const [reauthPassword, setReauthPassword] = useState('');
   const [reauthError, setReauthError] = useState('');
   const [reauthBusy, setReauthBusy] = useState(false);
@@ -70,7 +71,6 @@ export default function MfaSettings() {
   }, []);
 
   const openReauthModal = () => {
-    setReauthUsername(payload?.username || '');
     setReauthPassword('');
     setReauthError('');
     setReauthLoginToken('');
@@ -84,6 +84,23 @@ export default function MfaSettings() {
     setReauthPassword('');
     setReauthError('');
     setReauthLoginToken('');
+  };
+
+  const matchesCurrentIdentity = (candidateToken) => {
+    const claims = decodeJwtPayload(candidateToken);
+    if (!claims) return false;
+    const isLoginChallenge = claims.type === 'login';
+    const candidateUserId = isLoginChallenge ? claims.userId : claims._id;
+    if (currentUserId) {
+      if (!candidateUserId || String(candidateUserId) !== String(currentUserId)) {
+        return false;
+      }
+    }
+    if (!isLoginChallenge && currentUsername && claims.username &&
+      claims.username.toLowerCase() !== currentUsername.toLowerCase()) {
+      return false;
+    }
+    return Boolean(currentUserId || (!isLoginChallenge && currentUsername && claims.username));
   };
 
   const handleReauthComplete = () => {
@@ -101,6 +118,10 @@ export default function MfaSettings() {
   const handleReauthSubmit = async (event) => {
     event.preventDefault();
     setReauthError('');
+    if (!currentUsername) {
+      setReauthError('Unable to determine the current signed-in account.');
+      return;
+    }
     if (!captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)) {
       setReauthError('Please complete the CAPTCHA');
       return;
@@ -108,13 +129,18 @@ export default function MfaSettings() {
     setReauthBusy(true);
     try {
       const response = await api.post('/users/login', {
-        username: reauthUsername.trim(),
+        username: currentUsername,
         password: reauthPassword,
         captcha: captchaToken || undefined
       }, { authFlow: true });
 
       const hasProcessTokenOnly = decodeJwtPayload(response.data?.token)?.type === 'login';
       if (hasProcessTokenOnly) {
+        if (!matchesCurrentIdentity(response.data.token)) {
+          setReauthError('Re-authentication must match the currently signed-in account.');
+          setReauthPassword('');
+          return;
+        }
         setReauthLoginToken(response.data.token);
         setReauthPassword('');
         return;
@@ -123,6 +149,11 @@ export default function MfaSettings() {
       const finalToken = response.data?.token || response.headers['refresh-jwt'] || response.headers['Refresh-JWT'];
       const refreshToken = response.headers['refresh-token'];
       if (finalToken && refreshToken) {
+        if (!matchesCurrentIdentity(finalToken)) {
+          setReauthError('Re-authentication must match the currently signed-in account.');
+          setReauthPassword('');
+          return;
+        }
         setSessionTokens(finalToken, refreshToken);
         handleReauthComplete();
       } else {
@@ -166,6 +197,8 @@ export default function MfaSettings() {
     <Modal show={showSetup} onHide={() => setShowSetup(false)} centered><Modal.Body>
       {showSetup && <MfaChallenge
         loginToken={token}
+        expectedUserId={currentUserId}
+        expectedUsername={currentUsername}
         onAuthenticated={() => { setEnabled(true); setShowSetup(false); }}
         onCancel={() => setShowSetup(false)}
         onReauthRequired={handleSetupReauthRequired}
@@ -179,6 +212,8 @@ export default function MfaSettings() {
         {reauthLoginToken ? (
           <MfaChallenge
             loginToken={reauthLoginToken}
+            expectedUserId={currentUserId}
+            expectedUsername={currentUsername}
             onAuthenticated={handleReauthComplete}
             onCancel={closeReauthModal}
           />
@@ -189,9 +224,9 @@ export default function MfaSettings() {
               <Form.Label>Username</Form.Label>
               <Form.Control
                 type="text"
-                value={reauthUsername}
-                onChange={(event) => setReauthUsername(event.target.value)}
-                required
+                value={currentUsername}
+                readOnly
+                aria-readonly="true"
               />
             </Form.Group>
             <Form.Group className="mb-3" controlId="reauth-password">

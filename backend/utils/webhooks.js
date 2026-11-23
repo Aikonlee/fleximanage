@@ -25,6 +25,8 @@ blockedWebhookTargets.addSubnet('fe80::', 10, 'ipv6');
 
 const WEBHOOK_TARGET_ERROR =
   'Webhook URL must not target a loopback, link-local, or private network address';
+const WEBHOOK_TIMEOUT_MS = 5000;
+const WEBHOOK_MAX_RESPONSE_BYTES = 1024 * 1024; // 1MB response body cap
 
 /**
  * Host or address portion of a webhook URL, hostname, or IP literal.
@@ -247,7 +249,9 @@ class WebHooks {
       method: 'POST',
       headers,
       body: data,
-      redirect: 'error'
+      redirect: 'error',
+      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+      size: WEBHOOK_MAX_RESPONSE_BYTES
     };
     if (pinnedAddress) fetchOptions.agent = agentPinnedTo(url, pinnedAddress);
 
@@ -255,6 +259,19 @@ class WebHooks {
       .then(response => {
         if (response && response.status >= 300 && response.status < 400) {
           throw new Error(`Webhook redirect responses are not allowed (HTTP ${response.status})`);
+        }
+        const contentLength = response?.headers && typeof response.headers.get === 'function'
+          ? Number(response.headers.get('content-length'))
+          : NaN;
+        if (Number.isFinite(contentLength) && contentLength > WEBHOOK_MAX_RESPONSE_BYTES) {
+          if (response.body && typeof response.body.destroy === 'function') {
+            response.body.destroy();
+          } else if (response.body && typeof response.body.cancel === 'function') {
+            Promise.resolve(response.body.cancel()).catch(() => {});
+          }
+          throw new Error(
+            `Webhook response exceeds maximum allowed size (${WEBHOOK_MAX_RESPONSE_BYTES} bytes)`
+          );
         }
         return response.json()
           .then(json => {
@@ -291,4 +308,6 @@ function webHooks (secretKey) {
 }
 webHooks.isBlockedWebhookTarget = isBlockedWebhookTarget;
 webHooks.lookupPinnedTo = lookupPinnedTo;
+webHooks.WEBHOOK_TIMEOUT_MS = WEBHOOK_TIMEOUT_MS;
+webHooks.WEBHOOK_MAX_RESPONSE_BYTES = WEBHOOK_MAX_RESPONSE_BYTES;
 module.exports = webHooks;

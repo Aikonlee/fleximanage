@@ -329,9 +329,7 @@ class NotificationsService {
 
         if (deviceFilters.length > 0) {
           const deviceIDs = await NotificationsService.getDevicesFromFilters(orgList, deviceFilters);
-          if (deviceIDs.length > 0) {
-            notificationFilters.push({ 'targets.deviceId': { $in: deviceIDs.map(d => d._id) } });
-          }
+          notificationFilters.push({ 'targets.deviceId': { $in: deviceIDs.map(d => d._id) } });
         }
 
         if (notificationFilters.length > 0) {

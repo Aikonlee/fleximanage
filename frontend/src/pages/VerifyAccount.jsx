@@ -1,12 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
-// Simple account verification page. Extracts id & token (t) from query string and
-// POSTs them to /api/users/verify-account. Shows result & link back to login.
+// Simple account verification page. Extracts id from query string and token (t)
+// from the URL fragment (#t=...) so tokens are never sent in HTTP request lines
+// or logged in nginx error logs, then POSTs them to /api/users/verify-account.
+// Note: legacy emails carrying &t=<token> in the query string will no longer work.
 export default function VerifyAccount () {
   const location = useLocation();
   const navigate = useNavigate();
+  const [verifyParams] = useState(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+    return {
+      id: (searchParams.get('id') || '').trim(),
+      token: (hashParams.get('t') || '').trim()
+    };
+  });
+  const submittedRef = useRef(false);
   const [status, setStatus] = useState('pending'); // pending | success | already | error
   const [message, setMessage] = useState('Verifying your account...');
   const [resendEmail, setResendEmail] = useState('');
@@ -24,9 +35,21 @@ export default function VerifyAccount () {
   };
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const id = params.get('id');
-    const token = params.get('t');
+    // Clear the URL fragment (and query) before any API call so the token does
+    // not linger in browser history or leak via client-side telemetry.
+    const hasLocationParams = Boolean(location.search || location.hash);
+    if (hasLocationParams) {
+      navigate(location.pathname, { replace: true, state: location.state });
+    }
+    const hasWindowParams = typeof window !== 'undefined' &&
+      Boolean(window.location?.search || window.location?.hash);
+    if (hasWindowParams && window.history && typeof window.history.replaceState === 'function') {
+      window.history.replaceState(window.history.state, '', location.pathname);
+    }
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+
+    const { id, token } = verifyParams;
     if (!id || !token) {
       setStatus('error');
       setMessage('Missing verification parameters. Please use the link from your email.');
@@ -57,7 +80,7 @@ export default function VerifyAccount () {
         }
       }
     })();
-  }, [location.search, navigate]);
+  }, [location.hash, location.pathname, location.search, location.state, navigate, verifyParams]);
 
   const color = status === 'success' || status === 'already' ? 'success' : (status === 'error' ? 'danger' : 'secondary');
 

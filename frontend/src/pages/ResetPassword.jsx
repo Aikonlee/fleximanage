@@ -8,14 +8,18 @@ import { clearSession } from '../auth/session';
 import api from '../services/api';
 import './Login.css';
 
+// Reads user id from query params and reset token (t) from the URL fragment
+// (#t=...) so tokens are not sent in HTTP request lines or logged in nginx error
+// logs. Legacy emails with &t=<token> in the query string will no longer work.
 export default function ResetPassword() {
   const location = useLocation();
   const navigate = useNavigate();
   const [resetParams] = useState(() => {
-    const params = new URLSearchParams(location.search);
+    const searchParams = new URLSearchParams(location.search);
+    const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
     return {
-      id: (params.get('id') || '').trim(),
-      token: (params.get('t') || '').trim()
+      id: (searchParams.get('id') || '').trim(),
+      token: (hashParams.get('t') || '').trim()
     };
   });
   const [password, setPassword] = useState('');
@@ -24,10 +28,16 @@ export default function ResetPassword() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (location.search) {
-      navigate(location.pathname, { replace: true });
+    const hasLocationParams = Boolean(location.search || location.hash);
+    if (hasLocationParams) {
+      navigate(location.pathname, { replace: true, state: location.state });
     }
-  }, [location.pathname, location.search, navigate]);
+    const hasWindowParams = typeof window !== 'undefined' &&
+      Boolean(window.location?.search || window.location?.hash);
+    if (hasWindowParams && window.history && typeof window.history.replaceState === 'function') {
+      window.history.replaceState(window.history.state, '', location.pathname);
+    }
+  }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   const hasValidParams = Boolean(resetParams.id && resetParams.token);
 

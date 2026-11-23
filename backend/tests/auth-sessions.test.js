@@ -104,3 +104,43 @@ test('credential changes invalidate access version before revoking every session
     { $set: { revokedAt: expect.any(Date) } }
   );
 });
+
+test('revokeAll increments conditionally when expectedAuthVersion is set', async () => {
+  Users.findOneAndUpdate.mockResolvedValueOnce({ authVersion: 3 });
+  const nextVersion = await authSessions.revokeAll(user._id, { expectedAuthVersion: 2 });
+  expect(Users.findOneAndUpdate).toHaveBeenCalledWith(
+    { _id: user._id, authVersion: 2 },
+    { $inc: { authVersion: 1 } },
+    { new: true }
+  );
+  expect(nextVersion).toBe(3);
+  expect(Sessions.updateMany).toHaveBeenCalledTimes(1);
+
+  Sessions.updateMany.mockClear();
+  Users.findOneAndUpdate.mockResolvedValueOnce(null);
+  await expect(authSessions.revokeAll(user._id, { expectedAuthVersion: 0 }))
+    .rejects.toMatchObject({ code: 'AUTH_VERSION_MISMATCH' });
+  expect(Users.findOneAndUpdate).toHaveBeenLastCalledWith(
+    { _id: user._id, $or: [{ authVersion: 0 }, { authVersion: { $exists: false } }] },
+    { $inc: { authVersion: 1 } },
+    { new: true }
+  );
+  expect(Sessions.updateMany).not.toHaveBeenCalled();
+});
+
+test('revokeAll without version bump revokes prior sessions for expectedAuthVersion', async () => {
+  const version = await authSessions.revokeAll(user._id, {
+    incrementAuthVersion: false,
+    expectedAuthVersion: 2
+  });
+  expect(Users.findOneAndUpdate).not.toHaveBeenCalled();
+  expect(Sessions.updateMany).toHaveBeenCalledWith(
+    {
+      user: user._id,
+      revokedAt: null,
+      $or: [{ authVersion: { $lt: 2 } }, { authVersion: { $exists: false } }]
+    },
+    { $set: { revokedAt: expect.any(Date) } }
+  );
+  expect(version).toBe(2);
+});

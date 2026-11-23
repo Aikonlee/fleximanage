@@ -30,7 +30,8 @@ jest.mock('../periodic/deviceStatus', () => () => ({
   getDeviceStatus: jest.fn(() => ({ state: 'running' }))
 }));
 jest.mock('../periodic/statusesInDb', () => () => ({
-  isStatusesInDbEnabled: jest.fn(() => false)
+  isStatusesInDbEnabled: jest.fn(() => false),
+  updateDevicesStatuses: jest.fn(async () => {})
 }));
 jest.mock('../websocket/Connections', () => () => ({
   isConnected: jest.fn(() => true),
@@ -424,5 +425,134 @@ test('devicesIdRoutingOSPFPUT never echoes ospf.key, preserves stored key when o
     deadInterval: 45,
     redistributeBgp: false,
     keyConfigured: true
+  });
+});
+
+describe('F2 device filter and sort field allowlist', () => {
+  test.each([
+    'interfaces.ospf.key',
+    'interfaces.ospf.keyId',
+    'ospf.key',
+    'ospf.keyId',
+    'deviceToken',
+    'fromToken',
+    'bgp.neighbors.password',
+    'tunnelKeys',
+    'tunnelKeys.key1',
+    'interfaces.configuration.secret',
+    'applications.app.configuration.keys',
+    'name|interfaces.ospf.key',
+    'unknownField',
+    '$where'
+  ])('devicesGET rejects disallowed or sensitive filter key %s', async (badKey) => {
+    const aggSpy = jest.spyOn(devices, 'aggregate').mockImplementation(() => chainQuery([{
+      records: [],
+      meta: []
+    }]));
+
+    const res = await DevicesService.devicesGET(
+      { filters: JSON.stringify([{ key: badKey, op: 'contains', val: 'a' }]) },
+      { user },
+      { setHeader: jest.fn() }
+    );
+
+    expect(res.code).toBe(400);
+    expect(aggSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    'interfaces.ospf.key',
+    'interfaces.ospf.keyId',
+    'ospf.key',
+    'ospf.keyId',
+    'deviceToken',
+    'fromToken',
+    'bgp.neighbors.password',
+    'tunnelKeys',
+    'unknownSortField',
+    'name|hostname'
+  ])('devicesGET rejects disallowed or sensitive sortField %s', async (badSort) => {
+    const aggSpy = jest.spyOn(devices, 'aggregate').mockImplementation(() => chainQuery([{
+      records: [],
+      meta: []
+    }]));
+
+    const res = await DevicesService.devicesGET(
+      { sortField: badSort, sortOrder: 'asc' },
+      { user },
+      { setHeader: jest.fn() }
+    );
+
+    expect(res.code).toBe(400);
+    expect(aggSpy).not.toHaveBeenCalled();
+  });
+
+  test('devicesGET still allows normal device filters and sort fields', async () => {
+    const stored = makeStoredDevice();
+    const aggSpy = jest.spyOn(devices, 'aggregate').mockImplementation(() => chainQuery([{
+      records: [stored],
+      meta: [{ total: 1 }]
+    }]));
+
+    const res = await DevicesService.devicesGET(
+      {
+        filters: JSON.stringify([
+          { key: 'name', op: 'contains', val: 'edge' },
+          { key: 'interfaces.IPv4', op: '==', val: '10.0.1.1' },
+          { key: 'policies.qos.policy.name', op: '==', val: 'default' }
+        ]),
+        sortField: 'name',
+        sortOrder: 'asc'
+      },
+      { user },
+      { setHeader: jest.fn() }
+    );
+
+    expect(res.code).toBe(200);
+    expect(aggSpy).toHaveBeenCalledTimes(1);
+    expect(res.payload).toHaveLength(1);
+    expect(res.payload[0].name).toBe('edge-1');
+  });
+
+  test.each([
+    ['defaultRoute', 'defaultRoute', '10.0.0.1'],
+    ['interfaces.mtu', 'defaultRoute', 1500],
+    ['staticroutes.destination', 'upgradeSchedule.latestTry', '192.168.10.0/24'],
+    ['dhcp.rangeStart', 'IKEv2.expireTime', '192.168.1.10'],
+    ['bgp.keepaliveInterval', 'bgp.holdInterval', '30'],
+    ['edgeLoopbacks.ip', 'routingFilters.name', '10.255.0.1'],
+    ['firewall.rules.direction', 'sync.hash', 'inbound']
+  ])('devicesGET preserves compatibility for safe schema filter %s and sortField %s',
+    async (filterKey, sortField, filterVal) => {
+      const stored = makeStoredDevice();
+      const aggSpy = jest.spyOn(devices, 'aggregate').mockImplementation(() => chainQuery([{
+        records: [stored],
+        meta: [{ total: 1 }]
+      }]));
+
+      const res = await DevicesService.devicesGET(
+        {
+          filters: JSON.stringify([{ key: filterKey, op: '==', val: filterVal }]),
+          sortField,
+          sortOrder: 'asc'
+        },
+        { user },
+        { setHeader: jest.fn() }
+      );
+
+      expect(res.code).toBe(200);
+      expect(aggSpy).toHaveBeenCalledTimes(1);
+    });
+
+  test('devicesDELETE rejects sensitive filter keys', async () => {
+    const findSpy = jest.spyOn(devices, 'find').mockImplementation(() => chainQuery([]));
+
+    const res = await DevicesService.devicesDELETE(
+      { filters: [{ key: 'interfaces.ospf.key', op: 'contains', val: 'secret' }] },
+      { user }
+    );
+
+    expect(res.code).toBe(400);
+    expect(findSpy).not.toHaveBeenCalled();
   });
 });

@@ -10,7 +10,14 @@ const isReauthRequired = (reason) => (
     /recent reauthentication required/i.test(reason?.response?.data?.error || ''))
 );
 
-export default function MfaChallenge({ loginToken, onAuthenticated, onCancel, onReauthRequired }) {
+export default function MfaChallenge({
+  loginToken,
+  onAuthenticated,
+  onCancel,
+  onReauthRequired,
+  expectedUserId,
+  expectedUsername
+}) {
   const [methods, setMethods] = useState(null);
   const [setupUri, setSetupUri] = useState('');
   const [method, setMethod] = useState('authenticator');
@@ -50,7 +57,17 @@ export default function MfaChallenge({ loginToken, onAuthenticated, onCancel, on
         recovery ? { recoveryCode: code.trim() } : { token: code.trim() }, { headers, authFlow: true });
       const token = response.headers['refresh-jwt'];
       const refreshToken = response.headers['refresh-token'];
-      if (!token || !refreshToken || decodeJwtPayload(token)?.type === 'login' || decodeJwtPayload(token)?.mfaVerified !== true) throw new Error('No authenticated session returned');
+      const tokenPayload = decodeJwtPayload(token);
+      if (!token || !refreshToken || tokenPayload?.type === 'login' || tokenPayload?.mfaVerified !== true) {
+        throw new Error('No authenticated session returned');
+      }
+      if (expectedUserId && String(tokenPayload?._id || '') !== String(expectedUserId)) {
+        throw new Error('Authenticated account does not match the current session');
+      }
+      if (expectedUsername && tokenPayload?.username &&
+        tokenPayload.username.toLowerCase() !== expectedUsername.toLowerCase()) {
+        throw new Error('Authenticated account does not match the current session');
+      }
       setSessionTokens(token, refreshToken); onAuthenticated();
     } catch (reason) {
       const msg = reason.response?.data?.error || reason.message || 'Verification failed';

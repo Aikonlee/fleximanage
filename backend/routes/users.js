@@ -308,6 +308,9 @@ router.route('/register')
       })
       .then(() => {
         const uiServerUrl = getUiServerUrl(req);
+        // Carry the opaque token in the URL fragment (#t=) so it is never sent in
+        // HTTP request lines or logged by nginx on upstream errors. Legacy emails
+        // that placed &t= in the query string will no longer work.
         const p = mailer.sendMailHTML(
           configs.get('mailerEnvelopeFromAddress'),
           configs.get('mailerFromAddress'),
@@ -317,7 +320,7 @@ router.route('/register')
             <b>Click below to verify your account:</b>
             <p><a href="${uiServerUrl}/verify-account?id=${
               registerUser._id
-          }&t=${
+          }#t=${
             registerUser.emailTokens.verify
           }"><button style="color:#fff;background-color:#F99E5B;
             border-color:#F99E5B;font-weight:400;text-align:center;
@@ -433,7 +436,7 @@ router.route('/reverify-account')
                    ignore this message.</b>
                 <p><a href="${uiServerUrl}/verify-account?id=${
               resp._id
-            }&t=${validateKey}"><button style="color:#fff;background-color:#F99E5B;
+            }#t=${validateKey}"><button style="color:#fff;background-color:#F99E5B;
                  border-color:#F99E5B;font-weight:400;text-align:center;
                  vertical-align:middle;border:1px solid transparent;
                  padding:.375rem .75rem;font-size:1rem;line-height:1.5;
@@ -601,7 +604,7 @@ const resetPassword = (req, res, next) => {
                    ignore this message.</b>
                 <p><a href="${uiServerUrl}/reset-password?id=${
                 resp._id
-              }&t=${validateKey}"><button style="color:#fff;
+              }#t=${validateKey}"><button style="color:#fff;
           background-color:#F99E5B;border-color:#F99E5B;
           font-weight:400;text-align:center;
           vertical-align:middle;border:1px solid transparent;
@@ -897,14 +900,33 @@ router.route('/mfa/verify')
       }
 
       if (Object.keys(updateQuery.$set).length > 0) {
-        // save secret for the user
-        await User.findOneAndUpdate(
-          { _id: req.user._id },
+        const expectedAuthVersion = req.user.authVersion ?? 0;
+        const versionFilter = expectedAuthVersion === 0
+          ? { $or: [{ authVersion: 0 }, { authVersion: { $exists: false } }] }
+          : { authVersion: expectedAuthVersion };
+        const isEnablingMfa = Boolean(updateQuery.$set['mfa.enabled']);
+        if (isEnablingMfa) {
+          updateQuery.$inc = { authVersion: 1 };
+        }
+        // Guard enrollment against concurrent password reset, session revocation,
+        // or concurrent enrollment by atomically matching and bumping authVersion.
+        const updatedUser = await User.findOneAndUpdate(
+          { _id: req.user._id, ...versionFilter },
           updateQuery,
-          { upsert: false }
+          { upsert: false, new: true }
         );
-        if (updateQuery.$set['mfa.enabled']) {
-          req.user.authVersion = await authSessions.revokeAll(req.user._id);
+        if (!updatedUser) {
+          return next(createError(409, 'Recent reauthentication required for MFA enrollment', {
+            errorCode: 'REAUTH_REQUIRED'
+          }));
+        }
+        if (isEnablingMfa) {
+          const returnedVersion = updatedUser.authVersion ?? (expectedAuthVersion + 1);
+          req.user.authVersion = returnedVersion;
+          await authSessions.revokeAll(req.user._id, {
+            incrementAuthVersion: false,
+            expectedAuthVersion: returnedVersion
+          });
         }
       }
 

@@ -187,6 +187,9 @@ test('reverify-account still issues a token when verifyIssuedAt is past 60s', as
     { upsert: false, new: false }
   );
   expect(sendMailHTML).toHaveBeenCalled();
+  const reverifyHtml = sendMailHTML.mock.calls[0][4];
+  expect(reverifyHtml).toMatch(/\/verify-account\?id=user-id#t=[^"&\s]+/);
+  expect(reverifyHtml).not.toMatch(/[?&]t=/);
   expect(res.json).toHaveBeenCalledWith({ status: 'account reverified' });
 });
 
@@ -252,6 +255,9 @@ test('reset-password enforces cooldown in findOneAndUpdate and returns uniform 2
   expect(sendMailHTML).not.toHaveBeenCalled();
   await flushDetachedMail();
   expect(sendMailHTML).toHaveBeenCalledTimes(1);
+  const resetHtml = sendMailHTML.mock.calls[0][4];
+  expect(resetHtml).toMatch(/\/reset-password\?id=user-id#t=[^"&\s]+/);
+  expect(resetHtml).not.toMatch(/[?&]t=/);
   expect(User.findOne).not.toHaveBeenCalled();
   expect(User.findOneAndUpdate).toHaveBeenCalledWith(
     {
@@ -406,4 +412,7 @@ test('invitation issuedAt stays inside the 1h reset window beyond one hour', asy
   expect(stillAccepted(RESET_PASSWORD_TTL_MS + 60 * 1000)).toBe(true);
   expect(stillAccepted(INVITE_TTL_MS - 60 * 1000)).toBe(true);
   expect(stillAccepted(INVITE_TTL_MS + 60 * 1000)).toBe(false);
+  const inviteHtml = sendMailHTML.mock.calls[0][4];
+  expect(inviteHtml).toMatch(/\/reset-password\?id=new-user-id#t=[^"&\s]+/);
+  expect(inviteHtml).not.toMatch(/[?&]t=/);
 });

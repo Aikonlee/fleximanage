@@ -27,7 +27,8 @@ jest.mock('../models/users', () => ({
   deserializeUser: () => () => {},
   authenticate: () => () => {},
   findOne: jest.fn(),
-  findOneAndUpdate: jest.fn()
+  findOneAndUpdate: jest.fn(),
+  updateOne: jest.fn()
 }));
 jest.mock('../utils/mailer', () => () => ({ sendMailHTML: jest.fn() }));
 jest.mock('../utils/recaptcha', () => () => ({ verifyReCaptcha: jest.fn() }));
@@ -187,6 +188,7 @@ describe('MFA credential purpose enforcement via real JWT strategies (A2 & NEW-L
     }));
     Accounts.findOne.mockResolvedValue({ _id: ACCOUNT_ID, name: 'TestAccount', forceMfa: false });
     Users.findOneAndUpdate.mockResolvedValue({ _id: USER_ID });
+    Users.updateOne.mockResolvedValue({ matchedCount: 1 });
     authSessions.validateAccess.mockResolvedValue(true);
     authSessions.rotateRefresh.mockImplementation(async (payload) => ({
       sid: payload.sid,

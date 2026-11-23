@@ -190,19 +190,171 @@ test('batch admin promotion invalidates each affected user', async () => {
   }
 });
 
-test('enabling MFA invalidates previous sessions before issuing a verified one', async () => {
-  otp.verifyCode.mockReturnValue(true);
-  Users.findOneAndUpdate = jest.fn(async () => ({}));
-  sessions.revokeAll.mockResolvedValue(1);
-  const user = {
-    _id: 'user-id',
-    name: 'Synthetic',
-    authVersion: 0,
-    mfa: { secret: 'synthetic-secret', enabled: false, unverifiedSecrets: [] }
-  };
-  const res = response();
-  await handler('/mfa/verify', 'post')({ body: { token: 'synthetic-code' }, user }, res, jest.fn());
-  expect(sessions.revokeAll).toHaveBeenCalledWith('user-id');
-  expect(user.authVersion).toBe(1);
-  expect(issueSessionTokens).toHaveBeenCalledWith(user, true);
-});
+test('enabling MFA atomically bumps authVersion and revokes previous sessions',
+  async () => {
+    otp.verifyCode.mockReturnValue(true);
+    Users.findOneAndUpdate = jest.fn(async () => ({ _id: 'user-id', authVersion: 1 }));
+    sessions.revokeAll.mockResolvedValue(1);
+    const user = {
+      _id: 'user-id',
+      name: 'Synthetic',
+      authVersion: 0,
+      mfa: { secret: 'synthetic-secret', enabled: false, unverifiedSecrets: [] }
+    };
+    const res = response();
+    await handler('/mfa/verify', 'post')(
+      { body: { token: 'synthetic-code' }, user }, res, jest.fn()
+    );
+    expect(Users.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'user-id', $or: [{ authVersion: 0 }, { authVersion: { $exists: false } }] },
+      { $set: { 'mfa.enabled': true }, $inc: { authVersion: 1 } },
+      { upsert: false, new: true }
+    );
+    expect(sessions.revokeAll).toHaveBeenCalledWith('user-id', {
+      incrementAuthVersion: false,
+      expectedAuthVersion: 1
+    });
+    expect(user.authVersion).toBe(1);
+    expect(issueSessionTokens).toHaveBeenCalledWith(user, true);
+  });
+
+test('MFA enrollment returns 409 REAUTH_REQUIRED after concurrent reset without mutating MFA',
+  async () => {
+    otp.verifyCode.mockReturnValue(true);
+    // Simulate DB user whose authVersion is bumped 2 -> 3 by a concurrent password reset.
+    const storedUser = {
+      _id: 'user-id',
+      authVersion: 2,
+      mfa: { secret: null, enabled: false, unverifiedSecrets: ['unverified-secret'] }
+    };
+    const callerUser = {
+      _id: 'user-id',
+      name: 'Synthetic',
+      authVersion: storedUser.authVersion,
+      mfa: { secret: null, enabled: false, unverifiedSecrets: ['unverified-secret'] }
+    };
+
+    // Password reset runs before enrollment write:
+    storedUser.authVersion += 1;
+
+    Users.findOneAndUpdate = jest.fn(async (filter, update) => {
+      const matches = filter._id === storedUser._id &&
+        filter.authVersion === storedUser.authVersion;
+      if (!matches) return null;
+      if (update.$set) {
+        for (const [key, val] of Object.entries(update.$set)) {
+          const [, field] = key.split('.');
+          storedUser.mfa[field] = val;
+        }
+      }
+      if (update.$inc?.authVersion) {
+        storedUser.authVersion += update.$inc.authVersion;
+      }
+      return { ...storedUser, mfa: { ...storedUser.mfa } };
+    });
+
+    const res = response();
+    const next = jest.fn();
+    await handler('/mfa/verify', 'post')(
+      { body: { token: 'synthetic-code' }, user: callerUser }, res, next
+    );
+
+    expect(Users.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'user-id', authVersion: 2 },
+      {
+        $set: {
+          'mfa.secret': 'unverified-secret',
+          'mfa.enabled': true,
+          'mfa.unverifiedSecrets': []
+        },
+        $inc: { authVersion: 1 }
+      },
+      { upsert: false, new: true }
+    );
+    expect(storedUser).toEqual({
+      _id: 'user-id',
+      authVersion: 3,
+      mfa: { secret: null, enabled: false, unverifiedSecrets: ['unverified-secret'] }
+    });
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
+      status: 409,
+      errorCode: 'REAUTH_REQUIRED'
+    }));
+    expect(sessions.revokeAll).not.toHaveBeenCalled();
+    expect(issueSessionTokens).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
+
+test('concurrent MFA enrollments allow one winner and leave stored MFA unchanged for loser',
+  async () => {
+    otp.verifyCode.mockImplementation((code, secret) =>
+      (code === 'code-a' && secret === 'secret-a') ||
+      (code === 'code-b' && secret === 'secret-b')
+    );
+    const storedUser = {
+      _id: 'user-id',
+      authVersion: 1,
+      mfa: { secret: null, enabled: false, unverifiedSecrets: ['secret-a', 'secret-b'] }
+    };
+
+    Users.findOneAndUpdate = jest.fn(async (filter, update) => {
+      const matches = filter._id === storedUser._id &&
+        filter.authVersion === storedUser.authVersion;
+      if (!matches) return null;
+      if (update.$set) {
+        for (const [key, val] of Object.entries(update.$set)) {
+          const [, field] = key.split('.');
+          storedUser.mfa[field] = val;
+        }
+      }
+      if (update.$inc?.authVersion) {
+        storedUser.authVersion += update.$inc.authVersion;
+      }
+      return { ...storedUser, mfa: { ...storedUser.mfa } };
+    });
+    sessions.revokeAll.mockResolvedValue(2);
+
+    const callerA = {
+      _id: 'user-id',
+      name: 'Synthetic',
+      authVersion: 1,
+      mfa: { secret: null, enabled: false, unverifiedSecrets: ['secret-a', 'secret-b'] }
+    };
+    const callerB = {
+      _id: 'user-id',
+      name: 'Synthetic',
+      authVersion: 1,
+      mfa: { secret: null, enabled: false, unverifiedSecrets: ['secret-a', 'secret-b'] }
+    };
+
+    const resA = response();
+    const nextA = jest.fn();
+    await handler('/mfa/verify', 'post')(
+      { body: { token: 'code-a' }, user: callerA }, resA, nextA
+    );
+
+    const resB = response();
+    const nextB = jest.fn();
+    await handler('/mfa/verify', 'post')(
+      { body: { token: 'code-b' }, user: callerB }, resB, nextB
+    );
+
+    expect(nextA).not.toHaveBeenCalled();
+    expect(sessions.revokeAll).toHaveBeenCalledTimes(1);
+    expect(sessions.revokeAll).toHaveBeenCalledWith('user-id', {
+      incrementAuthVersion: false,
+      expectedAuthVersion: 2
+    });
+    expect(issueSessionTokens).toHaveBeenCalledTimes(1);
+
+    expect(nextB).toHaveBeenCalledWith(expect.objectContaining({
+      status: 409,
+      errorCode: 'REAUTH_REQUIRED'
+    }));
+    expect(resB.json).not.toHaveBeenCalled();
+    expect(storedUser).toEqual({
+      _id: 'user-id',
+      authVersion: 2,
+      mfa: { secret: 'secret-a', enabled: true, unverifiedSecrets: [] }
+    });
+  });

@@ -55,15 +55,15 @@
   width: 100%;
 }
 
-.copyright-line,
-.copyright-line a,
-.copyright-line a:hover,
-.copyright-line a:focus,
-.copyright-line a:visited {
+.copyright-line.is-light,
+.copyright-line.is-light a,
+.copyright-line.is-light a:hover,
+.copyright-line.is-light a:focus,
+.copyright-line.is-light a:visited {
   color: #ffffff !important;
 }
 
-.copyright-line .footer-link::after {
+.copyright-line.is-light .footer-link::after {
   background-color: #ffffff;
 }
 

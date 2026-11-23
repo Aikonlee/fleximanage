@@ -6,8 +6,8 @@ export const BUILD_REV = typeof __BUILD_REV__ === 'string' && __BUILD_REV__ ? __
 export const COPYRIGHT_TEXT = `© OpenSource-OpenNetworking.org 2025.10, All Rights Reserved · Rev ${BUILD_REV}`;
 export const DOCS_URL = '/docs/index.html';
 
-export const CopyrightLine = ({ linkClassName = 'text-reset' } = {}) => (
-  <span className="copyright-line">
+export const CopyrightLine = ({ linkClassName = 'text-reset', light = false } = {}) => (
+  <span className={light ? 'copyright-line is-light' : 'copyright-line'}>
     <span>{COPYRIGHT_TEXT}</span>
     {' · '}
     <a

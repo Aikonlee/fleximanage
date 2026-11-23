@@ -172,7 +172,7 @@ const Login = ({ onLogin }) => {
           </Card>
           <div className="text-center mt-3">
             <small>
-              <CopyrightLine />
+              <CopyrightLine light />
             </small>
           </div>
         </Col>

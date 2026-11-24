@@ -36,6 +36,7 @@ const QOSPoliciesService = require('./QOSPoliciesService');
 const PeersService = require('./PeersService');
 const VrrpService = require('./VrrpService');
 const LinkMonitorsService = require('./LinkMonitorsService');
+const DeviceTemplatesService = require('./DeviceTemplatesService');
 
 module.exports = {
   AccessTokensService,
@@ -58,5 +59,6 @@ module.exports = {
   QOSPoliciesService,
   PeersService,
   VrrpService,
-  LinkMonitorsService
+  LinkMonitorsService,
+  DeviceTemplatesService
 };

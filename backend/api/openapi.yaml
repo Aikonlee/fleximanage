@@ -7199,6 +7199,353 @@ paths:
       x-openapi-router-controller: LinkMonitorsController
       x-openapi-router-service: LinkMonitorsService
 
+  /devicetemplates:
+    get:
+      operationId: devicetemplatesGET
+      parameters:
+      - description: The number of items to skip before starting to collect the result
+          set
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          type: integer
+        style: form
+      - description: The numbers of items to return
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+        style: form
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/DeviceTemplate'
+                type: array
+                x-content-type: application/json
+          description: Successful operation
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Get all Device Templates
+      tags:
+      - Device Templates
+      x-swagger-router-controller: DeviceTemplates
+      x-openapi-router-controller: DeviceTemplatesController
+      x-openapi-router-service: DeviceTemplatesService
+    post:
+      operationId: devicetemplatesPOST
+      parameters:
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceTemplateCreateRequest'
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTemplate'
+          description: Device template created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Add a new Device Template
+      tags:
+      - Device Templates
+      x-swagger-router-controller: DeviceTemplates
+      x-openapi-router-controller: DeviceTemplatesController
+      x-openapi-router-service: DeviceTemplatesService
+  /devicetemplates/{id}:
+    get:
+      operationId: devicetemplatesIdGET
+      parameters:
+      - description: ID of the Device Template to retrieve
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTemplate'
+          description: Successful operation
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: The specified resource was not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Get a Device Template by id
+      tags:
+      - Device Templates
+      x-swagger-router-controller: DeviceTemplates
+      x-openapi-router-controller: DeviceTemplatesController
+      x-openapi-router-service: DeviceTemplatesService
+    put:
+      operationId: devicetemplatesIdPUT
+      parameters:
+      - description: ID of the Device Template to version
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceTemplateUpdateRequest'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTemplate'
+          description: Successful operation
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: The specified resource was not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Create a new version of a Device Template
+      tags:
+      - Device Templates
+      x-swagger-router-controller: DeviceTemplates
+      x-openapi-router-controller: DeviceTemplatesController
+      x-openapi-router-service: DeviceTemplatesService
+    delete:
+      operationId: devicetemplatesIdDELETE
+      parameters:
+      - description: ID of the Device Template to delete
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      - description: Organization to be filtered by
+        explode: true
+        in: query
+        name: org
+        required: false
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Successful operation
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: The specified resource was not found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unexpected error
+      security:
+      - apiKey: []
+      - bearerAuth: []
+      summary: Delete a Device Template
+      tags:
+      - Device Templates
+      x-swagger-router-controller: DeviceTemplates
+      x-openapi-router-controller: DeviceTemplatesController
+      x-openapi-router-service: DeviceTemplatesService
+
   /mlpolicies:
     get:
       operationId: mlpoliciesGET
@@ -13466,6 +13813,89 @@ components:
       required:
       - name
       - type
+      type: object
+    DeviceTemplate:
+      example:
+        _id: 507f1f77bcf86cd799439011
+        org: 507f1f77bcf86cd799439012
+        name: branch-default
+        description: Standard branch router template
+        version: 1
+        config:
+          hostname: branch-template
+          dns:
+          - 1.1.1.1
+        createdBy: 507f1f77bcf86cd799439013
+      properties:
+        _id:
+          maxLength: 24
+          minLength: 24
+          type: string
+        org:
+          maxLength: 24
+          minLength: 24
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        version:
+          type: integer
+        config:
+          type: object
+          additionalProperties: true
+        createdBy:
+          maxLength: 24
+          minLength: 24
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - name
+      - version
+      - config
+      type: object
+    DeviceTemplateCreateRequest:
+      example:
+        name: branch-default
+        description: Standard branch router template
+        config:
+          hostname: branch-template
+          dns:
+          - 1.1.1.1
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+      required:
+      - name
+      - config
+      additionalProperties: false
+      type: object
+    DeviceTemplateUpdateRequest:
+      example:
+        description: Updated branch router template
+        config:
+          hostname: branch-template-v2
+          dns:
+          - 1.1.1.1
+      properties:
+        description:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+      required:
+      - config
+      additionalProperties: false
       type: object
     MLPolicy:
       example:

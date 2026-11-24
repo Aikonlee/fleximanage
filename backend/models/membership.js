@@ -67,6 +67,9 @@ const Permissions = new Schema({
   qospolicies: { type: Number, min: [0, 'Permission too low'], max: [15, 'Permission too high'] },
   vrrp: { type: Number, min: [0, 'Permission too low'], max: [15, 'Permission too high'] },
   linkmonitors: { type: Number, min: [0, 'Permission too low'], max: [15, 'Permission too high'] },
+  devicetemplates: {
+    type: Number, min: [0, 'Permission too low'], max: [15, 'Permission too high']
+  },
   firewallpolicies: {
     type: Number, min: [0, 'Permission too low'], max: [15, 'Permission too high']
   }
@@ -94,7 +97,8 @@ const preDefinedPermissions = {
     qospolicies: setPermission(0, 0, 0, 0),
     firewallpolicies: setPermission(0, 0, 0, 0),
     vrrp: setPermission(0, 0, 0, 0),
-    linkmonitors: setPermission(0, 0, 0, 0)
+    linkmonitors: setPermission(0, 0, 0, 0),
+    devicetemplates: setPermission(0, 0, 0, 0)
   },
   account_owner: {
     jobs: setPermission(1, 1, 1, 1),
@@ -116,7 +120,8 @@ const preDefinedPermissions = {
     qospolicies: setPermission(1, 1, 1, 1),
     firewallpolicies: setPermission(1, 1, 1, 1),
     vrrp: setPermission(1, 1, 1, 1),
-    linkmonitors: setPermission(1, 1, 1, 1)
+    linkmonitors: setPermission(1, 1, 1, 1),
+    devicetemplates: setPermission(1, 1, 1, 1)
   },
   account_manager: {
     jobs: setPermission(1, 1, 1, 1),
@@ -138,7 +143,8 @@ const preDefinedPermissions = {
     qospolicies: setPermission(1, 1, 1, managerDelPermission()),
     firewallpolicies: setPermission(1, 1, 1, managerDelPermission()),
     vrrp: setPermission(1, 1, 1, managerDelPermission()),
-    linkmonitors: setPermission(1, 1, 1, managerDelPermission())
+    linkmonitors: setPermission(1, 1, 1, managerDelPermission()),
+    devicetemplates: setPermission(1, 1, 1, managerDelPermission())
   },
   account_viewer: {
     jobs: setPermission(1, 0, 0, 0),
@@ -160,7 +166,8 @@ const preDefinedPermissions = {
     qospolicies: setPermission(1, 0, 0, 0),
     firewallpolicies: setPermission(1, 0, 0, 0),
     vrrp: setPermission(1, 0, 0, 0),
-    linkmonitors: setPermission(1, 0, 0, 0)
+    linkmonitors: setPermission(1, 0, 0, 0),
+    devicetemplates: setPermission(1, 0, 0, 0)
   },
   group_manager: {
     jobs: setPermission(1, 1, 1, 1),
@@ -182,7 +189,8 @@ const preDefinedPermissions = {
     qospolicies: setPermission(1, 1, 1, managerDelPermission()),
     firewallpolicies: setPermission(1, 1, 1, managerDelPermission()),
     vrrp: setPermission(1, 1, 1, managerDelPermission()),
-    linkmonitors: setPermission(1, 1, 1, managerDelPermission())
+    linkmonitors: setPermission(1, 1, 1, managerDelPermission()),
+    devicetemplates: setPermission(1, 1, 1, managerDelPermission())
   },
   group_viewer: {
     jobs: setPermission(1, 0, 0, 0),
@@ -204,7 +212,8 @@ const preDefinedPermissions = {
     qospolicies: setPermission(1, 0, 0, 0),
     firewallpolicies: setPermission(1, 0, 0, 0),
     vrrp: setPermission(1, 0, 0, 0),
-    linkmonitors: setPermission(1, 0, 0, 0)
+    linkmonitors: setPermission(1, 0, 0, 0),
+    devicetemplates: setPermission(1, 0, 0, 0)
   },
   organization_manager: {
     jobs: setPermission(1, 1, 1, 1),
@@ -226,7 +235,8 @@ const preDefinedPermissions = {
     qospolicies: setPermission(1, 1, 1, managerDelPermission()),
     firewallpolicies: setPermission(1, 1, 1, managerDelPermission()),
     vrrp: setPermission(1, 1, 1, managerDelPermission()),
-    linkmonitors: setPermission(1, 1, 1, managerDelPermission())
+    linkmonitors: setPermission(1, 1, 1, managerDelPermission()),
+    devicetemplates: setPermission(1, 1, 1, managerDelPermission())
   },
   organization_viewer: {
     jobs: setPermission(1, 0, 0, 0),
@@ -248,7 +258,8 @@ const preDefinedPermissions = {
     qospolicies: setPermission(1, 0, 0, 0),
     firewallpolicies: setPermission(1, 0, 0, 0),
     vrrp: setPermission(1, 0, 0, 0),
-    linkmonitors: setPermission(1, 0, 0, 0)
+    linkmonitors: setPermission(1, 0, 0, 0),
+    devicetemplates: setPermission(1, 0, 0, 0)
   }
 };
 

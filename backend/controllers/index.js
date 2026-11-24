@@ -36,6 +36,7 @@ const QOSPoliciesController = require('./QOSPoliciesController');
 const PeersController = require('./PeersController');
 const VrrpController = require('./VrrpController');
 const LinkMonitorsController = require('./LinkMonitorsController');
+const DeviceTemplatesController = require('./DeviceTemplatesController');
 
 module.exports = {
   AccessTokensController,
@@ -58,5 +59,6 @@ module.exports = {
   QOSPoliciesController,
   PeersController,
   VrrpController,
-  LinkMonitorsController
+  LinkMonitorsController,
+  DeviceTemplatesController
 };

@@ -14,6 +14,7 @@
 
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
+const net = require('net');
 const { Types } = require('mongoose');
 const Service = require('./Service');
 const DeviceTemplates = require('../models/deviceTemplates');
@@ -83,6 +84,143 @@ function isValidTemplateConfig (value) {
     return false;
   }
   return hasSafeConfigStructure(value, new Set());
+}
+
+function extractApplicableStaticRoute (config) {
+  if (!isPlainObject(config) || !hasSafeConfigStructure(config, new Set())) {
+    return {
+      error: Service.rejectResponse(
+        'Invalid template config: must be a plain object without "$" or "__proto__" keys',
+        400
+      )
+    };
+  }
+
+  const topKeys = Object.getOwnPropertyNames(config);
+  if (
+    Object.getOwnPropertySymbols(config).length > 0 ||
+    topKeys.length !== 1 ||
+    topKeys[0] !== 'staticroutes'
+  ) {
+    return {
+      error: Service.rejectResponse(
+        'Template config is not applicable: config must contain only staticroutes ' +
+        'with a single { destination, gateway } entry',
+        400
+      )
+    };
+  }
+
+  const routes = config.staticroutes;
+  if (
+    !Array.isArray(routes) ||
+    routes.length !== 1 ||
+    !(0 in routes) ||
+    Object.getOwnPropertySymbols(routes).length > 0 ||
+    !Object.getOwnPropertyNames(routes).every((k) => k === '0' || k === 'length')
+  ) {
+    return {
+      error: Service.rejectResponse(
+        'Template config is not applicable: staticroutes must be an array with exactly one route',
+        400
+      )
+    };
+  }
+
+  const route = routes[0];
+  if (!isPlainObject(route)) {
+    return {
+      error: Service.rejectResponse(
+        'Template config is not applicable: static route entry must be a plain object',
+        400
+      )
+    };
+  }
+
+  const routeKeys = Object.getOwnPropertyNames(route);
+  if (
+    Object.getOwnPropertySymbols(route).length > 0 ||
+    routeKeys.length !== 2 ||
+    !routeKeys.includes('destination') ||
+    !routeKeys.includes('gateway')
+  ) {
+    return {
+      error: Service.rejectResponse(
+        'Template config is not applicable: static route must contain only destination and gateway',
+        400
+      )
+    };
+  }
+
+  if (typeof route.destination !== 'string' || typeof route.gateway !== 'string') {
+    return {
+      error: Service.rejectResponse(
+        'Invalid template static route: destination and gateway must be non-empty strings',
+        400
+      )
+    };
+  }
+
+  const destination = route.destination.trim();
+  const gateway = route.gateway.trim();
+  if (!destination || !gateway) {
+    return {
+      error: Service.rejectResponse(
+        'Invalid template static route: destination and gateway must be non-empty strings',
+        400
+      )
+    };
+  }
+
+  const cidrParts = destination.split('/');
+  if (cidrParts.length !== 2) {
+    return {
+      error: Service.rejectResponse(
+        'Invalid template static route: destination must be a valid IPv4 CIDR',
+        400
+      )
+    };
+  }
+
+  const [destIp, destPrefix] = cidrParts;
+  if (!net.isIPv4(destIp)) {
+    return {
+      error: Service.rejectResponse(
+        'Invalid template static route: destination must be a valid IPv4 CIDR',
+        400
+      )
+    };
+  }
+
+  if (/^0+$/.test(destPrefix)) {
+    return {
+      error: Service.rejectResponse(
+        'Invalid template static route: default route 0.0.0.0/0 is not allowed',
+        400
+      )
+    };
+  }
+
+  if (!/^[1-9]\d*$/.test(destPrefix)) {
+    return {
+      error: Service.rejectResponse(
+        'Invalid template static route: destination must be a valid IPv4 CIDR',
+        400
+      )
+    };
+  }
+
+  const prefixLength = Number(destPrefix);
+  if (prefixLength < 1 || prefixLength > 32) {
+    return {
+      error: Service.rejectResponse(
+        'Invalid template static route: destination must be a valid IPv4 CIDR',
+        400
+      )
+    };
+  }
+
+  return { destination, gateway };
 }
 
 function isValidObjectId (id) {
@@ -382,6 +520,96 @@ class DeviceTemplatesService {
       }
 
       return Service.successResponse(null, 204);
+    } catch (e) {
+      return handleError(e);
+    }
+  }
+
+  /**
+   * Apply a Device Template version to a single approved device
+   **/
+  static async devicetemplatesIdApplyPOST ({ id, org, deviceId }, { user, server }, response) {
+    try {
+      if (!user) {
+        return Service.rejectResponse('Forbidden', 403);
+      }
+      const orgValidationError = validateWriteOrg(user, org);
+      if (orgValidationError) {
+        return orgValidationError;
+      }
+      if (!isValidObjectId(id)) {
+        return Service.rejectResponse('Invalid device template id', 400);
+      }
+      if (!isValidObjectId(deviceId)) {
+        return Service.rejectResponse('Invalid device id', 400);
+      }
+
+      const requestedOrg = user.accessToken ? org.trim() : org;
+      const orgList = await getAccessTokenOrgList(user, requestedOrg, true, null, '', true);
+      if (!Array.isArray(orgList) || orgList.length === 0) {
+        return Service.rejectResponse(
+          'You do not have permission to access this organization',
+          403
+        );
+      }
+
+      const template = await DeviceTemplates.findOne(
+        { _id: id, org: { $in: orgList } },
+        selectFields
+      );
+      if (!template) {
+        return Service.rejectResponse('Not found', 404);
+      }
+
+      const routeResult = extractApplicableStaticRoute(template.config);
+      if (routeResult.error) {
+        return routeResult.error;
+      }
+      const { destination, gateway } = routeResult;
+
+      const Devices = require('../models/devices');
+      const device = await Devices.findOne({ _id: deviceId, org: { $in: orgList } });
+      if (!device || (template.org && device.org && String(device.org) !== String(template.org))) {
+        return Service.rejectResponse('Device not found', 404);
+      }
+      if (!device.isApproved) {
+        return Service.rejectResponse('Device must be first approved', 409);
+      }
+
+      const result = await require('./DevicesService').devicesIdStaticroutesPOST(
+        {
+          id: deviceId,
+          org: requestedOrg,
+          staticRouteRequest: {
+            destination,
+            gateway,
+            redistributeViaOSPF: false
+          }
+        },
+        { user, server },
+        response,
+        {
+          requireApproved: true,
+          expectedOrg: orgList[0]
+        }
+      );
+
+      if (!result || result.error || result.code >= 400) {
+        return result || Service.rejectResponse('Failed to apply device template', 500);
+      }
+
+      const routeId = result.payload && result.payload._id;
+      return Service.successResponse(
+        {
+          templateId: id,
+          version: template.version,
+          deviceId,
+          routeId,
+          destination,
+          gateway
+        },
+        202
+      );
     } catch (e) {
       return handleError(e);
     }

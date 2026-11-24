@@ -3033,8 +3033,9 @@ class DevicesService {
    * staticRouteRequest StaticRouteRequest  (optional)
    * returns DeviceStaticRouteInformation
    **/
-  static async devicesIdStaticroutesPOST (request, { user, server }, response) {
+  static async devicesIdStaticroutesPOST (request, { user, server }, response, options = {}) {
     const { id, org, staticRouteRequest } = request;
+    const requireApproved = Boolean(options && options.requireApproved);
     try {
       const orgList = await getAccessTokenOrgList(user, org, true);
       let device = await devices.findOne({
@@ -3044,7 +3045,11 @@ class DevicesService {
       if (!device) {
         return Service.rejectResponse('Device not found', 404);
       }
-      if (!device.isApproved && !staticRouteRequest.isApproved) {
+      if (requireApproved) {
+        if (!device.isApproved) {
+          return Service.rejectResponse('Device must be first approved', 409);
+        }
+      } else if (!device.isApproved && !staticRouteRequest.isApproved) {
         return Service.rejectResponse('Device must be first approved', 400);
       }
 
@@ -3078,8 +3083,12 @@ class DevicesService {
         throw new Error(err);
       }
 
+      const updateFilter = requireApproved
+        ? { _id: device._id, org: options.expectedOrg, isApproved: true }
+        : { _id: device._id };
+
       device = await devices.findOneAndUpdate(
-        { _id: device._id },
+        updateFilter,
         {
           $push: {
             staticroutes: route
@@ -3087,6 +3096,9 @@ class DevicesService {
         },
         { new: true, runValidators: true }
       );
+      if (requireApproved && !device) {
+        return Service.rejectResponse('Device is not approved or out of scope', 409);
+      }
 
       const copy = Object.assign({}, staticRouteRequest);
       copy.org = orgList[0];

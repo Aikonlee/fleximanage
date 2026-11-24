@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import DeviceTemplates from './DeviceTemplates';
 import api from '../services/api';
@@ -282,4 +282,317 @@ test('stale GET response resolving out of order does not overwrite a newer snaps
 
   expect(screen.getByText('Core Router')).toBeInTheDocument();
   expect(screen.queryByText('Branch Edge')).not.toBeInTheDocument();
+});
+
+const SUPPORTED_TEMPLATE = {
+  _id: 'tpl-1',
+  org: 'org-1',
+  name: 'Branch Route',
+  description: 'Single static route template',
+  version: 3,
+  config: {
+    staticroutes: [{ destination: '10.20.0.0/16', gateway: '192.168.10.1' }],
+  },
+  createdBy: 'user-1',
+};
+
+const SAMPLE_DEVICES = [
+  { _id: 'dev-1', name: 'Branch-1', hostname: 'branch-1.local', isApproved: true },
+  { _id: 'dev-2', hostname: 'hub-west' },
+  { _id: 'dev-3', name: 'Pending-Edge', hostname: 'pending.local', isApproved: false },
+  { _id: 'dev-4', name: 'Null-Approval', hostname: 'null.local', isApproved: null },
+];
+
+test('Apply button is disabled with explanation for unsupported keys, multiple routes, default route, or invalid route fields', async () => {
+  const unsupportedTemplates = [
+    {
+      _id: 'tpl-extra-top',
+      name: 'Extra Top Key',
+      version: 1,
+      config: {
+        staticroutes: [{ destination: '10.0.0.0/24', gateway: '192.168.1.1' }],
+        mtu: 1400,
+      },
+    },
+    {
+      _id: 'tpl-multi',
+      name: 'Multiple Routes',
+      version: 1,
+      config: {
+        staticroutes: [
+          { destination: '10.0.0.0/24', gateway: '192.168.1.1' },
+          { destination: '10.1.0.0/24', gateway: '192.168.1.1' },
+        ],
+      },
+    },
+    {
+      _id: 'tpl-default',
+      name: 'Default Route',
+      version: 1,
+      config: {
+        staticroutes: [{ destination: '0.0.0.0/0', gateway: '192.168.1.1' }],
+      },
+    },
+    {
+      _id: 'tpl-extra-route-key',
+      name: 'Extra Route Key',
+      version: 1,
+      config: {
+        staticroutes: [{ destination: '10.2.0.0/24', gateway: '192.168.1.1', metric: 10 }],
+      },
+    },
+    {
+      _id: 'tpl-blank-gateway',
+      name: 'Blank Gateway',
+      version: 1,
+      config: {
+        staticroutes: [{ destination: '10.3.0.0/24', gateway: '   ' }],
+      },
+    },
+  ];
+  api.get.mockResolvedValueOnce({ data: unsupportedTemplates });
+
+  render(<MemoryRouter><DeviceTemplates /></MemoryRouter>);
+
+  expect(await screen.findByText('Extra Top Key')).toBeInTheDocument();
+
+  for (const tpl of unsupportedTemplates) {
+    const btn = screen.getByRole('button', { name: `Apply ${tpl.name}` });
+    expect(btn).toBeDisabled();
+    expect(btn.getAttribute('title')).toMatch(/only single-static-route templates can be applied/i);
+  }
+  expect(api.get).toHaveBeenCalledTimes(1);
+});
+
+test('Apply button is enabled for supported template, fetches detailed devices, and lists only approved devices', async () => {
+  api.get
+    .mockResolvedValueOnce({ data: [SUPPORTED_TEMPLATE] })
+    .mockResolvedValueOnce({ data: SAMPLE_DEVICES });
+
+  render(<MemoryRouter><DeviceTemplates /></MemoryRouter>);
+
+  const applyBtn = await screen.findByRole('button', { name: 'Apply Branch Route' });
+  expect(applyBtn).not.toBeDisabled();
+
+  fireEvent.click(applyBtn);
+
+  await waitFor(() => expect(api.get).toHaveBeenCalledWith('/devices?response=detailed'));
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText('Apply Template — Branch Route (v3)')).toBeInTheDocument();
+  expect(within(dialog).getByText('10.20.0.0/16')).toBeInTheDocument();
+  expect(within(dialog).getByText('192.168.10.1')).toBeInTheDocument();
+
+  const select = within(dialog).getByLabelText('Target Device');
+  await waitFor(() => {
+    expect(within(select).getByRole('option', { name: /Branch-1.*dev-1/ })).toBeInTheDocument();
+  });
+  expect(within(select).queryByRole('option', { name: /hub-west|dev-2/ })).not.toBeInTheDocument();
+  expect(within(select).queryByRole('option', { name: /Pending-Edge|dev-3/ })).not.toBeInTheDocument();
+  expect(within(select).queryByRole('option', { name: /Null-Approval|dev-4/ })).not.toBeInTheDocument();
+  expect(within(select).getAllByRole('option')).toHaveLength(2);
+});
+
+test('submitting apply modal with no device selected does not POST', async () => {
+  api.get
+    .mockResolvedValueOnce({ data: [SUPPORTED_TEMPLATE] })
+    .mockResolvedValueOnce({ data: SAMPLE_DEVICES });
+
+  render(<MemoryRouter><DeviceTemplates /></MemoryRouter>);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Apply Branch Route' }));
+  const dialog = await screen.findByRole('dialog');
+  const select = within(dialog).getByLabelText('Target Device');
+  await waitFor(() => {
+    expect(within(select).getByRole('option', { name: /Branch-1.*dev-1/ })).toBeInTheDocument();
+  });
+
+  const submitBtn = within(dialog).getByRole('button', { name: 'Apply to Device' });
+  expect(submitBtn).toBeDisabled();
+
+  fireEvent.click(submitBtn);
+  fireEvent.submit(select.closest('form'));
+
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+test('selecting a device POSTs once to /devicetemplates/tpl-1/apply, disables submit while pending, shows 202 receipt, and keeps list unchanged', async () => {
+  let resolvePost;
+  const pendingPost = new Promise((resolve) => {
+    resolvePost = resolve;
+  });
+
+  api.get
+    .mockResolvedValueOnce({ data: [SUPPORTED_TEMPLATE] })
+    .mockResolvedValueOnce({ data: SAMPLE_DEVICES });
+  api.post.mockReturnValueOnce(pendingPost);
+
+  render(<MemoryRouter><DeviceTemplates /></MemoryRouter>);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Apply Branch Route' }));
+  const dialog = await screen.findByRole('dialog');
+  const select = within(dialog).getByLabelText('Target Device');
+  await waitFor(() => {
+    expect(within(select).getByRole('option', { name: /Branch-1.*dev-1/ })).toBeInTheDocument();
+  });
+
+  fireEvent.change(select, { target: { value: 'dev-1' } });
+  const submitBtn = within(dialog).getByRole('button', { name: 'Apply to Device' });
+  expect(submitBtn).not.toBeDisabled();
+
+  fireEvent.click(submitBtn);
+
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+  expect(api.post).toHaveBeenCalledWith('/devicetemplates/tpl-1/apply', { deviceId: 'dev-1' });
+
+  const pendingBtn = within(dialog).getByRole('button', { name: 'Applying...' });
+  expect(pendingBtn).toBeDisabled();
+  fireEvent.click(pendingBtn);
+  expect(api.post).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    resolvePost({
+      status: 202,
+      data: {
+        templateId: 'tpl-1',
+        version: 3,
+        deviceId: 'dev-1',
+        routeId: 'route-42',
+        destination: '10.20.0.0/16',
+        gateway: '192.168.10.1',
+      },
+    });
+    await pendingPost;
+  });
+
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('v3');
+  expect(alert).toHaveTextContent('route-42');
+  expect(alert).toHaveTextContent('dev-1');
+  expect(within(screen.getByRole('table')).getByText('Branch Route')).toBeInTheDocument();
+  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(api.get).toHaveBeenCalledTimes(2);
+});
+
+test('apply API rejection renders error message and does not show a success receipt', async () => {
+  api.get
+    .mockResolvedValueOnce({ data: [SUPPORTED_TEMPLATE] })
+    .mockResolvedValueOnce({ data: SAMPLE_DEVICES });
+  api.post.mockRejectedValueOnce({
+    response: { status: 409, data: { error: 'Device is not approved' } },
+  });
+
+  render(<MemoryRouter><DeviceTemplates /></MemoryRouter>);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Apply Branch Route' }));
+  const dialog = await screen.findByRole('dialog');
+  const select = within(dialog).getByLabelText('Target Device');
+  await waitFor(() => {
+    expect(within(select).getByRole('option', { name: /Branch-1.*dev-1/ })).toBeInTheDocument();
+  });
+
+  fireEvent.change(select, { target: { value: 'dev-1' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to Device' }));
+
+  expect(await within(dialog).findByText('Device is not approved')).toBeInTheDocument();
+  expect(screen.queryByText(/route-/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Applied /i)).not.toBeInTheDocument();
+});
+
+test('Cancel closes the apply modal without POST', async () => {
+  api.get
+    .mockResolvedValueOnce({ data: [SUPPORTED_TEMPLATE] })
+    .mockResolvedValueOnce({ data: SAMPLE_DEVICES });
+
+  render(<MemoryRouter><DeviceTemplates /></MemoryRouter>);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Apply Branch Route' }));
+  const dialog = await screen.findByRole('dialog');
+  const select = within(dialog).getByLabelText('Target Device');
+  await waitFor(() => {
+    expect(within(select).getByRole('option', { name: /Branch-1.*dev-1/ })).toBeInTheDocument();
+  });
+
+  fireEvent.change(select, { target: { value: 'dev-1' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+test('apply modal cannot be dismissed or re-submitted while POST is in flight, then completes normally', async () => {
+  let resolvePost;
+  const pendingPost = new Promise((resolve) => {
+    resolvePost = resolve;
+  });
+
+  api.get
+    .mockResolvedValueOnce({ data: [SUPPORTED_TEMPLATE] })
+    .mockResolvedValueOnce({ data: SAMPLE_DEVICES });
+  api.post.mockReturnValueOnce(pendingPost);
+
+  render(<MemoryRouter><DeviceTemplates /></MemoryRouter>);
+
+  const rowApplyBtn = await screen.findByRole('button', { name: 'Apply Branch Route' });
+  fireEvent.click(rowApplyBtn);
+  const dialog = await screen.findByRole('dialog');
+  const select = within(dialog).getByLabelText('Target Device');
+  await waitFor(() => {
+    expect(within(select).getByRole('option', { name: /Branch-1.*dev-1/ })).toBeInTheDocument();
+  });
+
+  fireEvent.change(select, { target: { value: 'dev-1' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to Device' }));
+
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+
+  const cancelBtn = within(dialog).getByRole('button', { name: 'Cancel' });
+  const closeBtn = within(dialog).getByRole('button', { name: 'Close' });
+  const pendingBtn = within(dialog).getByRole('button', { name: 'Applying...' });
+
+  expect(cancelBtn).toBeDisabled();
+  expect(closeBtn).toBeDisabled();
+  expect(pendingBtn).toBeDisabled();
+  expect(rowApplyBtn).toBeDisabled();
+
+  // Attempt Cancel, header Close, Escape key, and backdrop click dismissal
+  fireEvent.click(cancelBtn);
+  fireEvent.click(closeBtn);
+  fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape', keyCode: 27 });
+  fireEvent.keyDown(document, { key: 'Escape', code: 'Escape', keyCode: 27 });
+  fireEvent.click(dialog);
+  const backdrop = document.querySelector('.modal-backdrop');
+  if (backdrop) {
+    fireEvent.click(backdrop);
+  }
+
+  // Modal remains open and no second POST or device refetch can be triggered
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(within(dialog).getByText('Apply Template — Branch Route (v3)')).toBeInTheDocument();
+  fireEvent.click(pendingBtn);
+  fireEvent.submit(select.closest('form'));
+  fireEvent.click(rowApplyBtn);
+  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(api.get).toHaveBeenCalledTimes(2);
+
+  await act(async () => {
+    resolvePost({
+      status: 202,
+      data: {
+        templateId: 'tpl-1',
+        version: 3,
+        deviceId: 'dev-1',
+        routeId: 'route-99',
+        destination: '10.20.0.0/16',
+        gateway: '192.168.10.1',
+      },
+    });
+    await pendingPost;
+  });
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('v3');
+  expect(alert).toHaveTextContent('route-99');
+  expect(alert).toHaveTextContent('dev-1');
+  expect(api.post).toHaveBeenCalledTimes(1);
 });

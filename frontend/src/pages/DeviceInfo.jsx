@@ -725,6 +725,8 @@ const DeviceInfo = () => {
                 {device.interfaces?.map((iface, idx) => {
                   const isIfaceAssigned = (interfaceChanges[iface._id]?.isAssigned !== undefined) ? interfaceChanges[iface._id].isAssigned : iface.isAssigned;
                   const isUp = iface.linkStatus === 'up' || (iface.IPv4 && iface.IPv4.length > 0); // Simple heuristic for green status
+                  const effectiveType = interfaceChanges[iface._id]?.type ?? iface.type ?? '';
+                  const isKnownInterfaceType = ['WAN', 'LAN', 'TRUNK'].includes(effectiveType);
 
                   return (
                     <tr key={iface._id || idx}>
@@ -739,7 +741,29 @@ const DeviceInfo = () => {
                         {iface.deviceType === 'lte' && <span className="text-muted small ms-1">(LTE)</span>}
                         {iface.deviceType === 'wifi' && <span className="text-muted small ms-1">(WiFi)</span>}
                       </td>
-                      <td>{iface.type}</td>
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          <Form.Select
+                            ref={(el) => {
+                              if (el && !isKnownInterfaceType) {
+                                el.selectedIndex = -1;
+                              }
+                            }}
+                            size="sm"
+                            aria-label={`Type for ${iface.name}`}
+                            value={isKnownInterfaceType ? effectiveType : ''}
+                            onChange={(e) => handleInterfaceEdit(iface, 'type', e.target.value)}
+                            style={{ minWidth: '90px' }}
+                          >
+                            <option value="WAN">WAN</option>
+                            <option value="LAN">LAN</option>
+                            <option value="TRUNK">TRUNK</option>
+                          </Form.Select>
+                          {!isKnownInterfaceType && effectiveType && (
+                            <span className="text-muted small">{effectiveType}</span>
+                          )}
+                        </div>
+                      </td>
                       <td>
                         <div className="form-check form-switch d-flex justify-content-center">
                           <input

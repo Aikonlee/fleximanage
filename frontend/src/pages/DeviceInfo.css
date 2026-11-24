@@ -217,7 +217,7 @@
 
 /* Content Area */
 .content-area-template {
-  max-width: 56rem;
+  width: 100%;
   position: relative;
   z-index: 1;
 }

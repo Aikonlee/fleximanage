@@ -4,7 +4,7 @@ import './Footer.css';
 /* global __BUILD_REV__ */
 export const BUILD_REV = typeof __BUILD_REV__ === 'string' && __BUILD_REV__ ? __BUILD_REV__ : 'dev';
 export const COPYRIGHT_TEXT = `© OpenSource-OpenNetworking.org 2025.10, All Rights Reserved · Rev ${BUILD_REV}`;
-export const DOCS_URL = 'http://158.101.149.157/';
+export const DOCS_URL = 'https://docs.opensource-opennetworking.org/';
 
 export const CopyrightLine = ({ linkClassName = 'text-reset', light = false } = {}) => (
   <span className={light ? 'copyright-line is-light' : 'copyright-line'}>

@@ -60,15 +60,22 @@ jest.mock('../utils/mailer', () => {
   factory.sendMailHTML = sendMailHTML;
   return factory;
 });
-jest.mock('../utils/recaptcha', () => () => ({}));
+jest.mock('../utils/recaptcha', () => {
+  const verifyReCaptcha = jest.fn(async () => true);
+  const factory = () => ({ verifyReCaptcha });
+  factory.verifyReCaptcha = verifyReCaptcha;
+  return factory;
+});
 jest.mock('../utils/webhooks', () => () => ({ sendToWebHook: jest.fn(async () => true) }));
 jest.mock('../utils/membershipUtils', () => ({ getUserOrganizations: jest.fn() }));
 jest.mock('../otp', () => ({ verifyCode: jest.fn(), generateSecret: jest.fn() }));
 jest.mock('express-rate-limit', () => () => (req, res, next) => next());
 jest.mock('../utils/mfaRateLimitStore', () => class MfaRateLimitStore {});
 jest.mock('../logging/logging', () => {
+  const warn = jest.fn();
   const error = jest.fn();
-  const factory = () => ({ info: jest.fn(), warn: jest.fn(), error });
+  const factory = () => ({ info: jest.fn(), warn, error });
+  factory.warn = warn;
   factory.error = error;
   return factory;
 });
@@ -88,6 +95,8 @@ const sessions = require('../authSessions');
 const User = require('../models/users');
 const { membership } = require('../models/membership');
 const sendMailHTML = require('../utils/mailer').sendMailHTML;
+const verifyReCaptcha = require('../utils/recaptcha').verifyReCaptcha;
+const logWarn = require('../logging/logging').warn;
 const logError = require('../logging/logging').error;
 const router = require('../routes/users');
 const MembersService = require('../services/MembersService');
@@ -106,7 +115,7 @@ const response = () => ({
   json: jest.fn(),
   status (code) { this.statusCode = code; return this; }
 });
-const post = (body) => ({ body, get: () => undefined });
+const post = (body, ip = '198.51.100.10') => ({ body, ip, get: () => undefined });
 const account = (issuedAt) => ({
   _id: 'user-id',
   email: 'user@example.com',
@@ -125,6 +134,7 @@ beforeEach(() => {
   User.findOne.mockReset();
   User.findOneAndUpdate.mockReset();
   sendMailHTML.mockResolvedValue(true);
+  verifyReCaptcha.mockResolvedValue(true);
   sessions.revokeAll.mockResolvedValue(undefined);
 });
 
@@ -158,52 +168,192 @@ test('change-password clears reset token material after sessions are revoked', a
   expect(res.json).toHaveBeenCalledWith({ status: 'password changed' });
 });
 
-test('reverify-account returns 429 and does not overwrite a fresh verify token', async () => {
-  User.findOne.mockResolvedValue(account(new Date()));
-  const res = response();
-  const next = jest.fn();
-  await handler('/reverify-account', 'post')(post({ email: 'user@example.com' }), res, next);
-  expect(next).toHaveBeenCalledTimes(1);
-  expect(next.mock.calls[0][0].status).toBe(429);
-  expect(User.findOneAndUpdate).not.toHaveBeenCalled();
-  expect(sendMailHTML).not.toHaveBeenCalled();
-  expect(res.json).not.toHaveBeenCalled();
-});
+test('reverify-account rejects failed captcha before DB lookup and logs redacted warn',
+  async () => {
+    verifyReCaptcha.mockResolvedValueOnce(false);
+    const res = response();
+    const next = jest.fn();
+    await handler('/reverify-account', 'post')(
+      post({ email: 'victim@example.com', captcha: 'bad-captcha-token' }, '203.0.113.5'),
+      res,
+      next
+    );
+    expect(verifyReCaptcha).toHaveBeenCalledWith('bad-captcha-token', '203.0.113.5');
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0].status).toBe(401);
+    expect(next.mock.calls[0][0].message).toBe('Wrong Captcha');
+    expect(User.findOne).not.toHaveBeenCalled();
+    expect(User.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(sendMailHTML).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+    expect(logWarn).toHaveBeenCalledTimes(1);
+    const warnMeta = logWarn.mock.calls[0][1];
+    const serializedWarn = JSON.stringify(logWarn.mock.calls[0]);
+    expect(warnMeta.params).not.toHaveProperty('ip');
+    expect(serializedWarn).not.toContain('victim@example.com');
+    expect(serializedWarn).not.toContain('203.0.113.5');
+    expect(serializedWarn).not.toContain('bad-captcha-token');
+    expect(serializedWarn).not.toContain('old-verify');
+  });
 
-test('reverify-account still issues a token when verifyIssuedAt is past 60s', async () => {
-  const user = account(new Date(Date.now() - 90 * 1000));
-  User.findOne.mockResolvedValue(user);
-  User.findOneAndUpdate.mockResolvedValue(user);
-  const res = response();
-  const next = jest.fn();
-  await handler('/reverify-account', 'post')(post({ email: 'user@example.com' }), res, next);
-  expect(next).not.toHaveBeenCalled();
-  expect(User.findOneAndUpdate).toHaveBeenCalledWith(
-    { email: 'user@example.com' },
-    expect.objectContaining({
-      'emailTokens.verify': expect.any(String),
-      'emailTokens.verifyIssuedAt': expect.any(Date)
-    }),
-    { upsert: false, new: false }
-  );
-  expect(sendMailHTML).toHaveBeenCalled();
-  const reverifyHtml = sendMailHTML.mock.calls[0][4];
-  expect(reverifyHtml).toMatch(/\/verify-account\?id=user-id#t=[^"&\s]+/);
-  expect(reverifyHtml).not.toMatch(/[?&]t=/);
-  expect(res.json).toHaveBeenCalledWith({ status: 'account reverified' });
-});
+test('reverify-account enforces cooldown atomically in findOneAndUpdate with uniform 200',
+  async () => {
+    const freshUser = account(new Date());
+    const pastUser = account(new Date(Date.now() - 90 * 1000));
+    const missingIssuedAtUser = account(null);
 
-test('reverify-account still issues a token when verifyIssuedAt is missing', async () => {
-  const user = account(null);
-  User.findOne.mockResolvedValue(user);
-  User.findOneAndUpdate.mockResolvedValue(user);
-  const res = response();
-  const next = jest.fn();
-  await handler('/reverify-account', 'post')(post({ email: 'user@example.com' }), res, next);
-  expect(next).not.toHaveBeenCalled();
-  expect(User.findOneAndUpdate).toHaveBeenCalled();
-  expect(res.json).toHaveBeenCalledWith({ status: 'account reverified' });
-});
+    const runReverify = async (email, matchedUser) => {
+      User.findOne.mockClear();
+      User.findOneAndUpdate.mockReset();
+      sendMailHTML.mockClear();
+      User.findOneAndUpdate.mockImplementation(async (filter) => {
+        if (!matchedUser) return null;
+        if (filter.email !== matchedUser.email) return null;
+        const issuedAt = matchedUser.emailTokens?.verifyIssuedAt;
+        const lteClause = filter.$or?.find((clause) => clause['emailTokens.verifyIssuedAt']?.$lte);
+        const cutoff = lteClause?.['emailTokens.verifyIssuedAt']?.$lte;
+        const eligible = issuedAt == null || (cutoff instanceof Date && issuedAt <= cutoff);
+        return eligible ? matchedUser : null;
+      });
+      const res = response();
+      const next = jest.fn();
+      await handler('/reverify-account', 'post')(
+        post({ email, captcha: 'valid-token' }),
+        res,
+        next
+      );
+      return { res, next };
+    };
+
+    // Unknown address
+    const unknown = await runReverify('nobody@example.com', null);
+    await flushDetachedMail();
+    expect(unknown.next).not.toHaveBeenCalled();
+    expect(unknown.res.statusCode).toBe(200);
+    expect(unknown.res.json).toHaveBeenCalledWith({ status: 'account reverified' });
+    expect(sendMailHTML).not.toHaveBeenCalled();
+    expect(User.findOne).not.toHaveBeenCalled();
+
+    // Cooling-down address (issued within 60s cooldown): same 200 response, no mail sent
+    const throttled = await runReverify('user@example.com', freshUser);
+    await flushDetachedMail();
+    expect(throttled.next).not.toHaveBeenCalled();
+    expect(throttled.res.statusCode).toBe(200);
+    expect(throttled.res.json).toHaveBeenCalledWith({ status: 'account reverified' });
+    expect(sendMailHTML).not.toHaveBeenCalled();
+    expect(User.findOne).not.toHaveBeenCalled();
+
+    // Eligible address (past 60s cooldown): same 200 response, detached mail sent
+    const eligible = await runReverify('user@example.com', pastUser);
+    expect(eligible.next).not.toHaveBeenCalled();
+    expect(eligible.res.statusCode).toBe(200);
+    expect(eligible.res.json).toHaveBeenCalledWith({ status: 'account reverified' });
+    expect(sendMailHTML).not.toHaveBeenCalled();
+    await flushDetachedMail();
+    expect(sendMailHTML).toHaveBeenCalledTimes(1);
+    const reverifyHtml = sendMailHTML.mock.calls[0][4];
+    expect(reverifyHtml).toMatch(/\/verify-account\?id=user-id#t=[^"&\s]+/);
+    expect(reverifyHtml).not.toMatch(/[?&]t=/);
+    expect(User.findOne).not.toHaveBeenCalled();
+    expect(User.findOneAndUpdate).toHaveBeenCalledWith(
+      {
+        email: 'user@example.com',
+        $or: [
+          { 'emailTokens.verifyIssuedAt': null },
+          { 'emailTokens.verifyIssuedAt': { $exists: false } },
+          { 'emailTokens.verifyIssuedAt': { $lte: expect.any(Date) } }
+        ]
+      },
+      expect.objectContaining({
+        'emailTokens.verify': expect.any(String),
+        'emailTokens.verifyIssuedAt': expect.any(Date)
+      }),
+      { upsert: false, new: false }
+    );
+
+    // Eligible address with missing verifyIssuedAt
+    const missing = await runReverify('user@example.com', missingIssuedAtUser);
+    expect(missing.next).not.toHaveBeenCalled();
+    expect(missing.res.statusCode).toBe(200);
+    expect(missing.res.json).toHaveBeenCalledWith({ status: 'account reverified' });
+    expect(sendMailHTML).not.toHaveBeenCalled();
+    await flushDetachedMail();
+    expect(sendMailHTML).toHaveBeenCalledTimes(1);
+    expect(User.findOne).not.toHaveBeenCalled();
+  });
+
+test('reverify-account detaches mail delivery and still yields 200 on rejected send',
+  async () => {
+    const pastUser = account(new Date(Date.now() - 90 * 1000));
+    User.findOneAndUpdate.mockResolvedValue(pastUser);
+
+    // 1) Slow/unsettled mail provider: response resolves strictly before mail starts or settles.
+    const events = [];
+    let resolveSlowMail;
+    let mailSettled = false;
+    sendMailHTML.mockImplementationOnce(() => {
+      events.push('mail:start');
+      return new Promise((resolve) => {
+        resolveSlowMail = (val) => {
+          mailSettled = true;
+          events.push('mail:settled');
+          resolve(val);
+        };
+      });
+    });
+
+    const slowRes = response();
+    slowRes.json = jest.fn(() => {
+      events.push('response');
+      return slowRes;
+    });
+    const slowNext = jest.fn();
+    await handler('/reverify-account', 'post')(
+      post({ email: 'user@example.com', captcha: 'valid-token' }),
+      slowRes,
+      slowNext
+    );
+    expect(slowNext).not.toHaveBeenCalled();
+    expect(slowRes.statusCode).toBe(200);
+    expect(slowRes.json).toHaveBeenCalledWith({ status: 'account reverified' });
+    expect(mailSettled).toBe(false);
+    expect(sendMailHTML).not.toHaveBeenCalled();
+    expect(events).toEqual(['response']);
+
+    await flushDetachedMail();
+    expect(sendMailHTML).toHaveBeenCalledTimes(1);
+    expect(mailSettled).toBe(false);
+    expect(events).toEqual(['response', 'mail:start']);
+
+    resolveSlowMail(true);
+    await flushDetachedMail();
+    expect(mailSettled).toBe(true);
+    expect(events).toEqual(['response', 'mail:start', 'mail:settled']);
+
+    // 2) Rejected mail send still yields 200 and logs internally without calling next.
+    logError.mockClear();
+    sendMailHTML.mockRejectedValueOnce(new Error('SMTP connection refused'));
+
+    const res = response();
+    const next = jest.fn();
+    await handler('/reverify-account', 'post')(
+      post({ email: 'user@example.com', captcha: 'valid-token' }),
+      res,
+      next
+    );
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.json).toHaveBeenCalledWith({ status: 'account reverified' });
+    expect(sendMailHTML).toHaveBeenCalledTimes(1);
+
+    await flushDetachedMail();
+    expect(next).not.toHaveBeenCalled();
+    expect(sendMailHTML).toHaveBeenCalledTimes(2);
+    expect(logError).toHaveBeenCalledWith(
+      'Account Re-verification email delivery failed',
+      { params: { reason: 'SMTP connection refused' } }
+    );
+  });
 
 test('reset-password enforces cooldown in findOneAndUpdate and returns uniform 200 without 429', async () => {
   const freshUser = account(new Date());

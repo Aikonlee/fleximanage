@@ -474,6 +474,17 @@ exports.validatePassword = function (password) {
   return (password !== null && password !== undefined && password.length >= 8);
 };
 
+exports.validateRegistrationPassword = function (password) {
+  if (typeof password !== 'string' || password.length < 12) return false;
+  const classes = [
+    /[a-z]/.test(password),
+    /[A-Z]/.test(password),
+    /[0-9]/.test(password),
+    /[^a-zA-Z0-9\s]/.test(password)
+  ].filter(Boolean).length;
+  return classes >= 3;
+};
+
 const REAUTH_MAX_AGE_SECONDS = 15 * 60;
 
 function isAppCredential (user) {

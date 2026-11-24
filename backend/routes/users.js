@@ -72,12 +72,8 @@ const verifyAdminJWT = (req, res, next) => {
 };
 
 // Error formatter
-const formatErr = (err, msg) => {
-  // Check for unique error. err.name is 'MongoServerError' since mongodb driver v4
-  // (was 'MongoError' before) - match on the version-independent code instead
-  if (err.code === 11000) {
-    return ({ status: 500, error: 'User ' + msg.email + ' already exists' });
-  } else if (err.name === 'ValidationError') {
+const formatErr = (err) => {
+  if (err.name === 'ValidationError') {
     return ({ status: 500, error: err.message.split(':')[2] });
   } else {
     return ({ status: 500, error: err.message });
@@ -185,10 +181,12 @@ const requireLoginChallenge = (req, res, next) => {
   return next();
 };
 
-const issuedWithinCooldown = (issuedAt) => {
-  if (!issuedAt) return false;
-  const issuedMs = new Date(issuedAt).getTime();
-  return !Number.isNaN(issuedMs) && (Date.now() - issuedMs) < EMAIL_TOKEN_COOLDOWN_MS;
+const isUserEmailDuplicateError = (err) => {
+  if (!err || err.code !== 11000 || !err.keyPattern || typeof err.keyPattern !== 'object') {
+    return false;
+  }
+  const keys = Object.keys(err.keyPattern);
+  return keys.length > 0 && keys.every(key => key === 'email' || key === 'username');
 };
 
 // register user
@@ -198,6 +196,7 @@ router.route('/register')
     let session = null;
     let registerUser = null;
     let registerAccount = null;
+    let userSavePhase = false;
 
     // log info
     logger.info('Create account request', {
@@ -219,7 +218,9 @@ router.route('/register')
     }
 
     // Validate password
-    if (!auth.validatePassword(req.body.password)) return next(createError(500, 'Bad Password'));
+    if (!auth.validateRegistrationPassword(req.body.password)) {
+      return next(createError(500, 'Bad Password'));
+    }
 
     // Verify captcha
     if (!await reCaptcha.verifyReCaptcha(req.body.captcha, req.ip)) {
@@ -292,9 +293,11 @@ router.route('/register')
       })
       .then(() => {
         registerUser.$session(session);
+        userSavePhase = true;
         return registerUser.save();
       })
       .then(() => {
+        userSavePhase = false;
         const mem = {
           user: registerUser._id,
           account: registerAccount._id,
@@ -367,7 +370,15 @@ router.route('/register')
         return res.status(200).json({ status: 'user registered' });
       })
       .catch(async (err) => {
-        if (session) session.abortTransaction();
+        if (session) {
+          try {
+            await session.abortTransaction();
+          } catch (abortErr) {
+            logger.error('Failed to abort registration transaction', {
+              params: { reason: abortErr.message }
+            });
+          }
+        }
 
         // need to remove billing account
         if (registerCustomerId) {
@@ -382,9 +393,20 @@ router.route('/register')
           }
         }
 
+        if (userSavePhase && isUserEmailDuplicateError(err)) {
+          logger.warn('Duplicate user registration normalized', {
+            params: {
+              route: '/register',
+              email: req.body.email ? '***' : '',
+              code: err.code
+            }
+          });
+          return res.status(200).json({ status: 'user registered' });
+        }
+
         logger.error('Error in create account process', { params: { reason: err.message } });
 
-        const fErr = formatErr(err, req.body);
+        const fErr = formatErr(err);
         return next(createError(fErr.status, fErr.error));
       });
   });
@@ -396,61 +418,76 @@ router.route('/reverify-account')
     if (typeof req.body.email !== 'string') {
       return next(createError(400, 'Invalid email format'));
     }
-    const validateKey = randomKey(30);
-    let blocked = false;
-    return User.findOne({ email: req.body.email })
-      .then((current) => {
-        const verifyIssuedAt = current && current.emailTokens
-          ? current.emailTokens.verifyIssuedAt
-          : null;
-        if (issuedWithinCooldown(verifyIssuedAt)) {
-          blocked = true;
-          next(createError(429, 'Please wait before requesting another verification email'));
-          return null;
+    if (!await reCaptcha.verifyReCaptcha(req.body.captcha, req.ip)) {
+      logger.warn('Re-verification captcha failed', {
+        params: {
+          route: '/reverify-account',
+          email: req.body.email ? '***' : ''
         }
-        return User.findOneAndUpdate(
-          // Query, use the email
-          { email: req.body.email },
-          // Update
-          {
-            'emailTokens.verify': validateKey,
-            'emailTokens.verifyIssuedAt': new Date()
-          },
-          // Options
-          { upsert: false, new: false }
-        );
-      })
+      });
+      return next(createError(401, 'Wrong Captcha'));
+    }
+    const email = req.body.email;
+    const validateKey = randomKey(30);
+    const now = new Date();
+    const cooldownCutoff = new Date(now.getTime() - EMAIL_TOKEN_COOLDOWN_MS);
+
+    return User.findOneAndUpdate(
+      // Atomically enforce per-account cooldown in a single conditional write.
+      // Eligible, cooling-down, and unknown addresses all receive the exact same
+      // public 200 response.
+      {
+        email,
+        $or: [
+          { 'emailTokens.verifyIssuedAt': null },
+          { 'emailTokens.verifyIssuedAt': { $exists: false } },
+          { 'emailTokens.verifyIssuedAt': { $lte: cooldownCutoff } }
+        ]
+      },
+      // Update
+      {
+        'emailTokens.verify': validateKey,
+        'emailTokens.verifyIssuedAt': now
+      },
+      // Options
+      { upsert: false, new: false }
+    )
       .then((resp) => {
-        if (blocked) return null;
-        const uiServerUrl = getUiServerUrl(req);
-        // Send email if user found
+        // Always send the same public 200 response first, then detach mail
+        // delivery onto a subsequent event-loop turn so provider setup, latency,
+        // and errors cannot distinguish eligible, cooling-down, and unknown addresses.
+        const response = res.status(200).json({ status: 'account reverified' });
         if (resp) {
-          const p = mailer.sendMailHTML(
-            configs.get('mailerEnvelopeFromAddress'),
-            configs.get('mailerFromAddress'),
-            req.body.email,
-            `Re-Verify Your ${configs.get('companyName')} Account`,
-            `<h2>Re-Verify Your ${configs.get('companyName')} Account</h2>
+          const uiServerUrl = getUiServerUrl(req);
+          setImmediate(() => {
+            Promise.resolve()
+              .then(() => mailer.sendMailHTML(
+                configs.get('mailerEnvelopeFromAddress'),
+                configs.get('mailerFromAddress'),
+                email,
+                `Re-Verify Your ${configs.get('companyName')} Account`,
+                `<h2>Re-Verify Your ${configs.get('companyName')} Account</h2>
                 <b>It has been requested to re-verify your account. If it is asked by yourself,
                    click below to re-verify your account. If you do not know who this is,
                    ignore this message.</b>
                 <p><a href="${uiServerUrl}/verify-account?id=${
-              resp._id
-            }#t=${validateKey}"><button style="color:#fff;background-color:#F99E5B;
+                  resp._id
+                }#t=${validateKey}"><button style="color:#fff;background-color:#F99E5B;
                  border-color:#F99E5B;font-weight:400;text-align:center;
                  vertical-align:middle;border:1px solid transparent;
                  padding:.375rem .75rem;font-size:1rem;line-height:1.5;
                  border-radius:.25rem;
                 cursor:pointer">Re-Verify Account</button></a></p>
                 <p>Your friends @ ${configs.get('companyName')}</p>`
-          );
-          return p;
+              ))
+              .catch((mailErr) => {
+                logger.error('Account Re-verification email delivery failed', {
+                  params: { reason: mailErr?.message || String(mailErr) }
+                });
+              });
+          });
         }
-      })
-      .then(() => {
-        if (blocked) return null;
-        // In case of re-verification, always return OK to not expose email addresses
-        return res.status(200).json({ status: 'account reverified' });
+        return response;
       })
       .catch((err) => {
         logger.error('Account Re-verification process failed', { params: { reason: err.message } });

@@ -2,7 +2,7 @@ import { decodeJwtPayload } from '../auth/permissions';
 import TurnstileChallenge from '../components/auth/TurnstileChallenge';
 import MfaChallenge from '../components/auth/MfaChallenge';
 import { clearSession, setSessionTokens } from '../auth/session';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BRAND_NAME } from '../constants/branding';
 import { CopyrightLine } from '../components/Footer';
 import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
@@ -25,8 +25,10 @@ const Login = ({ onLogin }) => {
   const [captchaPolicy, setCaptchaPolicy] = useState({ ready: false, enforced: true });
   const [captchaReset, setCaptchaReset] = useState(0);
   const [loginToken, setLoginToken] = useState('');
+  const requestInFlight = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const isBusy = loading || resendState === 'sending';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -36,13 +38,30 @@ const Login = ({ onLogin }) => {
   }, [location.search]);
 
   const handleResendVerification = async () => {
+    if (requestInFlight.current || isBusy) return;
+    if (!captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)) {
+      setError('Please complete the CAPTCHA');
+      return;
+    }
+    const submittedCaptcha = captchaToken || undefined;
+    requestInFlight.current = true;
     setResendState('sending');
+    setCaptchaToken('');
+    setCaptchaReset(value => value + 1);
     try {
-      await api.post('/users/reverify-account', { email: credentials.username });
-    } finally {
+      await api.post('/users/reverify-account', {
+        email: credentials.username,
+        captcha: submittedCaptcha
+      });
       // Backend always returns OK here regardless of whether the email exists,
       // to avoid leaking which emails are registered - so just confirm we tried.
       setResendState('sent');
+    } catch (err) {
+      const apiError = err.response?.data?.error;
+      setError(apiError || 'Failed to resend verification email. Please try again.');
+      setResendState('idle');
+    } finally {
+      requestInFlight.current = false;
     }
   };
 
@@ -53,23 +72,27 @@ const Login = ({ onLogin }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (requestInFlight.current || isBusy) return;
+    if (!captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)) {
+      setError('Please complete the CAPTCHA');
+      return;
+    }
+
+    const submittedCaptcha = captchaToken || undefined;
+    requestInFlight.current = true;
     setLoading(true);
     setError('');
     setNeedsVerification(false);
     setResendState('idle');
+    setCaptchaToken('');
+    setCaptchaReset(value => value + 1);
 
     try {
-      if (!captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)) {
-        setError('Please complete the CAPTCHA');
-        setLoading(false);
-        return;
-      }
-
       clearSession();
       const response = await api.post('/users/login', {
         username: credentials.username,
         password: credentials.password,
-        captcha: captchaToken || undefined
+        captcha: submittedCaptcha
       }, { authFlow: true });
 
       const hasProcessTokenOnly = decodeJwtPayload(response.data?.token)?.type === 'login';
@@ -100,8 +123,8 @@ const Login = ({ onLogin }) => {
       } else {
         setError('Login failed. Please try again.');
       }
-      setCaptchaToken(''); setCaptchaReset(value => value + 1);
     } finally {
+      requestInFlight.current = false;
       setLoading(false);
     }
   };
@@ -127,7 +150,7 @@ const Login = ({ onLogin }) => {
                       ) : (
                         <Button
                           variant="link" size="sm" className="p-0"
-                          disabled={resendState === 'sending' || !credentials.username}
+                          disabled={isBusy || !credentials.username || !captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)}
                           onClick={handleResendVerification}
                         >
                           {resendState === 'sending' ? 'Sending...' : 'Resend verification email'}
@@ -158,7 +181,7 @@ const Login = ({ onLogin }) => {
 
                 <TurnstileChallenge onToken={setCaptchaToken} onPolicy={setCaptchaPolicy} resetKey={captchaReset} />
 
-                <Button variant="primary" type="submit" className="w-100" size="lg" disabled={loading || !captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)}>
+                <Button variant="primary" type="submit" className="w-100" size="lg" disabled={isBusy || !captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)}>
                   {loading ? 'Signing in...' : 'Sign In'}
                 </Button>
               </Form>}

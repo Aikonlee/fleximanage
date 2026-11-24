@@ -1,8 +1,18 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import VerifyAccount from './VerifyAccount';
 import api from '../services/api';
+
+vi.mock('../components/auth/TurnstileChallenge', () => ({
+  default: ({ onPolicy, onToken }) => (
+    <div data-testid="turnstile-challenge">
+      <button type="button" onClick={() => onPolicy({ ready: true, enforced: false })}>CaptchaReadyOff</button>
+      <button type="button" onClick={() => onPolicy({ ready: true, enforced: true })}>CaptchaEnforced</button>
+      <button type="button" onClick={() => onToken('verify-captcha-token')}>CaptchaSolve</button>
+    </div>
+  )
+}));
 
 const adapter = vi.fn();
 
@@ -151,4 +161,63 @@ test('rejects legacy query-string tokens and leaves no t= in location.search', a
   expect(window.location.search).not.toContain('t=');
   expect(await screen.findByText(/Missing verification parameters/i)).toBeInTheDocument();
   expect(adapter).not.toHaveBeenCalled();
+});
+
+test('VerifyAccount resend gates on captcha policy/token and sends captcha in POST body', async () => {
+  adapter.mockImplementation(async (config) => ({
+    config,
+    status: 200,
+    headers: {},
+    data: { status: 'account reverified' }
+  }));
+
+  renderAt('/verify-account');
+  expect(await screen.findByText(/Missing verification parameters/i)).toBeInTheDocument();
+
+  const emailInput = screen.getByPlaceholderText('Your email');
+  const resendBtn = screen.getByRole('button', { name: 'Resend verification email' });
+
+  // Disabled until policy is ready and enforced captcha token is solved
+  expect(resendBtn).toBeDisabled();
+  fireEvent.click(screen.getByText('CaptchaEnforced'));
+  expect(resendBtn).toBeDisabled();
+
+  // Submitting form programmatically without token is rejected client-side without calling API
+  fireEvent.change(emailInput, { target: { value: 'alice@example.com' } });
+  fireEvent.submit(emailInput.closest('form'));
+  expect(await screen.findByText('Please complete the CAPTCHA')).toBeInTheDocument();
+  expect(adapter).not.toHaveBeenCalled();
+
+  // Solving captcha enables button and submits token
+  fireEvent.click(screen.getByText('CaptchaSolve'));
+  expect(resendBtn).toBeEnabled();
+  fireEvent.click(resendBtn);
+
+  expect(await screen.findByText(/Verification email sent/i)).toBeInTheDocument();
+  expect(adapter).toHaveBeenCalledTimes(1);
+  const reqConfig = adapter.mock.calls[0][0];
+  expect(reqConfig.method).toBe('post');
+  expect(reqConfig.url).toBe('/users/reverify-account');
+  expect(JSON.parse(reqConfig.data)).toEqual({
+    email: 'alice@example.com',
+    captcha: 'verify-captcha-token'
+  });
+});
+
+test('VerifyAccount resend surfaces backend 401 Wrong Captcha without marking sent', async () => {
+  adapter.mockImplementation(async () => {
+    const err = new Error('Unauthorized');
+    err.response = { status: 401, data: { error: 'Wrong Captcha' } };
+    throw err;
+  });
+
+  renderAt('/verify-account');
+  expect(await screen.findByText(/Missing verification parameters/i)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByText('CaptchaReadyOff'));
+  fireEvent.change(screen.getByPlaceholderText('Your email'), { target: { value: 'alice@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Resend verification email' }));
+
+  expect(await screen.findByText('Wrong Captcha')).toBeInTheDocument();
+  expect(screen.queryByText(/Verification email sent/i)).not.toBeInTheDocument();
 });

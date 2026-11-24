@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import TurnstileChallenge from '../components/auth/TurnstileChallenge';
 import api from '../services/api';
 
 // Simple account verification page. Extracts id from query string and token (t)
@@ -22,15 +23,34 @@ export default function VerifyAccount () {
   const [message, setMessage] = useState('Verifying your account...');
   const [resendEmail, setResendEmail] = useState('');
   const [resendState, setResendState] = useState('idle'); // idle | sending | sent
+  const [resendError, setResendError] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaPolicy, setCaptchaPolicy] = useState({ ready: false, enforced: true });
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   const handleResend = async (e) => {
     e.preventDefault();
     if (!resendEmail) return;
+    if (!captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)) {
+      setResendError('Please complete the CAPTCHA');
+      return;
+    }
+    setResendError('');
     setResendState('sending');
     try {
-      await api.post('/users/reverify-account', { email: resendEmail });
-    } finally {
+      await api.post('/users/reverify-account', {
+        email: resendEmail,
+        captcha: captchaToken || undefined
+      });
       setResendState('sent');
+      setCaptchaToken('');
+      setCaptchaReset(value => value + 1);
+    } catch (err) {
+      const apiError = err.response?.data?.error;
+      setResendError(apiError || 'Failed to resend verification email. Please try again.');
+      setResendState('idle');
+      setCaptchaToken('');
+      setCaptchaReset(value => value + 1);
     }
   };
 
@@ -96,15 +116,23 @@ export default function VerifyAccount () {
             {resendState === 'sent' ? (
               <div className="mt-3 small">Verification email sent (if that address is registered) - check your inbox.</div>
             ) : (
-              <form className="mt-3 d-flex gap-2" onSubmit={handleResend}>
-                <input
-                  type="email" className="form-control form-control-sm" style={{ maxWidth: 260 }}
-                  placeholder="Your email" value={resendEmail}
-                  onChange={(e) => setResendEmail(e.target.value)} required
-                />
-                <button type="submit" className="btn btn-sm btn-outline-secondary" disabled={resendState === 'sending'}>
-                  {resendState === 'sending' ? 'Sending...' : 'Resend verification email'}
-                </button>
+              <form className="mt-3" onSubmit={handleResend}>
+                <TurnstileChallenge onToken={setCaptchaToken} onPolicy={setCaptchaPolicy} resetKey={captchaReset} />
+                {resendError && <div role="alert" className="text-danger small mb-2">{resendError}</div>}
+                <div className="d-flex gap-2">
+                  <input
+                    type="email" className="form-control form-control-sm" style={{ maxWidth: 260 }}
+                    placeholder="Your email" value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)} required
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-sm btn-outline-secondary"
+                    disabled={resendState === 'sending' || !captchaPolicy.ready || (captchaPolicy.enforced && !captchaToken)}
+                  >
+                    {resendState === 'sending' ? 'Sending...' : 'Resend verification email'}
+                  </button>
+                </div>
               </form>
             )}
           </div>

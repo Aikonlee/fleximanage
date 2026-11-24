@@ -128,3 +128,41 @@ test('accepts a matching typed refresh token after access expiry', async () => {
   expect(res.getHeaders()['refresh-jwt']).toBeTruthy();
   expect(res.getHeaders()['refresh-token']).toBeTruthy();
 });
+
+describe('password validation policies', () => {
+  test.each([
+    'Abcdefgh1234',
+    'abcdefgh123!',
+    'ABCDEFGH123!',
+    'Abcdefghijk!',
+    'Abcdefgh123!',
+    'Longer-Passphrase99'
+  ])('validateRegistrationPassword accepts strong password %s', (password) => {
+    expect(auth.validateRegistrationPassword(password)).toBe(true);
+  });
+
+  test.each([
+    'Abcdefg123!',
+    'Abc123!@',
+    'abcdefghijkl',
+    'ABCDEFGHIJKL',
+    '123456789012',
+    'Abcdefghijkl',
+    'abcdefgh1234',
+    'Abcdefghijk ',
+    '',
+    null,
+    undefined,
+    123456789012,
+    { length: 12 }
+  ])('validateRegistrationPassword rejects weak or invalid password %p', (password) => {
+    expect(auth.validateRegistrationPassword(password)).toBe(false);
+  });
+
+  test('validatePassword keeps legacy >= 8 length check for existing flows', () => {
+    expect(auth.validatePassword('abcdefgh')).toBe(true);
+    expect(auth.validatePassword('abcdefg')).toBe(false);
+    expect(auth.validatePassword(null)).toBe(false);
+    expect(auth.validatePassword(undefined)).toBe(false);
+  });
+});

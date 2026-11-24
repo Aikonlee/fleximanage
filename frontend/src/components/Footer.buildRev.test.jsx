@@ -37,7 +37,7 @@ test('footer, login, and register show the same revision suffix and only login u
   const docLinks = screen.getAllByRole('link', { name: 'documentation' });
   expect(docLinks).toHaveLength(3);
   for (const link of docLinks) {
-    expect(link).toHaveAttribute('href', '/docs/index.html');
+    expect(link).toHaveAttribute('href', 'http://158.101.149.157/');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(link.parentElement).toHaveClass('copyright-line');

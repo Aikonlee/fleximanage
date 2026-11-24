@@ -367,6 +367,7 @@ const Sidebar = ({ collapsed }) => {
         { path: '/path-selection-policy', label: 'Path Selection Policy', permKey: 'mlpolicies' },
         { path: '/qos', label: 'Quality of Service', permKey: 'qospolicies' },
         { path: '/link-monitors', label: 'Link Monitors', permKey: 'linkmonitors' },
+        { path: '/device-templates', label: 'Device Templates', permKey: 'devicetemplates' },
         { path: '/application-identification', label: 'Application Identification', permKey: 'appidentifications' },
         { path: '/ipsec-peering', label: 'IPsec Peering', permKey: 'peers' },
       ]

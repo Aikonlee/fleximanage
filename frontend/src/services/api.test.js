@@ -137,3 +137,9 @@ test('refresh token is never written to localStorage', () => {
   expect(getRefreshToken()).toBe('memory-refresh');
   expect(localStorage.getItem('refreshToken')).toBeNull();
 });
+
+test('devicetemplates writes enforce client-side devicetemplates permission domain', async () => {
+  setSessionToken(token('A', { devicetemplates: 1 }));
+  await expect(api.post('/devicetemplates', { name: 't1', config: {} })).rejects.toMatchObject({ response: { status: 403 } });
+  expect(adapter).not.toHaveBeenCalled();
+});

@@ -43,6 +43,7 @@ api.interceptors.request.use(async (config) => {
   const domains = { devices: 'devices', organizations: 'organizations', tunnels: 'tunnels',
     mlpolicies: 'mlpolicies', qospolicies: 'qospolicies', firewallpolicies: 'firewallpolicies',
     vrrp: 'vrrp', peers: 'peers', pathlabels: 'pathlabels', linkmonitors: 'linkmonitors',
+    devicetemplates: 'devicetemplates',
     appidentifications: 'appidentifications', tokens: 'tokens', accesstokens: 'accesstokens',
     notifications: 'notifications', notificationsconf: 'notifications', accounts: 'accounts',
     members: 'members', coupons: 'billing', appstore: 'applications' };

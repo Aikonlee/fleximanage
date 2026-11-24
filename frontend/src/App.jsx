@@ -38,6 +38,7 @@ import DeviceUpgrade from './pages/DeviceUpgrade';
 import Notifications from './pages/Notifications';
 import AppStore from './pages/AppStore';
 import LinkMonitors from './pages/LinkMonitors';
+import DeviceTemplates from './pages/DeviceTemplates';
 import ApplicationIdentification from './pages/ApplicationIdentification';
 import WorldMapDashboard from './pages/dashboards/WorldMap';
 import NetworkConnectivity from './pages/dashboards/NetworkConnectivity';
@@ -125,6 +126,7 @@ function App() {
             <Route path="/qos" element={<Guard permKey="qospolicies" element={<QoS />} />} />
             <Route path="/qos/:id" element={<Guard permKey="qospolicies" editor element={<QoSEditor />} />} />
             <Route path="/link-monitors" element={<Guard permKey="linkmonitors" element={<LinkMonitors />} />} />
+            <Route path="/device-templates" element={<Guard permKey="devicetemplates" element={<DeviceTemplates />} />} />
             <Route path="/application-identification" element={<Guard permKey="appidentifications" element={<ApplicationIdentification />} />} />
             <Route path="/ipsec-peering" element={<Guard permKey="peers" element={<IpsecPeering />} />} />
             <Route path="/ipsec-peering/:id" element={<Guard permKey="peers" editor element={<IpsecPeeringEditor />} />} />

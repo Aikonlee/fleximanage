@@ -5608,8 +5608,8 @@ paths:
       x-openapi-router-controller: MembersController
       x-openapi-router-service: MembersService
   /members/{id}/resetMfa:
-    get:
-      operationId: membersIdResetMfaGET
+    post:
+      operationId: membersIdResetMfaPOST
       parameters:
       - description: Numeric ID of the Member to reset for
         explode: false
@@ -5622,6 +5622,12 @@ paths:
       responses:
         "204":
           description: Successful operation
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Invalid or insufficient authorization
         "401":
           content:
             application/json:
@@ -5640,6 +5646,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The specified resource was not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Conflict due to authVersion mismatch
         "500":
           content:
             application/json:

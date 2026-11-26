@@ -292,6 +292,13 @@ const isLinuxManagementWifi = (ifc, existingIfc = null) => {
     return true;
   }
 
+  // Rule 2 applies only to new or currently unassigned interfaces. For an existing
+  // assigned interface, only explicit rule-1 evidence or an already-stored
+  // vppManaged === false (handled above) may downgrade it.
+  if (existingIfc && existingIfc.isAssigned === true) {
+    return false;
+  }
+
   // Rule 2: Linux wireless name/driver heuristic for non-AP interfaces
   const name = typeof ifc.name === 'string' && ifc.name.trim() !== ''
     ? ifc.name.trim()

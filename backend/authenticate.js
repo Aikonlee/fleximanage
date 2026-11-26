@@ -465,6 +465,9 @@ exports.verifyPermissionEx = function (serviceName, { method, user, openapi }) {
     case 'configurationRestServersGET':
     case 'notificationsConfEmailsPUT':
       return true;
+    case 'membersIdResetMfaPOST':
+      // Self/owner authorization and recent reauth are enforced in MembersService
+      return true;
   }
 
   return (user.perms[accessType] & permissionMasks[restCommand]);

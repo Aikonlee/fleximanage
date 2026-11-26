@@ -794,12 +794,29 @@ class MembersService {
    * id String numeric ID of the user to reset MFA for
    * returns 204
    */
-  static async membersIdResetMfaGET ({ id }, { user }) {
+  static async membersIdResetMfaPOST ({ id }, { user }) {
     try {
+      // Lazy-require to avoid loading the auth module at service module-load time.
+      const { hasRecentReauth, isAppCredential } = require('../authenticate');
+      if (isAppCredential(user)) {
+        return Service.rejectResponse('API credentials cannot access this resource', 403);
+      }
+      if (!hasRecentReauth(user)) {
+        return Service.rejectResponse(
+          'Recent reauthentication is required for this operation',
+          403
+        );
+      }
+
       // user can reset MFA for himself only.
       // Account owner can reset 2fa for users that are members of the account he owns.
       const isSelf = user._id.toString() === String(id);
-      if (!isSelf) {
+      let targetId;
+      let currentAuthVersion;
+      if (isSelf) {
+        targetId = user._id;
+        currentAuthVersion = user.authVersion ?? 0;
+      } else {
         const accountId = user.defaultAccount?._id;
         if (!accountId || !mongoose.isValidObjectId(id)) {
           return Service.rejectResponse('No sufficient permissions for this operation', 400);
@@ -817,11 +834,19 @@ class MembersService {
         if (!isAccountOwner || !targetMembership) {
           return Service.rejectResponse('No sufficient permissions for this operation', 400);
         }
+        const existingTarget = await Users.findOne({ _id: id }, { _id: 1, authVersion: 1 });
+        if (!existingTarget) return Service.rejectResponse('User not found', 404);
+        targetId = existingTarget._id ?? id;
+        currentAuthVersion = existingTarget.authVersion ?? 0;
       }
 
-      // reset user mfa settings
+      const versionFilter = currentAuthVersion === 0
+        ? { _id: targetId, $or: [{ authVersion: 0 }, { authVersion: { $exists: false } }] }
+        : { _id: targetId, authVersion: currentAuthVersion };
+
+      // Atomically reset user MFA settings and increment authVersion on matching version.
       const target = await Users.findOneAndUpdate(
-        { _id: id },
+        versionFilter,
         {
           $set: {
             mfa: {
@@ -830,14 +855,20 @@ class MembersService {
               unverifiedSecrets: [],
               recoveryCodes: []
             }
-          }
+          },
+          $inc: { authVersion: 1 }
         },
-        { upsert: false }
+        { upsert: false, new: true }
       );
-      if (!target) return Service.rejectResponse('User not found', 404);
+      if (!target) {
+        return Service.rejectResponse('Conflict: user authentication state changed', 409);
+      }
 
-      // Invalidate all sessions of the target; no replacement token is issued.
-      await authSessions.revokeAll(target._id);
+      // Invalidate all prior sessions of the target; no replacement token is issued.
+      await authSessions.revokeAll(target._id, {
+        incrementAuthVersion: false,
+        expectedAuthVersion: target.authVersion
+      });
 
       return Service.successResponse(null, 204);
     } catch (e) {

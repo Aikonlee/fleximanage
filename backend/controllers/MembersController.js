@@ -46,8 +46,8 @@ class MembersController {
     await Controller.handleRequest(request, response, this.service.membersOptionsTypeGET);
   }
 
-  async membersIdResetMfaGET (request, response) {
-    await Controller.handleRequest(request, response, this.service.membersIdResetMfaGET);
+  async membersIdResetMfaPOST (request, response) {
+    await Controller.handleRequest(request, response, this.service.membersIdResetMfaPOST);
   }
 }
 

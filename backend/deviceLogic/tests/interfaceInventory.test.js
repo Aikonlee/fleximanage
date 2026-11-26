@@ -3862,4 +3862,138 @@ describe('interfaceInventory', () => {
     expect(storedVlan.parentDevId).toBe('pci:0000:00:04.00');
     expect(res.interfaces.filter((i) => i.parentDevId === 'pci:0000:00:03.00')).toHaveLength(0);
   });
+
+  test('does not heuristically downgrade an assigned vppManaged non-wifi interface on a partial report with name wlan0', () => {
+    const existing = [
+      makeStoredInterface({
+        name: 'eth0',
+        devId: 'pci:0000:00:03.00',
+        driver: 'igb',
+        MAC: '52:54:00:aa:bb:11',
+        deviceType: 'dpdk',
+        isAssigned: true,
+        assignable: true,
+        vppManaged: true
+      })
+    ];
+
+    const partialReport = {
+      devId: 'pci:0000:00:03.00',
+      name: 'wlan0',
+      link: 'up'
+    };
+
+    expect(isLinuxManagementWifi(partialReport, existing[0])).toBe(false);
+
+    const { interfaces } = mergeInterfaceInventory(existing, [partialReport]);
+    expect(interfaces).toHaveLength(1);
+    expect(interfaces[0].isAssigned).toBe(true);
+    expect(interfaces[0].vppManaged).toBe(true);
+    expect(interfaces[0].assignable).toBe(true);
+
+    const built = buildInterfaces(interfaces, { helloInterval: 10, deadInterval: 40 }, '6.2.0');
+    expect(built.map((b) => b.dev_id)).toContain('pci:0000:00:03.00');
+  });
+
+  test('does not heuristically downgrade an assigned vppManaged non-wifi interface on a partial report with driver iwlwifi', () => {
+    const existing = [
+      makeStoredInterface({
+        name: 'eth0',
+        devId: 'pci:0000:00:03.00',
+        driver: 'igb',
+        MAC: '52:54:00:aa:bb:12',
+        deviceType: 'dpdk',
+        isAssigned: true,
+        assignable: true,
+        vppManaged: true
+      })
+    ];
+
+    const partialReport = {
+      devId: 'pci:0000:00:03.00',
+      driver: 'iwlwifi',
+      link: 'up'
+    };
+
+    expect(isLinuxManagementWifi(partialReport, existing[0])).toBe(false);
+
+    const { interfaces } = mergeInterfaceInventory(existing, [partialReport]);
+    expect(interfaces).toHaveLength(1);
+    expect(interfaces[0].isAssigned).toBe(true);
+    expect(interfaces[0].vppManaged).toBe(true);
+    expect(interfaces[0].assignable).toBe(true);
+
+    const built = buildInterfaces(interfaces, { helloInterval: 10, deadInterval: 40 }, '6.2.0');
+    expect(built.map((b) => b.dev_id)).toContain('pci:0000:00:03.00');
+  });
+
+  test('explicit host-management evidence still downgrades an assigned vppManaged non-wifi interface', () => {
+    const existing = [
+      makeStoredInterface({
+        name: 'eth0',
+        devId: 'pci:0000:00:03.00',
+        driver: 'igb',
+        MAC: '52:54:00:aa:bb:13',
+        deviceType: 'dpdk',
+        isAssigned: true,
+        assignable: true,
+        vppManaged: true
+      })
+    ];
+
+    const explicitReport = {
+      devId: 'pci:0000:00:03.00',
+      name: 'wlan0',
+      managedBy: 'networkmanager',
+      link: 'up'
+    };
+
+    expect(isLinuxManagementWifi(explicitReport, existing[0])).toBe(true);
+
+    const { interfaces } = mergeInterfaceInventory(existing, [explicitReport]);
+    expect(interfaces).toHaveLength(1);
+    expect(interfaces[0].vppManaged).toBe(false);
+    expect(interfaces[0].assignable).toBe(false);
+  });
+
+  test('unassigned non-wifi interface matching wireless name or driver is still classified non-VPP', () => {
+    const existingByName = makeStoredInterface({
+      name: 'eth1',
+      devId: 'pci:0000:00:04.00',
+      driver: 'igb',
+      MAC: '52:54:00:aa:bb:14',
+      deviceType: 'dpdk',
+      isAssigned: false,
+      assignable: true,
+      vppManaged: true
+    });
+    const existingByDriver = makeStoredInterface({
+      name: 'eth2',
+      devId: 'pci:0000:00:05.00',
+      driver: 'igb',
+      MAC: '52:54:00:aa:bb:15',
+      deviceType: 'dpdk',
+      isAssigned: false,
+      assignable: true,
+      vppManaged: true
+    });
+
+    const reportByName = { devId: 'pci:0000:00:04.00', name: 'wlan0', link: 'up' };
+    const reportByDriver = { devId: 'pci:0000:00:05.00', driver: 'iwlwifi', link: 'up' };
+
+    expect(isLinuxManagementWifi(reportByName, existingByName)).toBe(true);
+    expect(isLinuxManagementWifi(reportByDriver, existingByDriver)).toBe(true);
+
+    const { interfaces } = mergeInterfaceInventory(
+      [existingByName, existingByDriver],
+      [reportByName, reportByDriver]
+    );
+    const outName = interfaces.find((i) => i.devId === 'pci:0000:00:04.00');
+    const outDriver = interfaces.find((i) => i.devId === 'pci:0000:00:05.00');
+
+    expect(outName.vppManaged).toBe(false);
+    expect(outName.assignable).toBe(false);
+    expect(outDriver.vppManaged).toBe(false);
+    expect(outDriver.assignable).toBe(false);
+  });
 });

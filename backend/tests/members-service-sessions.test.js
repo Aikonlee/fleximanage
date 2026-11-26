@@ -62,6 +62,10 @@ jest.mock('../authSessions', () => {
   const actual = jest.requireActual('../authSessions');
   return { ...actual, revokeAll: jest.fn(actual.revokeAll) };
 });
+jest.mock('../authenticate', () => ({
+  hasRecentReauth: jest.fn(() => true),
+  isAppCredential: jest.fn(() => false)
+}));
 
 const { membership } = require('../models/membership');
 const Users = require('../models/users');
@@ -310,7 +314,7 @@ describe('membersPOST', () => {
   });
 });
 
-describe('membersIdResetMfaGET', () => {
+describe('membersIdResetMfaPOST', () => {
   const ownerOf = account => async q => {
     if (same(q.user, callerId)) {
       return q.role === 'owner' && same(q.account, account) ? { _id: oid(), role: 'owner' } : null;
@@ -318,21 +322,33 @@ describe('membersIdResetMfaGET', () => {
     return null;
   };
 
+  beforeEach(() => {
+    Users.findOne.mockImplementation(async q =>
+      (same(q._id, targetId) ? { _id: targetId, authVersion: 0 } : null));
+  });
+
   test('account owner resets a member of the same account and revokes the target', async () => {
     membership.findOne.mockImplementation(async q => {
       if (same(q.user, targetId) && same(q.account, accountId)) return { _id: oid() };
       return ownerOf(accountId)(q);
     });
     const response = { setHeader: jest.fn() };
-    const result = await MembersService.membersIdResetMfaGET({ id: String(targetId) },
+    const result = await MembersService.membersIdResetMfaPOST({ id: String(targetId) },
       { user: caller }, response);
     expect(result.code).toBe(204);
     expect(Users.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: String(targetId) },
-      { $set: { mfa: { enabled: false, secret: null, unverifiedSecrets: [], recoveryCodes: [] } } },
-      { upsert: false });
+      { _id: targetId, $or: [{ authVersion: 0 }, { authVersion: { $exists: false } }] },
+      {
+        $set: { mfa: { enabled: false, secret: null, unverifiedSecrets: [], recoveryCodes: [] } },
+        $inc: { authVersion: 1 }
+      },
+      { upsert: false, new: true });
     expect(authSessions.revokeAll).toHaveBeenCalledTimes(1);
     expect(String(authSessions.revokeAll.mock.calls[0][0])).toBe(String(targetId));
+    expect(authSessions.revokeAll.mock.calls[0][1]).toEqual({
+      incrementAuthVersion: false,
+      expectedAuthVersion: 1
+    });
     expect(incCount(targetId)).toBe(1);
     expect(incCount(callerId)).toBe(0);
     // no replacement token is issued
@@ -342,7 +358,7 @@ describe('membersIdResetMfaGET', () => {
 
   test('an owner of the caller account cannot reset a user outside that account', async () => {
     membership.findOne.mockImplementation(ownerOf(accountId)); // target has no membership here
-    const result = await MembersService.membersIdResetMfaGET({ id: String(targetId) },
+    const result = await MembersService.membersIdResetMfaPOST({ id: String(targetId) },
       { user: caller }, { setHeader: jest.fn() });
     expect(result.code).toBe(400);
     expect(membership.findOne).toHaveBeenCalledWith({ user: String(targetId), account: accountId });
@@ -355,7 +371,7 @@ describe('membersIdResetMfaGET', () => {
       if (same(q.user, targetId) && same(q.account, accountId)) return { _id: oid() };
       return ownerOf(otherAccountId)(q); // caller owns a different account only
     });
-    const result = await MembersService.membersIdResetMfaGET({ id: String(targetId) },
+    const result = await MembersService.membersIdResetMfaPOST({ id: String(targetId) },
       { user: caller }, { setHeader: jest.fn() });
     expect(result.code).toBe(400);
     expect(Users.findOneAndUpdate).not.toHaveBeenCalled();
@@ -363,7 +379,7 @@ describe('membersIdResetMfaGET', () => {
   });
 
   test('a malformed target id is rejected without touching any user', async () => {
-    const result = await MembersService.membersIdResetMfaGET({ id: 'not-an-object-id' },
+    const result = await MembersService.membersIdResetMfaPOST({ id: 'not-an-object-id' },
       { user: caller }, { setHeader: jest.fn() });
     expect(result.code).toBe(400);
     expect(membership.findOne).not.toHaveBeenCalled();
@@ -372,7 +388,7 @@ describe('membersIdResetMfaGET', () => {
 
   test('self reset revokes the caller and issues no replacement token', async () => {
     const response = { setHeader: jest.fn() };
-    const result = await MembersService.membersIdResetMfaGET({ id: String(callerId) },
+    const result = await MembersService.membersIdResetMfaPOST({ id: String(callerId) },
       { user: caller }, response);
     expect(result.code).toBe(204);
     expect(membership.findOne).not.toHaveBeenCalled();
@@ -387,7 +403,7 @@ describe('membersIdResetMfaGET', () => {
       if (same(q.user, ghost)) return { _id: oid() };
       return ownerOf(accountId)(q);
     });
-    const result = await MembersService.membersIdResetMfaGET({ id: String(ghost) },
+    const result = await MembersService.membersIdResetMfaPOST({ id: String(ghost) },
       { user: caller }, { setHeader: jest.fn() });
     expect(result.code).toBe(404);
     expect(authSessions.revokeAll).not.toHaveBeenCalled();

@@ -219,6 +219,7 @@ class AccountsService {
         if (!fresh.defaultOrg || fresh.defaultOrg._id == null) {
           fresh.defaultOrg = user.defaultOrg;
         }
+        fresh.authTime = user.authTime !== undefined ? user.authTime : null;
         const { token, refreshToken } = await issueSessionTokens(
           fresh, user.isLoggedInWithMfa === true);
         response.setHeader('Refresh-JWT', token);

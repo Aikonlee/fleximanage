@@ -42,6 +42,9 @@ jest.mock('../tokens', () => {
       accountName: user.defaultAccount ? user.defaultAccount.name : null,
       sid: user.authSessionId,
       authVersion: user.authVersion ?? 0,
+      authTime: user.authTime !== undefined
+        ? user.authTime
+        : Math.floor(Date.now() / 1000),
       mfaVerified: user.isLoggedInWithMfa ?? false,
       ...override
     })),
@@ -301,6 +304,38 @@ test('replacement JWT after a forceMfa change uses the new authVersion and a liv
     expect(events.indexOf('revoke:' + String(callerId)))
       .toBeLessThan(events.indexOf('session:5'));
   });
+
+test('forceMfa change preserves original authTime and does not refresh it to now', async () => {
+  const originalAuthTime = Math.floor(Date.now() / 1000) - 3600;
+  caller.authTime = originalAuthTime;
+  Accounts.findOne.mockResolvedValue({ _id: accountId, forceMfa: false });
+  Accounts.findOneAndUpdate.mockResolvedValue(updatedAccount(true));
+  membership.find.mockResolvedValue([{ user: callerId }]);
+
+  const beforeCallSeconds = Math.floor(Date.now() / 1000);
+  const resWithAuthTime = response();
+  const resultWithAuthTime = await put(true, resWithAuthTime);
+  expect(resultWithAuthTime.code).toBe(200);
+
+  const accessWithAuthTime = jwt.verify(resWithAuthTime.headers['Refresh-JWT'], 'synthetic-key');
+  expect(accessWithAuthTime.authTime).toBe(originalAuthTime);
+  expect(accessWithAuthTime.authTime).toBeLessThan(beforeCallSeconds);
+
+  // When the caller had no authTime, replacement token must keep authTime null rather than now.
+  delete caller.authTime;
+  Accounts.findOne.mockResolvedValue({ _id: accountId, forceMfa: true });
+  Accounts.findOneAndUpdate.mockResolvedValue(updatedAccount(false));
+  membership.find.mockResolvedValue([{ user: callerId }]);
+
+  const resWithoutAuthTime = response();
+  const resultWithoutAuthTime = await put(false, resWithoutAuthTime);
+  expect(resultWithoutAuthTime.code).toBe(200);
+
+  const accessWithoutAuthTime = jwt.verify(
+    resWithoutAuthTime.headers['Refresh-JWT'], 'synthetic-key'
+  );
+  expect(accessWithoutAuthTime.authTime).toBeNull();
+});
 
 test('accountsSelectPOST retires old session and binds new access+refresh session to destination account',
   async () => {

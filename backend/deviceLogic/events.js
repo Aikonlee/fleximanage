@@ -570,14 +570,36 @@ class Events {
   */
   async analyze (origDevice, newInterfaces) {
     try {
-      const orig = keyBy(origDevice.interfaces, 'devId');
-      const updated = keyBy(newInterfaces, 'devId');
+      const origList = Array.isArray(origDevice.interfaces) ? origDevice.interfaces : [];
+      const updatedList = Array.isArray(newInterfaces) ? newInterfaces : [];
 
-      for (const devId in orig) {
-        const origIfc = orig[devId];
-        const updatedIfc = updated[devId];
+      const updatedById = new Map();
+      const updatedByDevId = new Map();
+      for (const ifc of updatedList) {
+        if (ifc && ifc._id !== undefined && ifc._id !== null) {
+          updatedById.set(ifc._id.toString(), ifc);
+        }
+        if (ifc && ifc.devId) {
+          updatedByDevId.set(ifc.devId, ifc);
+        }
+      }
+
+      for (const origIfc of origList) {
         // no need to send events for unassigned interfaces
-        if (!origIfc.isAssigned) {
+        if (!origIfc || !origIfc.isAssigned) {
+          continue;
+        }
+
+        // Pair by stable _id first (survives devId backfill via MAC recovery),
+        // with a non-empty devId fallback for legacy/plain callers.
+        let updatedIfc;
+        if (origIfc._id !== undefined && origIfc._id !== null) {
+          updatedIfc = updatedById.get(origIfc._id.toString());
+        }
+        if (!updatedIfc && origIfc.devId) {
+          updatedIfc = updatedByDevId.get(origIfc.devId);
+        }
+        if (!updatedIfc) {
           continue;
         }
 

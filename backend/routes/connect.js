@@ -31,9 +31,9 @@ const logger = require('../logging/logging')({ module: module.filename, type: 'r
 const { getAgentBroker } = require('../utils/httpUtils');
 // billing support
 const flexibilling = require('../flexibilling');
-const { mapLteNames, getCpuInfo, getOptimizedCpuInfo } = require('../utils/deviceUtils');
+const { getCpuInfo, getOptimizedCpuInfo } = require('../utils/deviceUtils');
 const geoip = require('geoip-lite');
-const validators = require('../models/validators.js');
+const { normalizeRegistrationInterfaces } = require('../deviceLogic/interfaceInventory');
 const connectRouter = express.Router();
 connectRouter.use(bodyParser.json());
 
@@ -176,91 +176,20 @@ connectRouter.route('/register')
                 return next(createError(500, 'Device without interfaces is not allowed'));
               }
 
-              // first filter out not supported interfaces and allow to register with the rest
-              const interfaces = ifs.filter((i, idx) => validators.validateDevId(i.devId));
-              if (ifs.length !== interfaces.length) {
+              // Validate, dedupe, and normalize reported interfaces via shared inventory helper
+              const { interfaces, dropped } = normalizeRegistrationInterfaces(ifs, {
+                sourceIP,
+                defaultDev: req.body.default_dev,
+                defaultRoute: req.body.default_route
+              });
+              if (dropped.length > 0 || ifs.length !== interfaces.length) {
                 logger.warn('Unsupported interfaces were filtered out',
-                  { params: { ifs, interfaces } });
+                  { params: { ifs, interfaces, dropped } });
               }
 
               if (interfaces.length === 0) {
                 return next(createError(500, 'The interfaces are not supported'));
               }
-
-              // Get an interface with gateway and the lowest metric
-              const defaultIntf = interfaces.reduce((res, intf) =>
-                intf.gateway && (!res || +res.metric > +intf.metric)
-                  ? intf : res, undefined);
-              const lowestMetric = defaultIntf && defaultIntf.metric
-                ? defaultIntf.metric : '0';
-
-              let highestMetric = 0;
-              const setAutoMetricIndexes = new Set();
-              interfaces.forEach((intf, idx) => {
-                // VLAN identification by devId, example "vlan.10.pci:0000:00:08.00"
-                const idParts = intf.devId.split('.');
-                if (idParts.length > 2 && idParts[0] === 'vlan' && idParts[1]) {
-                  intf.vlanTag = idParts[1];
-                  intf.parentDevId = idParts.slice(2).join('.');
-                }
-                intf.locked = true;
-                intf.isAssigned = false;
-                intf.useStun = true;
-                intf.useFixedPublicPort = false;
-                intf.linkStatus = intf.link;
-                intf.internetAccess = intf.internetAccess === undefined ? ''
-                  : intf.linkStatus !== 'down' && intf.internetAccess ? 'yes' : 'no';
-                intf.mtu = !isNaN(intf.mtu) ? +intf.mtu : 1500;
-                if (!defaultIntf && intf.name === req.body.default_dev) {
-                  // old version agent
-                  intf.PublicIP = intf.public_ip || sourceIP;
-                  intf.PublicPort = intf.public_port || '';
-                  intf.NatType = intf.nat_type || '';
-                  intf.type = 'WAN';
-                  intf.dhcp = intf.dhcp || 'no';
-                  intf.gateway = req.body.default_route;
-                  intf.metric = '0';
-                } else if (intf.gateway || ['lte', 'pppoe'].includes(intf.deviceType)) {
-                  intf.type = 'WAN';
-                  intf.dhcp = intf.dhcp || 'no';
-                  if (intf.deviceType === 'lte') {
-                    intf.deviceParams = mapLteNames(intf.deviceParams);
-                    intf.metric = null;
-                  } else {
-                    intf.metric = (!intf.metric && intf.gateway === req.body.default_route)
-                      ? '0' : intf.metric || null;
-                  }
-                  intf.PublicIP = intf.public_ip || (intf.metric === lowestMetric ? sourceIP : '');
-                  intf.PublicPort = intf.public_port || '';
-                  intf.NatType = intf.nat_type || '';
-                  if (intf.deviceType === 'pppoe') {
-                    intf.dhcp = 'yes';
-                  }
-
-                  // to calculate auto metrics, store the highest configured metric
-                  // and the interfaces that we need to add an auto metric.
-                  if (intf.metric) {
-                    highestMetric = Math.max(highestMetric, parseInt(intf.metric));
-                  } else {
-                    setAutoMetricIndexes.add(idx);
-                  }
-                } else {
-                  intf.type = 'LAN';
-                  // set LAN as DHCP only if it's DHCP in Linux and has IP address.
-                  // Otherwise set it to static on registration.
-                  intf.dhcp = intf.dhcp === 'yes' && intf.IPv4 !== '' ? 'yes' : 'no';
-                  intf.routing = 'NONE';
-                  intf.gateway = '';
-                  intf.metric = '';
-                }
-              });
-
-              // set auto metrics for interfaces without a metric.
-              // This loop done at the end to avoid metric duplication
-              setAutoMetricIndexes.forEach(i => {
-                highestMetric += 100;
-                interfaces[i].metric = highestMetric;
-              });
 
               // Prepare device versions array
               const versions = {

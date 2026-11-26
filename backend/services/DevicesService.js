@@ -35,6 +35,7 @@ const pick = require('lodash/pick');
 const isEqual = require('lodash/isEqual');
 const uniqBy = require('lodash/uniqBy');
 const keyBy = require('lodash/keyBy');
+const cloneDeep = require('lodash/cloneDeep');
 const logger = require('../logging/logging')({ module: module.filename, type: 'req' });
 const flexibilling = require('../flexibilling');
 const dispatcher = require('../deviceLogic/dispatcher');
@@ -1688,7 +1689,8 @@ class DevicesService {
    * returns Device
    **/
   static async devicesIdPUT (request, { user, server }, response) {
-    const { id, org, allowOverlapping, ...deviceRequest } = request;
+    const { id, org, allowOverlapping, ...rawDeviceRequest } = request;
+    const MAX_UPDATE_RETRIES = 3;
 
     let sessionCopy;
     let errorData = null;
@@ -1699,29 +1701,81 @@ class DevicesService {
       let updDevice;
 
       let isNeedToReleasePendingTunnels = false;
+      // Hoisted outside mainDBwithTransaction so MongoDB WriteConflict callback retries
+      // and inner __v conflict retries both remember the initial interface snapshot.
+      // Any interface added to the DB after that initial read is carried forward into
+      // deviceRequest.interfaces rather than looking like a client-requested deletion.
+      let initialOrigInterfaceIds = null;
+      let initialOrigInterfaceDevIds = null;
 
       // We set closeSession to false since apply uses documents with the session
       // The session is closed at the end of the API
       sessionCopy = await mongoConns.mainDBwithTransaction(async (session) => {
         orgList = await getAccessTokenOrgList(user, org, true);
-        origDevice = await devices.findOne({
-          _id: id,
-          org: { $in: orgList }
-        })
-          .session(session)
-          .populate('policies.firewall.policy', '_id name rules')
-          .populate('interfaces.pathlabels', '_id name description color type')
-          .populate('org')
-          .populate({
-            path: 'applications.app',
-            populate: {
-              path: 'appStoreApp'
-            }
-          });
 
-        if (!origDevice) {
-          throw createError(404, 'Device not found');
-        }
+        for (let attempt = 0; attempt <= MAX_UPDATE_RETRIES; attempt++) {
+          const deviceRequest = cloneDeep(rawDeviceRequest);
+          isNeedToReleasePendingTunnels = false;
+          updDevice = null;
+
+          origDevice = await devices.findOne({
+            _id: id,
+            org: { $in: orgList }
+          })
+            .session(session)
+            .populate('policies.firewall.policy', '_id name rules')
+            .populate('interfaces.pathlabels', '_id name description color type')
+            .populate('org')
+            .populate({
+              path: 'applications.app',
+              populate: {
+                path: 'appStoreApp'
+              }
+            });
+
+          if (!origDevice) {
+            throw createError(404, 'Device not found');
+          }
+
+          if (initialOrigInterfaceIds === null) {
+            initialOrigInterfaceIds = new Set(
+              (origDevice.interfaces || [])
+                .filter(i => i && i._id)
+                .map(i => i._id.toString())
+            );
+            initialOrigInterfaceDevIds = new Set(
+              (origDevice.interfaces || [])
+                .filter(i => i && i.devId)
+                .map(i => i.devId)
+            );
+          } else if (Array.isArray(deviceRequest.interfaces)) {
+            // On any retry (transaction WriteConflict or inner __v mismatch), carry
+            // forward every newly discovered interface absent from the initial read
+            // so successive conflicts never drop carried-forward rows.
+            const reqIds = new Set(
+              deviceRequest.interfaces
+                .filter(i => i && i._id)
+                .map(i => i._id.toString())
+            );
+            const reqDevIds = new Set(
+              deviceRequest.interfaces
+                .filter(i => i && i.devId)
+                .map(i => i.devId)
+            );
+            for (const origIfc of origDevice.interfaces) {
+              const origIfcId = origIfc._id ? origIfc._id.toString() : null;
+              const isNewSinceInitialRead =
+                (origIfcId && !initialOrigInterfaceIds.has(origIfcId)) &&
+                (!origIfc.devId || !initialOrigInterfaceDevIds.has(origIfc.devId));
+              if (isNewSinceInitialRead &&
+                !reqIds.has(origIfcId) && (!origIfc.devId || !reqDevIds.has(origIfc.devId))) {
+                const plainNewIfc = typeof origIfc.toObject === 'function'
+                  ? origIfc.toObject({ minimize: false })
+                  : cloneDeep(origIfc);
+                deviceRequest.interfaces.push(plainNewIfc);
+              }
+            }
+          }
         const majorVersion = getMajorVersion(origDevice?.versions?.agent);
         const minorVersion = getMinorVersion(origDevice?.versions?.agent);
 
@@ -1932,6 +1986,13 @@ class DevicesService {
             }
 
             if (origIntf) {
+              // Preserve the stored server-assigned _id for existing interfaces matched
+              // by devId so clients omitting or altering _id do not break downstream
+              // _id-keyed assignment diffs (e.g. true->false unassignment in modifyDevice).
+              if (origIntf._id !== undefined && origIntf._id !== null) {
+                updIntf._id = origIntf._id;
+              }
+
               // if the user disabled the STUN for this interface
               // we release the high rate blockage if exists
               const isStunDisabledNow = origIntf.useStun === true && updIntf.useStun === false;
@@ -1967,6 +2028,15 @@ class DevicesService {
 
               // This field is set by changed to true by events logic only
               updIntf.hasIpOnDevice = origIntf.hasIpOnDevice;
+
+              // Inventory capability flags are system-managed; preserve stored values
+              // so payloads omitting or altering them cannot reset non-VPP/unassignable flags.
+              updIntf.assignable = origIntf.assignable !== undefined ? origIntf.assignable : true;
+              updIntf.vppManaged = origIntf.vppManaged !== undefined ? origIntf.vppManaged : true;
+
+              if (updIntf.isAssigned && updIntf.assignable === false) {
+                throw createError(400, `Interface ${origIntf.name} is not assignable`);
+              }
 
               if (updIntf.isAssigned) {
                 // interface is assigned, check if removed path labels not used by any tunnel
@@ -2406,12 +2476,6 @@ class DevicesService {
           throw createError(400, err);
         }
 
-        // reset the reconfig hash to update the info of unassigned interfaces
-        connections.devices.updateDeviceInfo(origDevice.machineId, 'reconfig', '');
-
-        // If device changed to not approved disconnect it's socket
-        if (deviceRequest.isApproved === false) connections.deviceDisconnect(origDevice.machineId);
-
         // TBD: Remove these fields from the yaml PUT request
         delete deviceRequest.machineId;
         delete deviceRequest.org;
@@ -2427,10 +2491,15 @@ class DevicesService {
         delete deviceRequest.account;
         delete deviceRequest.versions;
         delete deviceRequest.bgp;
+        delete deviceRequest.__v;
+
+        const versionFilter = typeof origDevice.__v === 'number'
+          ? origDevice.__v
+          : { $exists: false };
 
         updDevice = await devices.findOneAndUpdate(
-          { _id: id, org: { $in: orgList } },
-          { $set: deviceRequest },
+          { _id: id, org: { $in: orgList }, __v: versionFilter },
+          { $set: deviceRequest, $inc: { __v: 1 } },
           { new: true, upsert: false, runValidators: true }
         )
           .session(session)
@@ -2446,7 +2515,25 @@ class DevicesService {
               path: 'appStoreApp'
             }
           });
+
+        if (updDevice) {
+          break;
+        }
+        }
+
+        if (!updDevice) {
+          throw createError(409, 'Device was modified concurrently, please retry');
+        }
       }, false);
+
+      // Run externally visible connection side effects only after the transaction
+      // commits so WriteConflict retries or aborted updates never reset state or
+      // disconnect devices prematurely.
+      const committedMachineId = updDevice.machineId || origDevice.machineId;
+      connections.devices.updateDeviceInfo(committedMachineId, 'reconfig', '');
+      if (rawDeviceRequest.isApproved === false && updDevice.isApproved === false) {
+        connections.deviceDisconnect(committedMachineId);
+      }
 
       // If the change made to the device fields requires a change on the
       // device itself, add a 'modify' job to the device's queue.

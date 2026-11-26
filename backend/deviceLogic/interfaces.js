@@ -39,6 +39,10 @@ const buildInterfaces = (deviceInterfaces, globalOSPF, deviceVersion) => {
   const bridges = getBridges(deviceInterfaces);
 
   for (const ifc of deviceInterfaces) {
+    // Exclude non-VPP-managed interfaces (e.g. Linux host management Wi-Fi),
+    // even if assigned, so they are never emitted into VPP configuration.
+    if (ifc.vppManaged === false) continue;
+
     // Skip unassigned/un-typed interfaces, as they
     // cannot be part of the device configuration
     if (!ifc.isAssigned || ifc.type.toLowerCase() === 'none') continue;

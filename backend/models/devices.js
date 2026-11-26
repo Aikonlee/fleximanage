@@ -360,6 +360,16 @@ const interfacesSchema = new Schema({
   isConnected: {
     type: Boolean,
     default: false
+  },
+  // Whether this interface may be assigned in flexiManage (false for Linux host-managed Wi-Fi)
+  assignable: {
+    type: Boolean,
+    default: true
+  },
+  // Whether this interface is managed by VPP (false excludes it from VPP config generation)
+  vppManaged: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true,

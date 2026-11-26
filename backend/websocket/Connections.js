@@ -20,6 +20,7 @@ const Joi = require('joi');
 const Devices = require('./Devices');
 const modifyDeviceDispatcher = require('../deviceLogic/modifyDevice');
 const DeviceEvents = require('../deviceLogic/events');
+const { applyInterfaceInventory } = require('../deviceLogic/interfaceInventory');
 const createError = require('http-errors');
 const orgModel = require('../models/organizations');
 const { devices } = require('../models/devices');
@@ -538,23 +539,25 @@ class Connections {
     const deviceId = connectionURL ? connectionURL.pathname.replace(/^\/+/, '') : '';
     const token = connectionURL?.searchParams?.get('token');
     const debugIps = ['::ffff:122.194.232.225'];
-    
+
     logger.info('Device connection attempt', {
       params: {
         ip,
         deviceId,
         headers: info.req.headers,
-        token: token ? {
-          length: token.length,
-          preview: `${token.substring(0, 32)}...`
-        } : null,
+        token: token
+          ? {
+              length: token.length,
+              preview: `${token.substring(0, 32)}...`
+            }
+          : null,
         // Path only. The query string carries the device JWT and must not be logged.
         url: connectionURL.pathname,
         origin: info.req.headers.origin,
         timestamp: new Date().toISOString()
       }
     });
-    
+
     // Extra debug logging for specific IPs
     if (debugIps.includes(ip) && token) {
       logger.debug('Debug connection details', {
@@ -571,7 +574,7 @@ class Connections {
       logger.warn('Device connection rejected - missing device ID', { ip });
       return done(false, 400);
     }
-    
+
     // Handshake token debug logging is handled later in the connection flow
 
     if (
@@ -960,142 +963,78 @@ class Connections {
         }
 
         const incomingInterfaces = deviceInfo.message.network.interfaces;
+        const deviceId = origDevice._id.toString();
 
-        const interfaces = [];
-        for (const i of origDevice.interfaces) {
-          let updatedConfig = incomingInterfaces.find(u => u.devId === i.devId);
-          if (!updatedConfig && !i.devId && i.MAC) {
-            // devId was previously lost (e.g. an edit that dropped it before the
-            // DevicesService guard existed) and can't be reconstructed locally -
-            // it can only come from a live agent report. MAC is hardware-stable
-            // and reported on every sync, so use it to re-identify the interface
-            // and backfill the real devId below.
-            updatedConfig = incomingInterfaces.find(u =>
-              u.MAC && u.MAC.toLowerCase() === i.MAC.toLowerCase());
-            if (updatedConfig) {
-              logger.warn('Recovered devId via MAC match for interface with missing devId', {
-                params: {
-                  machineId, interface: i.name, MAC: i.MAC, devId: updatedConfig.devId
-                }
-              });
-            }
-          }
-          if (!updatedConfig) {
-            if (i.devId && i.devId.startsWith('vlan')) {
-              // the VLAN sub-interface is removed in device
-              // it should be unlocked in manage if assigned or removed if not assigned
-              if (i.isAssigned) {
-                interfaces.push({ ...i.toObject(), locked: false });
+        try {
+          // Reconcile and persist interface inventory through the tenant-scoped,
+          // optimistic-concurrency applier (skips DB write when unchanged).
+          const applyResult = await applyInterfaceInventory({
+            deviceModel: devices,
+            deviceId: origDevice._id,
+            org: origDevice.org,
+            account: origDevice.account,
+            reportedInterfaces: incomingInterfaces
+          });
+
+          const { interfaces, mergeResult } = applyResult;
+          const baseDevice = applyResult.prevDevice || applyResult.device || origDevice;
+          const { org, _id: devObjectId, name } = baseDevice;
+
+          for (const rec of mergeResult.recoveredDevIds) {
+            logger.warn('Recovered devId via MAC match for interface with missing devId', {
+              params: {
+                machineId,
+                interface: rec.existing.name,
+                MAC: rec.existing.MAC,
+                devId: rec.devId
               }
-              continue;
-            }
+            });
+          }
+
+          for (const missing of mergeResult.missingInterfaces) {
             logger.warn('Missing interface configuration in the get-device-info message', {
               params: {
                 reconfig: deviceInfo.message.reconfig,
                 machineId: machineId,
-                interface: i.toJSON()
+                interface: missing
               }
             });
-            interfaces.push(i.toObject());
-            continue;
           }
-          const { org, _id: deviceId, name } = origDevice;
-          const linkStatusChanged = (updatedConfig.link === 'up' && i.linkStatus !== 'up') ||
-            (updatedConfig.link === 'down' && i.linkStatus !== 'down');
+
+          for (const { existing: i, reported: updatedConfig } of mergeResult.matchedPairs) {
+            const linkStatusChanged = (updatedConfig.link === 'up' && i.linkStatus !== 'up') ||
+              (updatedConfig.link === 'down' && i.linkStatus !== 'down');
             // send a notification if the link's status has been changed
-          if (linkStatusChanged) {
-            const linkStatus = (updatedConfig.link).toUpperCase();
-            const resolved = updatedConfig.link === 'up' && i.linkStatus !== 'up';
-            logger.info(`Link status changed to ${updatedConfig.link} in device ${name}`,
-              { params: { interface: i } });
-            await notificationsMgr.sendNotifications([{
-              org: org,
-              title: resolved ? '[resolved] Link status change' : 'Link status change',
-              details: `Link ${i.name} ${i.IPv4} is ${linkStatus} in device ${name}`,
-              eventType: 'Link status',
-              targets: {
-                deviceId,
-                tunnelId: null,
-                interfaceId: i._id
-              },
-              resolved
-            }]);
-          }
-
-          const updInterface = {
-            ...i.toJSON(),
-            devId: updatedConfig.devId,
-            PublicIP: updatedConfig.public_ip && i.useStun
-              ? updatedConfig.public_ip : i.PublicIP,
-            PublicPort: updatedConfig.public_port && i.useStun
-              ? updatedConfig.public_port : i.PublicPort,
-            NatType: updatedConfig.nat_type || i.NatType,
-            internetAccess: updatedConfig.internetAccess === undefined ? ''
-              : updatedConfig.link !== 'down' && updatedConfig.internetAccess ? 'yes' : 'no',
-            linkStatus: updatedConfig.link,
-            hasIpOnDevice: updatedConfig.IPv4 !== ''
-          };
-
-          // allow to modify the interface type dpdk/pppoe for unassigned interfaces
-          if (!i.isAssigned && ['dpdk', 'pppoe'].includes(updatedConfig.deviceType)) {
-            // don't allow to change LTE or WiFi deviceType dynamically
-            if (i.deviceType !== 'lte' && i.deviceType !== 'wifi') {
-              updInterface.deviceType = updatedConfig.deviceType;
-            }
-            updInterface.dhcp = updatedConfig.dhcp;
-            if (updatedConfig.deviceType === 'pppoe') {
-              updInterface.type = 'WAN';
-              updInterface.routing = 'NONE';
+            if (linkStatusChanged) {
+              const linkStatus = (updatedConfig.link).toUpperCase();
+              const resolved = updatedConfig.link === 'up' && i.linkStatus !== 'up';
+              logger.info(`Link status changed to ${updatedConfig.link} in device ${name}`,
+                { params: { interface: i } });
+              await notificationsMgr.sendNotifications([{
+                org: org,
+                title: resolved ? '[resolved] Link status change' : 'Link status change',
+                details: `Link ${i.name} ${i.IPv4} is ${linkStatus} in device ${name}`,
+                eventType: 'Link status',
+                targets: {
+                  deviceId: devObjectId,
+                  tunnelId: null,
+                  interfaceId: i._id
+                },
+                resolved
+              }]);
             }
           }
-
-          if (!i.isAssigned || i.deviceType === 'pppoe') {
-            // don't update metric for LTE interface. Metric is a flexiManage static configuration
-            if (i.deviceType !== 'lte') {
-              updInterface.metric = updatedConfig.metric;
-            }
-            if (updatedConfig.mtu) {
-              updInterface.mtu = updatedConfig.mtu;
-            }
-          };
-
-          if (i.dhcp === 'yes' || !i.isAssigned || i.deviceType === 'pppoe') {
-            updInterface.IPv4 = updatedConfig.IPv4;
-            updInterface.IPv4Mask = updatedConfig.IPv4Mask;
-            updInterface.IPv6 = updatedConfig.IPv6;
-            updInterface.IPv6Mask = updatedConfig.IPv6Mask;
-            updInterface.gateway = updatedConfig.gateway;
-          };
-
-          if (!i.isAssigned && updInterface.deviceType === 'dpdk') {
-            // changing the type of an unassigned interface based on the gateway
-            // Non dpdk interfaces are pppoe (WAN) or lte (WAN) or wifi (LAN),
-            // these shouldn't be modified from the value set on registration
-            updInterface.type = updInterface.gateway ? 'WAN' : 'LAN';
-          }
-
-          updInterface.locked = i.locked;
-          interfaces.push(updInterface);
-        };
-
-        const deviceId = origDevice._id.toString();
-
-        try {
-          // Update interfaces in DB
-          await devices.findOneAndUpdate(
-            { machineId },
-            { $set: { interfaces } },
-            { runValidators: true }
-          );
 
           // We create a new instance of events class
           // to know changedDevice and changedTunnels
           let events = new DeviceEvents();
 
-          const plainJsDevice = origDevice.toObject({ minimize: false });
+          const plainJsDevice = typeof baseDevice.toObject === 'function'
+            ? baseDevice.toObject({ minimize: false })
+            : { ...baseDevice };
 
           // add current device to changed devices in order to run modify process for it
-          await events.addChangedDevice(origDevice._id, origDevice);
+          await events.addChangedDevice(baseDevice._id, baseDevice);
 
           await events.analyze(plainJsDevice, interfaces);
 

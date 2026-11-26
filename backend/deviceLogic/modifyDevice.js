@@ -626,9 +626,11 @@ const queueModifyDeviceJob = async (
         return ifc._id.toString() === tunnel.interfaceA.toString();
       });
 
-      const origIfcB = peer ? null : deviceB.interfaces.find(ifc => {
-        return ifc._id.toString() === tunnel.interfaceB.toString();
-      });
+      const origIfcB = peer
+        ? null
+        : deviceB.interfaces.find(ifc => {
+          return ifc._id.toString() === tunnel.interfaceB.toString();
+        });
 
       // For interface changes such as IP/mask we remove the tunnel
       // and readd it after the change has been applied on the device.
@@ -733,7 +735,7 @@ const queueModifyDeviceJob = async (
       const skipLocal = peer
         ? false
         : (
-          isObject(modifiedIfcA) &&
+            isObject(modifiedIfcA) &&
           modifiedIfcA.addr === `${origIfcA.IPv4}/${origIfcA.IPv4Mask}` &&
           isLocal(modifiedIfcA, origIfcB) &&
           isLocal(origIfcA, origIfcB)) ||
@@ -1269,15 +1271,33 @@ const apply = async (device, user, data) => {
     }
   });
 
-  // Handle changes in the 'assigned' field. assignedDiff will contain
-  // all the interfaces that have changed their 'isAssigned' field
+  // Handle changes in the 'assigned' field. assignedDiff will contain only
+  // real assignment transitions:
+  // - Pre-existing interfaces whose isAssigned flipped (false->true or true->false)
+  // - Newly added interfaces explicitly marked isAssigned:true (e.g. user-added VLANs)
+  // Newly appended unassigned inventory rows (whose _id did not exist in origIsAssigned)
+  // are ignored so inventory discovery never emits a bogus remove-interface task.
+  const origAssignedById = new Map(
+    origIsAssigned
+      .filter(ifc => ifc._id !== undefined && ifc._id !== null)
+      .map(ifc => [ifc._id.toString(), ifc])
+  );
+
   const assignedDiff = differenceWith(
     newIsAssigned,
     origIsAssigned,
-    (origIfc, newIfc) => {
-      return isEqual(origIfc, newIfc);
+    (newIfc, origIfc) => {
+      return isEqual(newIfc, origIfc);
     }
-  );
+  ).filter(ifc => {
+    const origEntry = (ifc._id !== undefined && ifc._id !== null)
+      ? origAssignedById.get(ifc._id.toString())
+      : undefined;
+    if (!origEntry) {
+      return ifc.isAssigned === true;
+    }
+    return origEntry.isAssigned !== ifc.isAssigned;
+  });
 
   if (assignedDiff.length > 0) {
     const toAssign = [];
@@ -1287,7 +1307,8 @@ const apply = async (device, user, data) => {
     // unassigned. Add the full interface details as well.
     assignedDiff.forEach(ifc => {
       const ifcInfo = newInterfaces.find(ifcEntry => {
-        return ifcEntry._id === ifc._id;
+        return ifcEntry._id === ifc._id ||
+          (ifcEntry._id && ifc._id && ifcEntry._id.toString() === ifc._id.toString());
       });
 
       if (ifc.isAssigned) toAssign.push(ifcInfo);
